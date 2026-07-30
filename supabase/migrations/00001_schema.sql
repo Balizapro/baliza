@@ -146,7 +146,13 @@ INSERT INTO estaciones (nombre, fuente, lat, lon) VALUES
   ('San Fernando (Brazo Luján)', 'INA', -34.44, -58.56),
   ('La Plata', 'INA', -34.92, -57.95),
   ('Puerto de Buenos Aires', 'INA', -34.60, -58.37),
-  ('Pilote Norden', 'INA', -34.73, -58.35);
+  ('Pilote Norden', 'SHN', -34.73, -58.35),
+  ('Rosario', 'INA', -32.94, -60.63),
+  ('San Nicolás', 'INA', -33.34, -60.19),
+  ('Zárate', 'INA', -34.10, -59.01),
+  ('Campana', 'INA', -34.16, -58.96),
+  ('Escobar', 'INA', -34.30, -58.73)
+ON CONFLICT DO NOTHING;
 
 -- Seed: umbrales
 INSERT INTO umbrales (nombre, valor_m, descripcion) VALUES

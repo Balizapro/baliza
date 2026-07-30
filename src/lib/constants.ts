@@ -10,6 +10,11 @@ export const ESTACIONES = {
   LA_PLATA: "la_plata",
   BUENOS_AIRES: "puesto_buenos_aires",
   PILOTE_NORDEN: "pilote_norden",
+  ROSARIO: "rosario",
+  SAN_NICOLAS: "san_nicolas",
+  ZARATE: "zarate",
+  CAMPANA: "campana",
+  ESCOBAR: "escobar",
 } as const;
 
 export const PROPAGACION = {

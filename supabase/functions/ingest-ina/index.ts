@@ -29,6 +29,12 @@ const INA_STATIONS: Record<string, { series_id: number }> = {
   "La Plata": { series_id: 86 },
   "Puerto de Buenos Aires": { series_id: 85 },
   "Pilote Norden": { series_id: 1740 },
+  // Paraná aguas arriba (vista semanal)
+  "Rosario": { series_id: 34 },
+  "San Nicolás": { series_id: 36 },
+  "Zárate": { series_id: 40 },
+  "Campana": { series_id: 41 },
+  "Escobar": { series_id: 42 },
 };
 
 async function fetchObservaciones(

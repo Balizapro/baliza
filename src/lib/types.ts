@@ -85,6 +85,13 @@ export interface DatosAgregados {
     buenosAires: Lectura | null;
     piloteNorden: Lectura | null;
   };
+  parana: {
+    rosario: Lectura | null;
+    sanNicolas: Lectura | null;
+    zarate: Lectura | null;
+    campana: Lectura | null;
+    escobar: Lectura | null;
+  };
   viento: Viento | null;
   umbrales: Umbral[];
   config: Configuracion[];

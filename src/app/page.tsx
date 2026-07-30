@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import type { DatosAgregados, Lectura } from "@/lib/types";
+import VistaSemanal from "@/components/VistaSemanal";
+import Bitacora from "@/components/Bitacora";
 
 function direccionCardinal(grados: number): string {
   const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
@@ -52,11 +54,16 @@ export default function Dashboard() {
       if (!estaciones) return;
 
       const sfId = estaciones.find((e) => e.nombre.includes("San Fernando"))?.id;
-      const lpId = estaciones.find((e) => e.nombre.includes("La Plata"))?.id;
+      const lpId = estaciones.find((e) => e.nombre.includes("La Plata") && e.fuente === "INA")?.id;
       const baId = estaciones.find((e) => e.nombre.includes("Buenos Aires"))?.id;
       const pnId = estaciones.find((e) => e.nombre.includes("Pilote Norden"))?.id;
+      const rosId = estaciones.find((e) => e.nombre === "Rosario")?.id;
+      const snId = estaciones.find((e) => e.nombre === "San Nicolás")?.id;
+      const zarId = estaciones.find((e) => e.nombre === "Zárate")?.id;
+      const campId = estaciones.find((e) => e.nombre === "Campana")?.id;
+      const escId = estaciones.find((e) => e.nombre === "Escobar")?.id;
 
-      const ids = [sfId, lpId, baId, pnId].filter(Boolean);
+      const ids = [sfId, lpId, baId, pnId, rosId, snId, zarId, campId, escId].filter(Boolean);
       const { data: lecturas } = await supabase
         .from("lecturas")
         .select("*")
@@ -85,15 +92,24 @@ export default function Dashboard() {
       const filtrarPorEstacion = (id: string | undefined) =>
         (lecturas ?? []).filter((l) => l.estacion_id === id);
 
+      const obs = (id: string | undefined) => filtrarPorEstacion(id).find((l) => l.tipo === "observado") ?? null;
+
       const d: DatosAgregados = {
         sanFernando: {
-          observado: filtrarPorEstacion(sfId).find((l) => l.tipo === "observado") ?? null,
+          observado: obs(sfId),
           pronostico: filtrarPorEstacion(sfId).filter((l) => l.tipo === "pronostico"),
         },
         exteriores: {
-          laPlata: filtrarPorEstacion(lpId).find((l) => l.tipo === "observado") ?? null,
-          buenosAires: filtrarPorEstacion(baId).find((l) => l.tipo === "observado") ?? null,
-          piloteNorden: filtrarPorEstacion(pnId).find((l) => l.tipo === "observado") ?? null,
+          laPlata: obs(lpId),
+          buenosAires: obs(baId),
+          piloteNorden: obs(pnId),
+        },
+        parana: {
+          rosario: obs(rosId),
+          sanNicolas: obs(snId),
+          zarate: obs(zarId),
+          campana: obs(campId),
+          escobar: obs(escId),
         },
         viento: viento ?? null,
         umbrales: umbrales ?? [],
@@ -273,6 +289,10 @@ export default function Dashboard() {
           </div>
         </section>
 
+        {/* Vista semanal Paraná */}
+        <VistaSemanal parana={datos?.parana ?? { rosario: null, sanNicolas: null, zarate: null, campana: null, escobar: null }} />
+
+        {/* Pronóstico San Fernando */}
         {sfProno && sfProno.length > 0 && (
           <section className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-xs uppercase tracking-widest font-semibold text-gray-500 mb-2">
@@ -288,6 +308,9 @@ export default function Dashboard() {
             </div>
           </section>
         )}
+
+        {/* Bitácora */}
+        <Bitacora nivelActual={sfObs?.nivel_m ?? 0} onRegistro={() => {}} />
 
         <footer className="text-center text-xs text-gray-400 py-4 space-y-1">
           <p>Los datos provienen de INA y SHN — herramienta de apoyo, no reemplaza el boletín oficial.</p>
