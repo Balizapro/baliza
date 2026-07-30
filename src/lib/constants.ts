@@ -1,0 +1,23 @@
+export const PALETA = {
+  primario: "#0E4749",
+  alerta: "#E8823A",
+  ok: "#4C7A5E",
+  fondo: "#F2E9DC",
+} as const;
+
+export const ESTACIONES = {
+  SAN_FERNANDO: "san_fernando",
+  LA_PLATA: "la_plata",
+  BUENOS_AIRES: "puesto_buenos_aires",
+  PILOTE_NORDEN: "pilote_norden",
+} as const;
+
+export const PROPAGACION = {
+  LA_PLATA_A_SF_HORAS: 2.5,
+  BA_A_SF_HORAS: 1,
+} as const;
+
+export const COORDENADAS_BALIZA = {
+  lat: -34.35,
+  lon: -58.55,
+} as const;

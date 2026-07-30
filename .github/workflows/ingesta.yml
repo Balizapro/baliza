@@ -1,0 +1,19 @@
+name: Ingesta de datos
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ingesta INA
+        run: curl -s -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-ina"
+
+      - name: Ingesta viento
+        run: curl -s -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-viento"
+
+      - name: Ingesta SHN
+        run: curl -s -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-shn"
