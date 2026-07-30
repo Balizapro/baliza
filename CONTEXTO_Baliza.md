@@ -25,11 +25,17 @@ Edge Functions:
 - evaluar-alerta  → se dispara después de cada ingesta
 ```
 
+## Umbrales (editables en DB, tablas `umbrales` y `configuracion`)
+| Umbral | Valor | Descripción |
+|---|---|---|
+| Evaluación | 2.00m | Nivel de atención: empezar a evaluar |
+| No retorno | 2.20m | Punto de no retorno: salir ahora |
+| Traslado | 10 min | Tiempo escuela → muelle en tierra |
+
 ## Modelo de decisión
-- **Dos umbrales**: evaluación (1.80m) y no retorno (2.15m) — valores de referencia, a confirmar
 - **Tres estados**: verde (normal), amarilla (monitorear), roja (salir ahora)
+- **Cuenta regresiva** descontando los 10 min de traslado
 - **Preaviso por propagación**: La Plata (~2.5hs antes) → Buenos Aires (~1hs antes) → San Fernando
-- **Cuenta regresiva** al punto de no retorno cuando aplica
 - Reporte manual con escalones del muelle (Fase 2)
 - Bitácora de eventos (Fase 2)
 
@@ -45,22 +51,17 @@ Edge Functions:
 - Sin login ni auth en Fase 1
 - SHN scraping mediante regex sobre HTML (formato semi-estructurado)
 
-## Cron jobs (Vercel)
-- `ingest-ina`: cada 3hs (`0 */3 * * *`)
-- `ingest-viento`: cada 1h (`0 * * * *`)
-- `ingest-shn`: cada 6hs (`0 */6 * * *`)
-- Configurado via `vercel.json` + Route Handlers en `src/app/api/cron/`
-
-## Pendientes
-- Confirmar umbral de evaluación y punto de no retorno exactos (~2.15-2.20m San Fernando de referencia)
-- Confirmar tiempo de traslado escuela → muelle en tierra
+## Cron jobs (GitHub Actions)
+- `.github/workflows/ingesta.yml`: cada 3hs
+- Llama a los endpoints Vercel `/api/cron/ingest-*`
 
 ## Estado actual
 ✅ Proyecto Next.js scaffoldeado  
 ✅ Esquema de BD creado + migración ejecutada  
 ✅ Edge Functions: ingest-ina, ingest-shn, ingest-viento, evaluar-alerta (deployadas)  
 ✅ Dashboard UI con alerta principal, niveles, viento, estaciones exteriores  
-✅ Datos reales de INA cargados (151 lecturas)  
+✅ Datos reales de INA cargados  
 ✅ Viento funcionando (Open-Meteo)  
-✅ Cron jobs configurados para Vercel  
-⏳ Pendiente: deploy a Vercel
+✅ Deployado en https://baliza-ashy.vercel.app  
+✅ Umbrales: eval=2.0m, NR=2.2m, traslado=10min — editables en DB  
+✅ GitHub: https://github.com/Balizapro/baliza

@@ -69,6 +69,12 @@ export interface EquivalenciaEscalon {
   confianza: number;
 }
 
+export interface Configuracion {
+  clave: string;
+  valor: string;
+  descripcion: string;
+}
+
 export interface DatosAgregados {
   sanFernando: {
     observado: Lectura | null;
@@ -81,5 +87,6 @@ export interface DatosAgregados {
   };
   viento: Viento | null;
   umbrales: Umbral[];
+  config: Configuracion[];
   alerta: Alerta | null;
 }

@@ -11,14 +11,12 @@ function direccionCardinal(grados: number): string {
 
 function formatearHora(iso: string | null): string {
   if (!iso) return "--";
-  const d = new Date(iso);
-  return d.toLocaleString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString("es-AR", { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatearFechaHora(iso: string | null): string {
   if (!iso) return "--";
-  const d = new Date(iso);
-  return d.toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 function tendenciaIcono(lecturas: Lectura[] | undefined | null): string {
@@ -29,22 +27,13 @@ function tendenciaIcono(lecturas: Lectura[] | undefined | null): string {
   return "→";
 }
 
-function calcularCuentaRegresiva(ventanaFin: string | null): string | null {
-  if (!ventanaFin) return null;
-  const diff = new Date(ventanaFin).getTime() - Date.now();
-  if (diff <= 0) return "AHORA";
-  const h = Math.floor(diff / 3600000);
-  const m = Math.floor((diff % 3600000) / 60000);
-  return `${h}h ${m}m`;
-}
-
-const colorAlerta: Record<string, string> = {
+const colorAlerta = {
   verde: "bg-[#4C7A5E]",
   amarilla: "bg-[#E8823A]",
   roja: "bg-red-600",
 };
 
-const colorAlertaBg: Record<string, string> = {
+const colorAlertaBg = {
   verde: "bg-green-50 border-[#4C7A5E]",
   amarilla: "bg-orange-50 border-[#E8823A]",
   roja: "bg-red-50 border-red-600",
@@ -53,6 +42,7 @@ const colorAlertaBg: Record<string, string> = {
 export default function Dashboard() {
   const [datos, setDatos] = useState<DatosAgregados | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [cuentaRegresiva, setCuentaRegresiva] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -81,11 +71,11 @@ export default function Dashboard() {
         .limit(1)
         .single();
 
-      const { data: umbrales } = await supabase
-        .from("umbrales")
-        .select("*");
+      const { data: umbrales } = await supabase.from("umbrales").select("*");
 
-      const { data: alertas } = await supabase
+      const { data: config } = await supabase.from("configuracion").select("*");
+
+      const { data: alerta } = await supabase
         .from("alertas")
         .select("*")
         .order("timestamp", { ascending: false })
@@ -107,7 +97,8 @@ export default function Dashboard() {
         },
         viento: viento ?? null,
         umbrales: umbrales ?? [],
-        alerta: alertas ?? null,
+        config: config ?? [],
+        alerta: alerta ?? null,
       };
 
       setDatos(d);
@@ -119,13 +110,28 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  if (cargando) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-[#F2E9DC]">
-        <p className="text-[#0E4749] text-lg">Cargando...</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const ventanaFin = datos?.alerta?.ventana_fin;
+    if (!ventanaFin) {
+      setCuentaRegresiva(null);
+      return;
+    }
+
+    function tick() {
+      const diff = new Date(ventanaFin!).getTime() - Date.now();
+      if (diff <= 0) {
+        setCuentaRegresiva("AHORA");
+        return;
+      }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      setCuentaRegresiva(`${h}h ${m}m`);
+    }
+
+    tick();
+    const interval = setInterval(tick, 10000);
+    return () => clearInterval(interval);
+  }, [datos?.alerta?.ventana_fin]);
 
   const alerta = datos?.alerta;
   const sfObs = datos?.sanFernando.observado;
@@ -136,9 +142,16 @@ export default function Dashboard() {
   const viento = datos?.viento;
   const umbralEval = datos?.umbrales.find((u) => u.nombre === "evaluacion");
   const umbralNR = datos?.umbrales.find((u) => u.nombre === "no_retorno");
-  const cuentaRegresiva = calcularCuentaRegresiva(alerta?.ventana_fin ?? null);
-
+  const trasladoMin = parseInt(datos?.config.find((c) => c.clave === "tiempo_traslado_minutos")?.valor ?? "10", 10);
   const alertaNivel = alerta?.nivel ?? "verde";
+
+  if (cargando) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#F2E9DC]">
+        <p className="text-[#0E4749] text-lg">Cargando...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F2E9DC]">
@@ -151,7 +164,6 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-3xl mx-auto p-4 space-y-4">
-        {/* Alerta principal */}
         <section className={`rounded-xl border-2 p-4 ${colorAlertaBg[alertaNivel]}`}>
           <div className="flex items-start justify-between">
             <div className="flex-1">
@@ -161,10 +173,13 @@ export default function Dashboard() {
               <p className={`text-lg font-bold ${alertaNivel === "roja" ? "text-red-700" : alertaNivel === "amarilla" ? "text-orange-700" : "text-green-700"}`}>
                 {alerta?.mensaje ?? "Sin datos — esperando primera ingesta"}
               </p>
-              {cuentaRegresiva && (
-                <p className="text-2xl font-bold text-red-600 mt-2">
-                  {cuentaRegresiva}
-                </p>
+              {cuentaRegresiva && alertaNivel === "roja" && (
+                <div className="mt-2">
+                  <p className="text-2xl font-bold text-red-600">{cuentaRegresiva}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Tiempo estimado hasta punto de no retorno ({umbralNR?.valor_m.toFixed(1) ?? "--"}m)
+                  </p>
+                </div>
               )}
             </div>
             <span className={`inline-block w-4 h-4 rounded-full ${colorAlerta[alertaNivel]} flex-shrink-0 mt-1`} />
@@ -172,7 +187,6 @@ export default function Dashboard() {
         </section>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Nivel San Fernando */}
           <section className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-xs uppercase tracking-widest font-semibold text-gray-500 mb-1">
               San Fernando (brazo Luján)
@@ -186,7 +200,6 @@ export default function Dashboard() {
             </p>
           </section>
 
-          {/* Viento */}
           <section className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-xs uppercase tracking-widest font-semibold text-gray-500 mb-1">
               Viento
@@ -200,9 +213,7 @@ export default function Dashboard() {
                 <p className="text-sm text-gray-600">
                   {direccionCardinal(viento.direccion_grados)} ({viento.direccion_grados}°)
                 </p>
-                <p className="text-xs text-gray-400">
-                  {formatearFechaHora(viento.timestamp)}
-                </p>
+                <p className="text-xs text-gray-400">{formatearFechaHora(viento.timestamp)}</p>
               </>
             ) : (
               <p className="text-gray-400 text-sm">sin datos</p>
@@ -210,7 +221,6 @@ export default function Dashboard() {
           </section>
         </div>
 
-        {/* Estaciones exteriores */}
         <section className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-xs uppercase tracking-widest font-semibold text-gray-500 mb-3">
             Estaciones exteriores — preaviso temprano
@@ -239,10 +249,9 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* Umbrales */}
         <section className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-xs uppercase tracking-widest font-semibold text-gray-500 mb-2">
-            Umbrales de referencia (San Fernando)
+            Umbrales de referencia — San Fernando
           </p>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -256,9 +265,14 @@ export default function Dashboard() {
               <p className="text-xs text-gray-400">{umbralNR?.descripcion}</p>
             </div>
           </div>
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs text-gray-500">
+              Tiempo de traslado escuela → muelle: <strong className="text-gray-700">{trasladoMin} min</strong>
+              {" — "}la cuenta regresiva contempla salir con esa anticipación.
+            </p>
+          </div>
         </section>
 
-        {/* Pronóstico */}
         {sfProno && sfProno.length > 0 && (
           <section className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-xs uppercase tracking-widest font-semibold text-gray-500 mb-2">
@@ -275,17 +289,12 @@ export default function Dashboard() {
           </section>
         )}
 
-        {/* Footer */}
         <footer className="text-center text-xs text-gray-400 py-4 space-y-1">
           <p>Los datos provienen de INA y SHN — herramienta de apoyo, no reemplaza el boletín oficial.</p>
           <p>
-            <a href="https://alerta.ina.gob.ar" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#0E4749]">
-              Fuente INA
-            </a>
+            <a href="https://alerta.ina.gob.ar" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#0E4749]">Fuente INA</a>
             {" · "}
-            <a href="https://www.hidro.gov.ar" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#0E4749]">
-              Fuente SHN
-            </a>
+            <a href="https://www.hidro.gov.ar" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#0E4749]">Fuente SHN</a>
           </p>
         </footer>
       </main>

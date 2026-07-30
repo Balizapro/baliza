@@ -10,10 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ingesta INA
-        run: curl -s -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-ina"
+        run: curl -s -f -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-ina"
 
       - name: Ingesta viento
-        run: curl -s -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-viento"
+        run: curl -s -f -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-viento"
 
       - name: Ingesta SHN
-        run: curl -s -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-shn"
+        run: curl -s -f -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-shn"

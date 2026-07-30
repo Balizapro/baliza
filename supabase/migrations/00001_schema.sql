@@ -100,6 +100,14 @@ CREATE TABLE equivalencia_escalones (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Configuración dinámica (clave-valor, editable sin tocar código)
+CREATE TABLE configuracion (
+  clave TEXT PRIMARY KEY,
+  valor TEXT NOT NULL,
+  descripcion TEXT,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- Suscriptores (Fase 2)
 CREATE TABLE suscriptores (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -118,6 +126,7 @@ ALTER TABLE umbrales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE alertas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bitacora ENABLE ROW LEVEL SECURITY;
 ALTER TABLE equivalencia_escalones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE configuracion ENABLE ROW LEVEL SECURITY;
 ALTER TABLE suscriptores ENABLE ROW LEVEL SECURITY;
 
 -- Permitir SELECT anónimo en todas las tablas del MVP
@@ -129,6 +138,7 @@ CREATE POLICY "anon_select_umbrales" ON umbrales FOR SELECT USING (true);
 CREATE POLICY "anon_select_alertas" ON alertas FOR SELECT USING (true);
 CREATE POLICY "anon_select_bitacora" ON bitacora FOR SELECT USING (true);
 CREATE POLICY "anon_select_equivalencia" ON equivalencia_escalones FOR SELECT USING (true);
+CREATE POLICY "anon_select_configuracion" ON configuracion FOR SELECT USING (true);
 CREATE POLICY "anon_select_suscriptores" ON suscriptores FOR SELECT USING (true);
 
 -- Seed: estaciones
@@ -138,7 +148,13 @@ INSERT INTO estaciones (nombre, fuente, lat, lon) VALUES
   ('Puerto de Buenos Aires', 'INA', -34.60, -58.37),
   ('Pilote Norden', 'INA', -34.73, -58.35);
 
--- Seed: umbrales iniciales (valores de referencia, a confirmar)
+-- Seed: umbrales
 INSERT INTO umbrales (nombre, valor_m, descripcion) VALUES
-  ('evaluacion', 1.80, 'Nivel de atención: empezar a monitorear'),
-  ('no_retorno', 2.15, 'Punto de no retorno: salir ahora');
+  ('evaluacion', 2.0, 'Nivel de atención: empezar a evaluar'),
+  ('no_retorno', 2.2, 'Punto de no retorno: salir ahora')
+ON CONFLICT (nombre) DO UPDATE SET valor_m = EXCLUDED.valor_m, descripcion = EXCLUDED.descripcion, updated_at = now();
+
+-- Seed: configuración dinámica
+INSERT INTO configuracion (clave, valor, descripcion) VALUES
+  ('tiempo_traslado_minutos', '10', 'Tiempo estimado de traslado escuela → muelle en tierra')
+ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = now();
