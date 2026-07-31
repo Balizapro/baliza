@@ -16,11 +16,6 @@ interface SerieInfo {
   id: number;
   estacion: { id: number; nombre: string; tabla: string };
   tipo: string;
-  pronosticos?: Array<{
-    series_id: number;
-    cal_id: number;
-    cal_grupo_id: number;
-  }>;
 }
 
 // Mapeo de estaciones INA → nombres en nuestra BD
@@ -28,7 +23,7 @@ const INA_STATIONS: Record<string, { series_id: number }> = {
   "San Fernando (Brazo Luján)": { series_id: 52 },
   "La Plata": { series_id: 86 },
   "Puerto de Buenos Aires": { series_id: 85 },
-  "Pilote Norden": { series_id: 1740 },
+  "Pilote Norden": { series_id: 3345 },
   // Paraná aguas arriba (vista semanal)
   "Rosario": { series_id: 34 },
   "San Nicolás": { series_id: 36 },
@@ -139,50 +134,6 @@ serve(async (req) => {
         });
         allOk = false;
       }
-    }
-
-    // También intentar obtener pronóstico de San Fernando
-    try {
-      const pronoUrl = `${INA_BASE}/getPronosticos?cal_grupo_id=1`;
-      const pronoRes = await fetch(pronoUrl);
-      if (pronoRes.ok) {
-        const pronoData = await pronoRes.json();
-        for (const item of pronoData) {
-          for (const series of item.series) {
-            if (series.estacion_id === 52 && series.qualifiers?.includes("main")) {
-              // El pronóstico está disponible pero los valores se obtienen
-              // con getObservaciones para series de pronóstico
-              const pronoObs = await fetch(`${INA_BASE}/getObservaciones?tipo=H&series_id=${series.series_id}&timestart=${series.begin_date.split("T")[0]}&timeend=${series.end_date.split("T")[0]}`);
-              if (pronoObs.ok) {
-                const pronoData: ObservacionRaw[] = await pronoObs.json();
-                const sfId = nombreToId["San Fernando (Brazo Luján)"];
-                let pronoInserted = 0;
-                for (const p of pronoData) {
-                  const ts = new Date(p.timestart).toISOString();
-                  const { data: existing } = await supabase
-                    .from("lecturas")
-                    .select("id")
-                    .eq("estacion_id", sfId)
-                    .eq("timestamp", ts)
-                    .eq("tipo", "pronostico")
-                    .maybeSingle();
-                  if (existing) continue;
-                  const { error: insertErr } = await supabase.from("lecturas").insert({
-                    estacion_id: sfId,
-                    timestamp: ts,
-                    nivel_m: p.valor,
-                    tipo: "pronostico",
-                  });
-                  if (!insertErr) pronoInserted++;
-                }
-                console.log(`[ingest-ina] Pronóstico SF: ${pronoInserted} insertados`);
-              }
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.error(`[ingest-ina] Error pronóstico: ${(err as Error).message}`);
     }
 
     // Disparar evaluación de alerta

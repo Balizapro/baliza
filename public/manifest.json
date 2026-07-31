@@ -1,0 +1,18 @@
+{
+  "name": "Baliza",
+  "short_name": "Baliza",
+  "description": "la señal antes de la crecida — Anticipación a crecidas para el Delta de Tigre",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0E4749",
+  "theme_color": "#0E4749",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/baliza-logo-icono.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

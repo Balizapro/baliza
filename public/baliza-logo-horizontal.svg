@@ -1,0 +1,10 @@
+<svg width="680" height="180" viewBox="0 0 680 180" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Baliza — logo horizontal</title>
+<desc>Lockup horizontal con el ícono de la boya a la izquierda y el nombre baliza a la derecha, para header o barra de navegación</desc>
+<circle cx="100" cy="90" r="65" fill="#0E4749"/>
+<circle cx="100" cy="45" r="5" fill="#F2E9DC"/>
+<path d="M100 51 L120 112 L80 112 Z" fill="#E8823A"/>
+<path d="M60 116 Q76 108 92 116 T124 116 T148 116" fill="none" stroke="#F2E9DC" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M66 128 Q80 121 94 128 T118 128 T138 128" fill="none" stroke="#F2E9DC" stroke-width="3.5" stroke-linecap="round" opacity="0.7"/>
+<text x="195" y="102" font-family="Arial, Helvetica, sans-serif" font-size="46" font-weight="500" fill="#12312B">baliza</text>
+</svg>

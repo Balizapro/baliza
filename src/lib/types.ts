@@ -75,10 +75,19 @@ export interface Configuracion {
   descripcion: string;
 }
 
+export interface Pronostico {
+  id: string;
+  estacion_id: string;
+  timestamp: string;
+  valor_m: number;
+  qualifier: string;
+  forecast_date: string;
+}
+
 export interface DatosAgregados {
   sanFernando: {
     observado: Lectura | null;
-    pronostico: Lectura[];
+    pronostico: Pronostico[];
   };
   exteriores: {
     laPlata: Lectura | null;
@@ -96,4 +105,5 @@ export interface DatosAgregados {
   umbrales: Umbral[];
   config: Configuracion[];
   alerta: Alerta | null;
+  escalones: EquivalenciaEscalon[];
 }

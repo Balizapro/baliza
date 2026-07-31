@@ -3,6 +3,10 @@ export const PALETA = {
   alerta: "#E8823A",
   ok: "#4C7A5E",
   fondo: "#F2E9DC",
+  texto: "#12312B",
+  textoSec: "#5B6E68",
+  rojoAlerta: "#C0442B",
+  atencion: "#C99A3D",
 } as const;
 
 export const ESTACIONES = {

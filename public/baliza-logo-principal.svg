@@ -1,0 +1,12 @@
+<svg width="680" height="360" viewBox="0 0 680 360" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Baliza</title>
+<desc>Marca de Baliza: un círculo verde azulado oscuro con una boya naranja y ondas de agua, y el nombre "baliza" debajo</desc>
+<circle cx="340" cy="150" r="110" fill="#0E4749"/>
+<circle cx="340" cy="72" r="8" fill="#F2E9DC"/>
+<path d="M340 80 L370 190 L310 190 Z" fill="#E8823A"/>
+<path d="M260 195 Q280 185 300 195 T340 195 T380 195 T420 195" fill="none" stroke="#F2E9DC" stroke-width="5" stroke-linecap="round"/>
+<path d="M270 213 Q288 203 306 213 T342 213 T378 213 T410 213" fill="none" stroke="#F2E9DC" stroke-width="5" stroke-linecap="round" opacity="0.75"/>
+<path d="M285 231 Q300 223 315 231 T345 231 T375 231 T395 231" fill="none" stroke="#F2E9DC" stroke-width="5" stroke-linecap="round" opacity="0.5"/>
+<text x="340" y="300" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="48" font-weight="500" fill="#12312B">baliza</text>
+<text x="340" y="330" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#5B6E68">la señal antes de la crecida</text>
+</svg>

@@ -19,12 +19,17 @@ interface LecturaRow {
 const PROPAGACION_LP_A_SF = 2.5;
 const PROPAGACION_BA_A_SF = 1.0;
 
+function reemplazar(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+}
+
 function calcularVentana(
   nivelActual: number,
   tendencia: "subiendo" | "bajando" | "estable",
   umbralEvaluacion: number,
   umbralNoRetorno: number,
-  trasladoMin: number
+  trasladoMin: number,
+  mensajes: Record<string, string>
 ): {
   alerta: "verde" | "amarilla" | "roja";
   ventanaInicio: Date | null;
@@ -36,16 +41,20 @@ function calcularVentana(
       alerta: "roja",
       ventanaInicio: new Date(),
       ventanaFin: null,
-      mensaje: `Salir ahora — nivel crítico alcanzado (${nivelActual.toFixed(2)}m)`,
+      mensaje: reemplazar(mensajes.recomendacion_roja_critico ?? "Salir ahora — nivel crítico {{nivel}}m", {
+        nivel: nivelActual.toFixed(2), umbral_nr: umbralNoRetorno.toFixed(1),
+      }),
     };
   }
 
-  if (tendencia === "bajando" && nivelActual < umbralEvaluacion) {
+  if (tendencia !== "subiendo" && nivelActual < umbralEvaluacion) {
     return {
       alerta: "verde",
       ventanaInicio: null,
       ventanaFin: null,
-      mensaje: "Todo normal — nivel por debajo del umbral y bajando",
+      mensaje: reemplazar(mensajes.recomendacion_verde ?? "Todo normal — {{nivel}}m", {
+        nivel: nivelActual.toFixed(2), umbral_eval: umbralEvaluacion.toFixed(1),
+      }),
     };
   }
 
@@ -55,7 +64,6 @@ function calcularVentana(
     const horasEstimadas = Math.max(0.5, diff / 0.05);
     const ventanaFin = new Date(ahora.getTime() + horasEstimadas * 60 * 60 * 1000);
 
-    // Descontar traslado para la cuenta regresiva real
     const horasSalida = Math.max(0, horasEstimadas - trasladoMin / 60);
     const horaSalida = new Date(ahora.getTime() + horasSalida * 60 * 60 * 1000);
 
@@ -63,7 +71,13 @@ function calcularVentana(
       alerta: "roja",
       ventanaInicio: ahora,
       ventanaFin: horaSalida,
-      mensaje: `Nivel superando umbral de evaluación. Estimar alcanzar punto de no retorno en ~${Math.round(horasEstimadas)}hs. Salir antes de las ${horaSalida.getHours()}:${String(horaSalida.getMinutes()).padStart(2, "0")}hs`,
+      mensaje: reemplazar(mensajes.recomendacion_roja_subiendo ?? "Preparar salida — nivel {{nivel}}m", {
+        nivel: nivelActual.toFixed(2),
+        umbral_eval: umbralEvaluacion.toFixed(1),
+        umbral_nr: umbralNoRetorno.toFixed(1),
+        horas: Math.round(horasEstimadas).toString(),
+        hora_salida: `${horaSalida.getHours()}:${String(horaSalida.getMinutes()).padStart(2, "0")}`,
+      }),
     };
   }
 
@@ -76,7 +90,11 @@ function calcularVentana(
       alerta: "amarilla",
       ventanaInicio: null,
       ventanaFin: null,
-      mensaje: `Se puede esperar — próxima revisión ~${proximaRevision.getHours()}:${String(proximaRevision.getMinutes()).padStart(2, "0")}hs (${umbralEvaluacion.toFixed(1)}m)`,
+      mensaje: reemplazar(mensajes.recomendacion_amarilla ?? "Atención — {{nivel}}m subiendo", {
+        nivel: nivelActual.toFixed(2),
+        umbral_eval: umbralEvaluacion.toFixed(1),
+        hora_revision: `${proximaRevision.getHours()}:${String(proximaRevision.getMinutes()).padStart(2, "0")}`,
+      }),
     };
   }
 
@@ -84,7 +102,7 @@ function calcularVentana(
     alerta: "verde",
     ventanaInicio: null,
     ventanaFin: null,
-    mensaje: "Todo normal",
+    mensaje: mensajes.recomendacion_verde_default ?? "Todo normal",
   };
 }
 
@@ -136,6 +154,18 @@ serve(async (req) => {
         JSON.stringify({ ok: false, error: "estación SF no encontrada" }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
+    }
+
+    const { data: recomendaciones } = await supabase
+      .from("configuracion")
+      .select("clave, valor")
+      .in("clave", ["recomendacion_verde", "recomendacion_amarilla", "recomendacion_roja_subiendo", "recomendacion_roja_critico", "recomendacion_verde_default"]);
+
+    const mensajes: Record<string, string> = {};
+    if (recomendaciones) {
+      for (const r of recomendaciones as ConfigRow[]) {
+        mensajes[r.clave] = r.valor;
+      }
     }
 
     const { data: lecturas } = await supabase
@@ -193,7 +223,7 @@ serve(async (req) => {
     }
 
     const { alerta, ventanaInicio, ventanaFin, mensaje } = calcularVentana(
-      nivelActual, tendencia, umbralEval, umbralNR, trasladoMin
+      nivelActual, tendencia, umbralEval, umbralNR, trasladoMin, mensajes
     );
 
     const mensajeCompleto = preavisos.length

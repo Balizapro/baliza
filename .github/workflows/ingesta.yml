@@ -1,8 +1,8 @@
-name: Ingesta de datos
+name: Ingesta de datos (backup)
 
 on:
   schedule:
-    - cron: "0 */3 * * *"
+    - cron: "0 */6 * * *"
   workflow_dispatch:
 
 jobs:
@@ -17,3 +17,6 @@ jobs:
 
       - name: Ingesta SHN
         run: curl -s -f -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-shn"
+
+      - name: Ingesta pronóstico INA
+        run: curl -s -f -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-pronostico"

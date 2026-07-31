@@ -41,27 +41,50 @@ Edge Functions:
 
 ## Supabase
 - URL: `https://tcgzpcfhwytrrhfxtkmt.supabase.co`
-- Migraciones en `supabase/migrations/00001_schema.sql`
-- RLS: SELECT anónimo habilitado en todas las tablas (MVP sin login)
+- Migraciones en `supabase/migrations/00001_schema.sql`, `00002_pronosticos.sql`, `00003_rls_auth.sql`
+- RLS: SELECT anónimo en todas las tablas + INSERT/UPDATE para authenticated en bitacora/umbrales/config/suscriptores/equivalencia
+- Auth: email/password con sesión vía `@supabase/ssr`
+- Proxy (replaces middleware) refresca sesión automáticamente
 
 ## Decisiones técnicas
 - Edge Functions en Deno con imports desde deno.land y esm.sh
 - Cliente Supabase con `@supabase/ssr` para server y browser
 - Dashboard client-side con polling cada 60s
-- Sin login ni auth en Fase 1
+- Auth con Supabase Auth (email/password), contexto React en AuthProvider
+- API routes protegidas verifican sesión antes de escribir con service_role key
 - SHN scraping mediante regex sobre HTML (formato semi-estructurado)
+- Middleware reemplazado por `proxy.ts` (Next.js 16)
+- Supabase Edge Functions usan SUPABASE_SERVICE_ROLE_KEY inyectado automáticamente
 
 ## Cron jobs (GitHub Actions)
 - `.github/workflows/ingesta.yml`: cada 3hs
 - Llama a los endpoints Vercel `/api/cron/ingest-*`
 
+## Pronóstico INA — endpoint descubierto
+Endpoint real: `GET /a5/sim/calibrados?estacion_id=52&var_id=2&includeCorr=true&timestart=...&timeend=...`
+- Devuelve modelo de regresión `regre_sfer` (marea_rdp_regre) para San Fernando
+- 5 qualifiers: main, p05, p25, p75, p95 — cada uno con ~97-169 pronósticos horarios
+- Datos en formato `{timestart, valor}` dentro de `corrida.series[i].pronosticos`
+- Edge Function `ingest-pronostico` alimenta tabla `pronosticos` (reemplaza cada corrida)
+
+## Admin (Fase 2)
+- Login: `/auth/login` con email `escuela@baliza.app` / pass `Baliza2026!`
+- Bitácora: escribe mediante API route protegida `/api/bitacora` (verifica sesión + service_role key)
+- AuthContext: expone `user` y `cargando` para UI condicional
+- RLS: authenticated users pueden INSERT en bitacora, UPDATE en umbrales/config/suscriptores/equivalencia
+
 ## Estado actual
 ✅ Proyecto Next.js scaffoldeado  
-✅ Esquema de BD creado + migración ejecutada  
-✅ Edge Functions: ingest-ina, ingest-shn, ingest-viento, evaluar-alerta (deployadas)  
+✅ Esquema de BD creado + migraciones 00001 + 00002 + 00003 ejecutadas  
+✅ Edge Functions: ingest-ina, ingest-shn, ingest-viento, evaluar-alerta, ingest-pronostico (deployadas)  
 ✅ Dashboard UI con alerta principal, niveles, viento, estaciones exteriores  
+✅ Pronóstico INA con qualifiers (main + p05/p25/p75/p95) en gráfico SVG integrado  
 ✅ Datos reales de INA cargados  
 ✅ Viento funcionando (Open-Meteo)  
+✅ Login con Supabase Auth (email/password) + proxy + AuthProvider  
+✅ API protegida para writes de bitácora  
+✅ RLS para authenticated users  
+✅ Admin user creado: escuela@baliza.app  
 ✅ Deployado en https://baliza-ashy.vercel.app  
 ✅ Umbrales: eval=2.0m, NR=2.2m, traslado=10min — editables en DB  
 ✅ GitHub: https://github.com/Balizapro/baliza
