@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
-import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon } from "@/lib/types";
+import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia } from "@/lib/types";
 import VistaSemanal from "@/components/VistaSemanal";
 import Bitacora from "@/components/Bitacora";
 import { useAuth } from "@/components/AuthProvider";
@@ -35,6 +35,55 @@ function tendenciaIcono(lecturas: Lectura[] | undefined | null): string {
   if (diff > 0.01) return "↑";
   if (diff < -0.01) return "↓";
   return "→";
+}
+
+// Calcula dirección, velocidad de cambio (cm/h) y duración de la tendencia
+// a partir de las últimas lecturas de una estación (orden descendente).
+function calcularTendencia(lecturas: Lectura[] | undefined | null): Tendencia | null {
+  if (!lecturas || lecturas.length < 2) return null;
+
+  const ordenadas = [...lecturas].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
+  const ultima = ordenadas[0];
+  const anterior = ordenadas[1];
+  const dtHs = (new Date(ultima.timestamp).getTime() - new Date(anterior.timestamp).getTime()) / 3600000;
+  if (dtHs <= 0) return null;
+
+  const diff = ultima.nivel_m - anterior.nivel_m;
+  const velocidadCmH = (diff / dtHs) * 100;
+  const direccion = diff > 0.01 ? "subiendo" : diff < -0.01 ? "bajando" : "estable";
+
+  // Duración: cuánto hace que viene sosteniendo la misma dirección
+  let duracionHs = 0;
+  let desde: string | null = null;
+  if (direccion !== "estable") {
+    for (let i = 0; i < ordenadas.length - 1; i++) {
+      const d = ordenadas[i].nivel_m - ordenadas[i + 1].nivel_m;
+      const mismaDir = direccion === "subiendo" ? d > 0.01 : d < -0.01;
+      if (!mismaDir) break;
+      duracionHs +=
+        (new Date(ordenadas[i].timestamp).getTime() - new Date(ordenadas[i + 1].timestamp).getTime()) / 3600000;
+    }
+    if (duracionHs > 0) {
+      desde = new Date(new Date(ordenadas[0].timestamp).getTime() - duracionHs * 3600000).toISOString();
+    }
+  }
+
+  return { direccion, velocidad_cm_h: velocidadCmH, duracion_hs: duracionHs, desde };
+}
+
+function formatoTendencia(t: Tendencia | null): string {
+  if (!t) return "sin datos suficientes";
+  const base = t.direccion;
+  if (t.direccion === "estable") return "estable";
+  const vel = Math.abs(t.velocidad_cm_h).toFixed(1);
+  if (t.duracion_hs >= 1) {
+    const hs = Math.round(t.duracion_hs);
+    return `${base} hace ~${hs}h a ~${vel}cm/h`;
+  }
+  return `${base} a ~${vel}cm/h`;
 }
 
 const colorAlerta = {
@@ -151,6 +200,11 @@ export default function Dashboard() {
           laPlata: obs(lpId),
           buenosAires: obs(baId),
           piloteNorden: obs(pnId),
+        },
+        tendencias: {
+          laPlata: calcularTendencia(filtrarPorEstacion(lpId)),
+          buenosAires: calcularTendencia(filtrarPorEstacion(baId)),
+          piloteNorden: calcularTendencia(filtrarPorEstacion(pnId)),
         },
         parana: {
           rosario: obs(rosId),
@@ -339,9 +393,9 @@ export default function Dashboard() {
           </p>
           <div className="space-y-3">
             {[
-              { nombre: "La Plata", obs: lpObs, delay: "~2-3hs antes que SF" },
-              { nombre: "Puerto de Buenos Aires", obs: baObs, delay: "~1hs antes que SF" },
-              { nombre: "Pilote Norden", obs: pnObs, delay: "" },
+              { nombre: "La Plata", obs: lpObs, tend: datos?.tendencias.laPlata ?? null, delay: "~2-3hs antes que SF" },
+              { nombre: "Puerto de Buenos Aires", obs: baObs, tend: datos?.tendencias.buenosAires ?? null, delay: "~1hs antes que SF" },
+              { nombre: "Pilote Norden", obs: pnObs, tend: datos?.tendencias.piloteNorden ?? null, delay: "" },
             ].map((est) => (
               <div key={est.nombre} className="flex items-center justify-between">
                 <div>
@@ -351,6 +405,9 @@ export default function Dashboard() {
                 <div className="text-right flex-shrink-0 ml-2">
                   <p className="font-mono text-base sm:text-lg font-bold text-[#0E4749] dark:text-[#4fc3c5] whitespace-nowrap">
                     {est.obs ? `${est.obs.nivel_m.toFixed(2)}m` : <span className="text-xs font-normal italic text-[#5B6E68]/60">sin datos disponibles</span>}
+                  </p>
+                  <p className={`text-xs ${est.tend?.direccion === "subiendo" ? "text-[#C0442B]" : est.tend?.direccion === "bajando" ? "text-[#4C7A5E]" : "text-[#5B6E68]/60"} dark:text-gray-500`}>
+                    {est.obs ? formatoTendencia(est.tend) : ""}
                   </p>
                   <p className="text-xs font-mono text-[#5B6E68]/60 dark:text-gray-500">
                     {est.obs ? formatearHora(est.obs.timestamp) : ""}

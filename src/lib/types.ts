@@ -84,6 +84,15 @@ export interface Pronostico {
   forecast_date: string;
 }
 
+export type DireccionTendencia = "subiendo" | "bajando" | "estable";
+
+export interface Tendencia {
+  direccion: DireccionTendencia;
+  velocidad_cm_h: number;
+  duracion_hs: number;
+  desde: string | null;
+}
+
 export interface DatosAgregados {
   sanFernando: {
     observado: Lectura | null;
@@ -93,6 +102,11 @@ export interface DatosAgregados {
     laPlata: Lectura | null;
     buenosAires: Lectura | null;
     piloteNorden: Lectura | null;
+  };
+  tendencias: {
+    laPlata: Tendencia | null;
+    buenosAires: Tendencia | null;
+    piloteNorden: Tendencia | null;
   };
   parana: {
     rosario: Lectura | null;
