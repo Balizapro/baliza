@@ -92,7 +92,9 @@ serve(async (req) => {
         const alturaStr = celdas[3].replace(/<[^>]+>/g, "").trim();
         const fecha = celdas[4].replace(/<[^>]+>/g, "").trim();
 
-        if (!lugar || !hora || !alturaStr || lugar === "LUGAR") continue;
+        if (!lugar || lugar === "LUGAR") continue;
+        if (hora === "---" || !/^\d{1,2}:\d{2}$/.test(hora)) continue;
+        if (alturaStr === "---" || isNaN(parseFloat(alturaStr.replace(",", ".")))) continue;
 
         const altura = parseAltura(alturaStr);
         const [dd, mm, yyyy] = fecha.split("/").map(Number);
