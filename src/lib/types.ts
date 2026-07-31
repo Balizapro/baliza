@@ -93,6 +93,36 @@ export interface Tendencia {
   desde: string | null;
 }
 
+export interface EventoSmn {
+  id: number;
+  max_level: number;
+}
+
+export interface AlertaSmn {
+  area_id: number;
+  fecha: string;
+  max_level: number;
+  eventos_json: EventoSmn[];
+  actualizado: string;
+}
+
+export type TipoAvisoShn =
+  | "pronostico_mareologico"
+  | "pronostico_olas"
+  | "dragado"
+  | "balizamiento"
+  | "novedad";
+
+export interface AvisoShn {
+  numero: string;
+  tipo: TipoAvisoShn;
+  titulo: string;
+  texto: string;
+  tendencia: "ascendente" | "descendente" | null;
+  publicado: string | null;
+  actualizado: string;
+}
+
 export interface DatosAgregados {
   sanFernando: {
     observado: Lectura | null;
@@ -120,4 +150,6 @@ export interface DatosAgregados {
   config: Configuracion[];
   alerta: Alerta | null;
   escalones: EquivalenciaEscalon[];
+  alertasSmn: AlertaSmn[];
+  avisosShn: AvisoShn[];
 }

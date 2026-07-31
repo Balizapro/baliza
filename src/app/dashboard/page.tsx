@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
-import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia } from "@/lib/types";
+import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn } from "@/lib/types";
 import VistaSemanal from "@/components/VistaSemanal";
 import Bitacora from "@/components/Bitacora";
 import { useAuth } from "@/components/AuthProvider";
@@ -12,6 +12,8 @@ import GraficoHistorico from "@/components/GraficoHistorico";
 import ThemeToggle from "@/components/ThemeToggle";
 import PropagacionLP from "@/components/PropagacionLP";
 import EscalaHidrometro from "@/components/EscalaHidrometro";
+import AlertaSmnCard from "@/components/AlertaSmnCard";
+import AvisoShnCard from "@/components/AvisoShnCard";
 import { ADMINS } from "@/lib/constants";
 
 function direccionCardinal(grados: number): string {
@@ -177,6 +179,17 @@ export default function Dashboard() {
         .gte("timestamp", sieteDiasAtras)
         .order("timestamp", { ascending: true });
 
+      const { data: alertasSmn } = await supabase
+        .from("alertas_smn")
+        .select("*")
+        .order("fecha", { ascending: true });
+
+      const { data: avisosShn } = await supabase
+        .from("avisos_shn")
+        .select("*")
+        .order("publicado", { ascending: false })
+        .limit(6);
+
       setHistorial((historico as Lectura[]) ?? []);
       setAlertasList((alertasHist as { timestamp: string; nivel: "verde" | "amarilla" | "roja" }[]) ?? []);
 
@@ -218,6 +231,8 @@ export default function Dashboard() {
         config: config ?? [],
         alerta: alerta ?? null,
         escalones: (escalones as EquivalenciaEscalon[]) ?? [],
+        alertasSmn: (alertasSmn as unknown as { area_id: number; fecha: string; max_level: number; eventos_json: { id: number; max_level: number }[]; actualizado: string }[]) ?? [],
+        avisosShn: (avisosShn as AvisoShn[]) ?? [],
       };
 
       setDatos(d);
@@ -335,6 +350,12 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        {/* Alerta meteorológica SMN */}
+        <AlertaSmnCard alertas={datos?.alertasSmn ?? []} />
+
+        {/* Aviso del SHN (pronóstico mareológico) */}
+        <AvisoShnCard avisos={datos?.avisosShn ?? []} />
 
         {/* Escala hidrométrica + estado San Fernando */}
         <section className="dashboard-section">
