@@ -299,7 +299,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-[#F2E9DC] dark:bg-[#0f172a]">
       <header className="bg-[#0E4749] dark:bg-[#0a2a2b] text-white px-4 py-3 flex items-center gap-3 relative shadow-sm">
         <a href="/" className="flex items-center gap-3">
-          <img src="/baliza-boya.svg" alt="Baliza" className="w-8 h-8 flex-shrink-0" />
+          <img src="/baliza-boya.svg" alt="Baliza" className="w-10 h-10 flex-shrink-0" />
           <span className="logo-wordmark">baliza</span>
         </a>
         <p className="text-[11px] text-[#F2E9DC]/70 dark:text-white/50 italic font-serif hidden sm:block border-l border-[#F2E9DC]/20 pl-3 leading-tight">

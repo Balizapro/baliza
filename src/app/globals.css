@@ -76,10 +76,16 @@ html {
 }
 
 .logo-wordmark {
-  color: #F2E9DC;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
+  font-family: Georgia, 'Times New Roman', serif;
+  color: #ffffff;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  line-height: 1;
+}
+
+.dark .logo-wordmark {
+  color: #ffffff;
 }
 
 .recomendacion-banner-wrapper {
