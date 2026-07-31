@@ -38,8 +38,9 @@ async function fetchObservaciones(
 ): Promise<ObservacionRaw[]> {
   const now = new Date();
   const start = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
+  const end = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
   const timestart = start.toISOString().split("T")[0];
-  const timeend = now.toISOString().split("T")[0];
+  const timeend = end.toISOString().split("T")[0];
 
   const url = `${INA_BASE}/getObservaciones?tipo=H&series_id=${series_id}&timestart=${timestart}&timeend=${timeend}`;
   console.log(`[ingest-ina] Fetching: ${url}`);
