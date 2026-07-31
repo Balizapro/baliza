@@ -230,7 +230,8 @@ export default function Dashboard() {
     <div className="min-h-screen bg-[#F2E9DC] dark:bg-[#0f172a]">
       <header className="bg-[#0E4749] dark:bg-[#0a2a2b] text-white px-4 py-3 flex items-center gap-3 relative shadow-sm">
         <a href="/" className="flex items-center gap-3">
-          <img src="/baliza-logo-horizontal.svg" alt="Baliza" className="h-7 sm:h-8 w-auto" />
+          <img src="/baliza-boya.svg" alt="Baliza" className="w-8 h-8 flex-shrink-0" />
+          <span className="logo-wordmark">baliza</span>
         </a>
         <p className="text-[11px] text-[#F2E9DC]/70 dark:text-white/50 italic font-serif hidden sm:block border-l border-[#F2E9DC]/20 pl-3 leading-tight">
           la señal antes de la crecida
@@ -265,25 +266,19 @@ export default function Dashboard() {
 
       <main className="max-w-3xl mx-auto px-3 sm:px-4">
         {/* Alerta / Recomendación */}
-        <div className={`dashboard-section py-4 sm:py-5 ${alertaNivel === "roja" ? "bg-[#C0442B]/5 -mx-3 sm:-mx-4 px-3 sm:px-4" : alertaNivel === "amarilla" ? "bg-[#E8823A]/5 -mx-3 sm:-mx-4 px-3 sm:px-4" : ""}`}>
-          <div className="flex items-start gap-3">
-            <span className={`w-3 h-3 rounded-full mt-1 flex-shrink-0 ${alertaNivel === "roja" ? "bg-[#C0442B]" : alertaNivel === "amarilla" ? "bg-[#E8823A]" : "bg-[#4C7A5E]"}`} />
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] uppercase tracking-[0.15em] font-sans text-[#5B6E68] dark:text-gray-400 mb-1">
-                Recomendación
-              </p>
-              <p className={`font-serif text-lg sm:text-xl leading-relaxed ${alertaNivel === "roja" ? "text-[#C0442B]" : alertaNivel === "amarilla" ? "text-[#C99A3D]" : "text-[#0E4749]"}`}>
-                {alerta?.mensaje ?? "Sin datos — esperando primera ingesta"}
-              </p>
-              {cuentaRegresiva && alertaNivel === "roja" && (
-                <div className="mt-3 inline-block bg-[#C0442B]/10 rounded-lg px-4 py-2 border border-[#C0442B]/20">
-                  <p className="font-mono text-2xl font-bold text-[#C0442B]">{cuentaRegresiva}</p>
-                  <p className="text-xs text-[#5B6E68] dark:text-gray-400 mt-0.5">
-                    hasta punto de no retorno ({umbralNR?.valor_m.toFixed(1) ?? "--"}m)
-                  </p>
-                </div>
-              )}
-            </div>
+        <div className="dashboard-section">
+          <div className={`recomendacion-banner ${alertaNivel === "roja" ? "roja" : alertaNivel === "amarilla" ? "amarilla" : "verde"}`}>
+            <p className="recomendacion-titulo">
+              {alerta?.mensaje ?? "Sin datos — esperando primera ingesta"}
+            </p>
+            {cuentaRegresiva && alertaNivel === "roja" && (
+              <div className="mt-3 flex items-center gap-4">
+                <span className="font-mono text-2xl font-bold text-[#C0442B]">{cuentaRegresiva}</span>
+                <span className="recomendacion-subtexto">
+                  hasta punto de no retorno ({umbralNR?.valor_m.toFixed(1) ?? "--"}m)
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

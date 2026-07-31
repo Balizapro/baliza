@@ -59,3 +59,42 @@ html {
 .dashboard-section:last-child {
   border-bottom: none;
 }
+
+.logo-wordmark {
+  color: #F2E9DC;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.recomendacion-banner {
+  background: transparent;
+  border-left: 4px solid #4C7A5E;
+  padding: 12px 0 12px 20px;
+  border-radius: 0;
+}
+
+.recomendacion-banner.verde {
+  border-left-color: #4C7A5E;
+}
+
+.recomendacion-banner.amarilla {
+  border-left-color: #C99A3D;
+}
+
+.recomendacion-banner.roja {
+  border-left-color: #C0442B;
+}
+
+.recomendacion-titulo {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 26px;
+  font-weight: 400;
+  color: #12312B;
+}
+
+.recomendacion-subtexto {
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  color: #5B6E68;
+}

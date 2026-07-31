@@ -4,7 +4,10 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#F2E9DC] dark:bg-[#0f172a] flex flex-col">
       <header className="bg-[#0E4749] dark:bg-[#0a2a2b] px-4 py-3">
-        <img src="/baliza-logo-horizontal.svg" alt="Baliza" className="h-7 sm:h-8 w-auto" />
+        <a href="/" className="inline-flex items-center gap-3">
+          <img src="/baliza-boya.svg" alt="Baliza" className="w-8 h-8 flex-shrink-0" />
+          <span className="logo-wordmark">baliza</span>
+        </a>
       </header>
       <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <img
