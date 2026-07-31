@@ -6,10 +6,10 @@ import type { Bitacora as BitacoraType, Lectura } from "@/lib/types";
 
 interface AlertaItem {
   timestamp: string;
-  nivel: "verde" | "amarilla" | "roja";
+  nivel: "verde" | "amarilla" | "roja" | "azul" | "evacuacion";
 }
 
-const colorAlertaChart = { verde: "#4C7A5E", amarilla: "#C99A3D", roja: "#C0442B" } as const;
+const colorAlertaChart = { verde: "#4C7A5E", amarilla: "#C99A3D", roja: "#C0442B", azul: "#2563EB", evacuacion: "#8B1E1E" } as const;
 
 function formatearFecha(iso: string) {
   return new Date(iso).toLocaleString("es-AR", {

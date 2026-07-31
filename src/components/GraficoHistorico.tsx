@@ -1,13 +1,13 @@
 "use client";
 
-import type { Lectura, Pronostico } from "@/lib/types";
+import type { Lectura, Pronostico, NivelAlerta } from "@/lib/types";
 
 interface Props {
   observaciones: Lectura[];
   pronosticos: Pronostico[];
   umbralEval: number;
   umbralNR: number;
-  alertas: { timestamp: string; nivel: "verde" | "amarilla" | "roja" }[];
+  alertas: { timestamp: string; nivel: NivelAlerta }[];
 }
 
 function formatearDia(iso: string): string {
@@ -115,7 +115,7 @@ export default function GraficoHistorico({ observaciones, pronosticos, umbralEva
           const t = new Date(a.timestamp).getTime();
           if (t < desde || t > ahora) return null;
           const x = xPos(a.timestamp, puntosObs);
-          const color = a.nivel === "roja" ? "#C0442B" : a.nivel === "amarilla" ? "#C99A3D" : "#4C7A5E";
+          const color = a.nivel === "roja" || a.nivel === "evacuacion" ? "#C0442B" : a.nivel === "amarilla" ? "#C99A3D" : a.nivel === "azul" ? "#2563EB" : "#4C7A5E";
           return (
             <circle key={i} cx={x} cy={yPos(minVal + rango * 0.05)} r="4" fill={color} />
           );

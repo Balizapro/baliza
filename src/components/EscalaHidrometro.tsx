@@ -1,4 +1,4 @@
-import type { EquivalenciaEscalon, Umbral } from "@/lib/types";
+import type { EquivalenciaEscalon, Umbral, NivelAlerta } from "@/lib/types";
 
 interface Props {
   nivelActual: number;
@@ -7,18 +7,21 @@ interface Props {
   escalones: EquivalenciaEscalon[];
   umbralEval: Umbral | null;
   umbralNR: Umbral | null;
-  alertaNivel: "verde" | "amarilla" | "roja";
+  umbralBajAlarma: Umbral | null;
+  umbralBajEvac: Umbral | null;
+  alertaNivel: NivelAlerta;
 }
 
 function formatearFecha(iso: string): string {
   return new Date(iso).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, escalones, umbralEval, umbralNR, alertaNivel }: Props) {
+export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, escalones, umbralEval, umbralNR, umbralBajAlarma, umbralBajEvac, alertaNivel }: Props) {
   const umbralMax = Math.max(umbralNR?.valor_m ?? 2.2, umbralEval?.valor_m ?? 2.0);
   const maxEscalon = escalones.length > 0 ? escalones[escalones.length - 1].nivel_max_m : umbralMax + 0.5;
   const escalaTecho = Math.max(maxEscalon + 0.2, nivelActual + 0.3, umbralMax + 0.3);
-  const escalaPiso = Math.min(escalones.length > 0 ? escalones[0].nivel_min_m : 0, nivelActual - 0.2, 0);
+  const bajanteMin = Math.min(umbralBajEvac?.valor_m ?? -0.1, umbralBajAlarma?.valor_m ?? 0);
+  const escalaPiso = Math.min(escalones.length > 0 ? escalones[0].nivel_min_m : 0, nivelActual - 0.2, bajanteMin - 0.2);
 
   const rango = Math.max(escalaTecho - escalaPiso, 1);
   const H = 360;
@@ -36,13 +39,22 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
     return colores[(e - 1) % colores.length];
   }
 
-  const nivelColor = alertaNivel === "roja" ? "#C0442B" : alertaNivel === "amarilla" ? "#E8823A" : "#0E4749";
-  const alertaBg = alertaNivel === "roja" ? "bg-[#C0442B]/10" : alertaNivel === "amarilla" ? "bg-[#E8823A]/10" : "bg-transparent";
+  const nivelColor =
+    alertaNivel === "roja" ? "#C0442B"
+    : alertaNivel === "evacuacion" ? "#8B1E1E"
+    : alertaNivel === "amarilla" ? "#E8823A"
+    : alertaNivel === "azul" ? "#2563EB"
+    : "#0E4749";
+  const alertaBg =
+    alertaNivel === "roja" || alertaNivel === "evacuacion" ? "bg-[#C0442B]/10"
+    : alertaNivel === "amarilla" ? "bg-[#E8823A]/10"
+    : alertaNivel === "azul" ? "bg-[#2563EB]/10"
+    : "bg-transparent";
 
   return (
     <section className={`relative ${alertaBg} rounded-xl p-4 sm:p-5`}>
       <div className="flex items-center gap-2 mb-4">
-        <span className={`w-2.5 h-2.5 rounded-full ${alertaNivel === "roja" ? "bg-[#C0442B]" : alertaNivel === "amarilla" ? "bg-[#E8823A]" : "bg-[#4C7A5E]"}`} />
+        <span className={`w-2.5 h-2.5 rounded-full ${alertaNivel === "roja" || alertaNivel === "evacuacion" ? "bg-[#C0442B]" : alertaNivel === "amarilla" ? "bg-[#E8823A]" : alertaNivel === "azul" ? "bg-[#2563EB]" : "bg-[#4C7A5E]"}`} />
         <p className="font-serif text-sm uppercase tracking-widest text-[#5B6E68] dark:text-gray-400">
           San Fernando — brazo Luján
         </p>
@@ -87,6 +99,24 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
                 <line x1={barraX - 4} y1={yPos(umbralNR.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralNR.valor_m)} stroke="#C0442B" strokeWidth={1.5} strokeDasharray="4,3" />
                 <text x={labelX + 60} y={yPos(umbralNR.valor_m) + 3} fontSize="9" fill="#C0442B" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralNR.valor_m.toFixed(2)}m</text>
                 <text x={labelX + 62} y={yPos(umbralNR.valor_m) + 3} fontSize="8" fill="#C0442B" textAnchor="start">NR</text>
+              </g>
+            )}
+
+            {/* Línea umbral bajante alarma */}
+            {umbralBajAlarma && (
+              <g>
+                <line x1={barraX - 4} y1={yPos(umbralBajAlarma.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralBajAlarma.valor_m)} stroke="#2563EB" strokeWidth={1.5} strokeDasharray="4,3" />
+                <text x={labelX + 60} y={yPos(umbralBajAlarma.valor_m) + 3} fontSize="9" fill="#2563EB" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralBajAlarma.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralBajAlarma.valor_m) + 3} fontSize="8" fill="#2563EB" textAnchor="start">baj.</text>
+              </g>
+            )}
+
+            {/* Línea umbral bajante evacuación */}
+            {umbralBajEvac && (
+              <g>
+                <line x1={barraX - 4} y1={yPos(umbralBajEvac.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralBajEvac.valor_m)} stroke="#8B1E1E" strokeWidth={1.5} strokeDasharray="4,3" />
+                <text x={labelX + 60} y={yPos(umbralBajEvac.valor_m) + 3} fontSize="9" fill="#8B1E1E" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralBajEvac.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralBajEvac.valor_m) + 3} fontSize="8" fill="#8B1E1E" textAnchor="start">evac</text>
               </g>
             )}
 
@@ -155,6 +185,18 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
               <p className="flex items-center gap-2">
                 <span className="w-3 h-[2px] bg-[#C0442B] inline-block" />
                 <span className="text-[#5B6E68] dark:text-gray-400">No retorno: <strong className="font-mono text-[#C0442B]">{umbralNR.valor_m.toFixed(2)}m</strong></span>
+              </p>
+            )}
+            {umbralBajAlarma && (
+              <p className="flex items-center gap-2">
+                <span className="w-3 h-[2px] bg-[#2563EB] inline-block" />
+                <span className="text-[#5B6E68] dark:text-gray-400">Bajante alarma: <strong className="font-mono text-[#2563EB]">{umbralBajAlarma.valor_m.toFixed(2)}m</strong></span>
+              </p>
+            )}
+            {umbralBajEvac && (
+              <p className="flex items-center gap-2">
+                <span className="w-3 h-[2px] bg-[#8B1E1E] inline-block" />
+                <span className="text-[#5B6E68] dark:text-gray-400">Bajante evacuación: <strong className="font-mono text-[#8B1E1E]">{umbralBajEvac.valor_m.toFixed(2)}m</strong></span>
               </p>
             )}
           </div>

@@ -111,6 +111,14 @@ html {
   border-left-color: #C0442B;
 }
 
+.recomendacion-banner.azul {
+  border-left-color: #2563EB;
+}
+
+.recomendacion-banner.evacuacion {
+  border-left-color: #8B1E1E;
+}
+
 .recomendacion-titulo {
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 26px;

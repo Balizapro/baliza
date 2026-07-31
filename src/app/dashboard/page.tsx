@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
-import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn } from "@/lib/types";
+import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn, NivelAlerta } from "@/lib/types";
 import VistaSemanal from "@/components/VistaSemanal";
 import Bitacora from "@/components/Bitacora";
 import { useAuth } from "@/components/AuthProvider";
@@ -92,12 +92,16 @@ const colorAlerta = {
   verde: "bg-[#4C7A5E]",
   amarilla: "bg-[#E8823A]",
   roja: "bg-red-600",
+  azul: "bg-blue-600",
+  evacuacion: "bg-[#8B1E1E]",
 };
 
 const colorAlertaBg = {
   verde: "bg-green-50 border-[#4C7A5E]",
   amarilla: "bg-orange-50 border-[#E8823A]",
   roja: "bg-red-50 border-red-600",
+  azul: "bg-blue-50 border-blue-600",
+  evacuacion: "bg-[#FBF1F0] border-[#8B1E1E]",
 };
 
 export default function Dashboard() {
@@ -106,7 +110,7 @@ export default function Dashboard() {
   const [cargando, setCargando] = useState(true);
   const [cuentaRegresiva, setCuentaRegresiva] = useState<string | null>(null);
   const [historial, setHistorial] = useState<Lectura[]>([]);
-  const [alertasList, setAlertasList] = useState<{ timestamp: string; nivel: "verde" | "amarilla" | "roja" }[]>([]);
+  const [alertasList, setAlertasList] = useState<{ timestamp: string; nivel: NivelAlerta }[]>([]);
   const [lecturasLP, setLecturasLP] = useState<Lectura[]>([]);
   const router = useRouter();
 
@@ -191,7 +195,7 @@ export default function Dashboard() {
         .limit(6);
 
       setHistorial((historico as Lectura[]) ?? []);
-      setAlertasList((alertasHist as { timestamp: string; nivel: "verde" | "amarilla" | "roja" }[]) ?? []);
+      setAlertasList((alertasHist as { timestamp: string; nivel: NivelAlerta }[]) ?? []);
 
       const filtrarPorEstacion = (id: string | undefined) =>
         (lecturas ?? []).filter((l) => l.estacion_id === id);
@@ -276,6 +280,8 @@ export default function Dashboard() {
   const viento = datos?.viento;
   const umbralEval = datos?.umbrales.find((u) => u.nombre === "evaluacion");
   const umbralNR = datos?.umbrales.find((u) => u.nombre === "no_retorno");
+  const umbralBajAlarma = datos?.umbrales.find((u) => u.nombre === "bajante_alarma") ?? null;
+  const umbralBajEvac = datos?.umbrales.find((u) => u.nombre === "bajante_evacuacion") ?? null;
   const trasladoMin = parseInt(datos?.config.find((c) => c.clave === "tiempo_traslado_minutos")?.valor ?? "10", 10);
   const escalones = datos?.escalones ?? [];
   const alertaNivel = alerta?.nivel ?? "verde";
@@ -336,11 +342,11 @@ export default function Dashboard() {
       <main className="max-w-3xl mx-auto px-3 sm:px-4 py-4 space-y-4 sm:space-y-5">
         {/* Alerta / Recomendación */}
         <div className="recomendacion-banner-wrapper">
-          <div className={`recomendacion-banner ${alertaNivel === "roja" ? "roja" : alertaNivel === "amarilla" ? "amarilla" : "verde"}`}>
+          <div className={`recomendacion-banner ${alertaNivel === "roja" ? "roja" : alertaNivel === "evacuacion" ? "evacuacion" : alertaNivel === "amarilla" ? "amarilla" : alertaNivel === "azul" ? "azul" : "verde"}`}>
             <p className="recomendacion-titulo">
               {alerta?.mensaje ?? "Sin datos — esperando primera ingesta"}
             </p>
-            {cuentaRegresiva && alertaNivel === "roja" && (
+            {(cuentaRegresiva && alertaNivel === "roja") && (
               <div className="mt-3 flex items-center gap-4">
                 <span className="font-mono text-2xl font-bold text-[#C0442B]">{cuentaRegresiva}</span>
                 <span className="recomendacion-subtexto">
@@ -366,6 +372,8 @@ export default function Dashboard() {
             escalones={escalones}
             umbralEval={umbralEval ?? null}
             umbralNR={umbralNR ?? null}
+            umbralBajAlarma={umbralBajAlarma}
+            umbralBajEvac={umbralBajEvac}
             alertaNivel={alertaNivel}
           />
         </section>
@@ -551,6 +559,8 @@ export default function Dashboard() {
               <AdminPanel
                 umbralEval={umbralEval ?? null}
                 umbralNR={umbralNR ?? null}
+                umbralBajAlarma={umbralBajAlarma}
+                umbralBajEvac={umbralBajEvac}
                 trasladoMin={trasladoMin}
                 config={datos?.config}
                 onSaved={() => {}}

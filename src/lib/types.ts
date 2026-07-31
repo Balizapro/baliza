@@ -35,12 +35,12 @@ export interface Viento {
 
 export interface Umbral {
   id: string;
-  nombre: "evaluacion" | "no_retorno";
+  nombre: "evaluacion" | "no_retorno" | "bajante_alarma" | "bajante_evacuacion";
   valor_m: number;
   descripcion: string;
 }
 
-export type NivelAlerta = "verde" | "amarilla" | "roja";
+export type NivelAlerta = "verde" | "amarilla" | "roja" | "azul" | "evacuacion";
 
 export interface Alerta {
   id: string;

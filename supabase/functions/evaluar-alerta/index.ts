@@ -16,6 +16,8 @@ interface LecturaRow {
   nivel_m: number;
 }
 
+type NivelAlerta = "verde" | "amarilla" | "roja" | "azul" | "evacuacion";
+
 const PROPAGACION_LP_A_SF = 2.5;
 const PROPAGACION_BA_A_SF = 1.0;
 
@@ -28,14 +30,39 @@ function calcularVentana(
   tendencia: "subiendo" | "bajando" | "estable",
   umbralEvaluacion: number,
   umbralNoRetorno: number,
+  bajanteAlarma: number,
+  bajanteEvacuacion: number,
   trasladoMin: number,
   mensajes: Record<string, string>
 ): {
-  alerta: "verde" | "amarilla" | "roja";
+  alerta: NivelAlerta;
   ventanaInicio: Date | null;
   ventanaFin: Date | null;
   mensaje: string;
 } {
+  // Bajante tiene prioridad: un nivel muy bajo no es compatible con crecida.
+  if (nivelActual <= bajanteEvacuacion) {
+    return {
+      alerta: "evacuacion",
+      ventanaInicio: new Date(),
+      ventanaFin: null,
+      mensaje: reemplazar(mensajes.recomendacion_bajante_evacuacion ?? "EVACUACIÓN por bajante — nivel {{nivel}}m", {
+        nivel: nivelActual.toFixed(2), bajante_evac: bajanteEvacuacion.toFixed(2),
+      }),
+    };
+  }
+
+  if (nivelActual <= bajanteAlarma) {
+    return {
+      alerta: "azul",
+      ventanaInicio: null,
+      ventanaFin: null,
+      mensaje: reemplazar(mensajes.recomendacion_bajante_alarma ?? "Bajante — nivel {{nivel}}m", {
+        nivel: nivelActual.toFixed(2), bajante_alarma: bajanteAlarma.toFixed(2),
+      }),
+    };
+  }
+
   if (nivelActual >= umbralNoRetorno) {
     return {
       alerta: "roja",
@@ -119,7 +146,7 @@ serve(async (req) => {
     const { data: umbrales } = await supabase
       .from("umbrales")
       .select("nombre, valor_m")
-      .in("nombre", ["evaluacion", "no_retorno"]);
+      .in("nombre", ["evaluacion", "no_retorno", "bajante_alarma", "bajante_evacuacion"]);
 
     if (!umbrales || (umbrales as UmbralRow[]).length < 2) {
       return new Response(
@@ -130,6 +157,8 @@ serve(async (req) => {
 
     const umbralEval = (umbrales as UmbralRow[]).find((u) => u.nombre === "evaluacion")!.valor_m;
     const umbralNR = (umbrales as UmbralRow[]).find((u) => u.nombre === "no_retorno")!.valor_m;
+    const bajanteAlarma = (umbrales as UmbralRow[]).find((u) => u.nombre === "bajante_alarma")?.valor_m ?? 0;
+    const bajanteEvacuacion = (umbrales as UmbralRow[]).find((u) => u.nombre === "bajante_evacuacion")?.valor_m ?? -0.1;
 
     // Leer tiempo de traslado desde configuracion
     let trasladoMin = 10;
@@ -159,7 +188,7 @@ serve(async (req) => {
     const { data: recomendaciones } = await supabase
       .from("configuracion")
       .select("clave, valor")
-      .in("clave", ["recomendacion_verde", "recomendacion_amarilla", "recomendacion_roja_subiendo", "recomendacion_roja_critico", "recomendacion_verde_default"]);
+      .in("clave", ["recomendacion_verde", "recomendacion_amarilla", "recomendacion_roja_subiendo", "recomendacion_roja_critico", "recomendacion_verde_default", "recomendacion_bajante_alarma", "recomendacion_bajante_evacuacion"]);
 
     const mensajes: Record<string, string> = {};
     if (recomendaciones) {
@@ -223,7 +252,7 @@ serve(async (req) => {
     }
 
     const { alerta, ventanaInicio, ventanaFin, mensaje } = calcularVentana(
-      nivelActual, tendencia, umbralEval, umbralNR, trasladoMin, mensajes
+      nivelActual, tendencia, umbralEval, umbralNR, bajanteAlarma, bajanteEvacuacion, trasladoMin, mensajes
     );
 
     const mensajeCompleto = preavisos.length
@@ -240,6 +269,8 @@ serve(async (req) => {
         tendencia,
         umbral_evaluacion: umbralEval,
         umbral_no_retorno: umbralNR,
+        bajante_alarma: bajanteAlarma,
+        bajante_evacuacion: bajanteEvacuacion,
         traslado_minutos: trasladoMin,
         preavisos,
       },

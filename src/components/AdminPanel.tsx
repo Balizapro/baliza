@@ -28,17 +28,21 @@ interface Usuario {
 interface Props {
   umbralEval: { valor_m: number; descripcion: string } | null;
   umbralNR: { valor_m: number; descripcion: string } | null;
+  umbralBajAlarma: { valor_m: number; descripcion: string } | null;
+  umbralBajEvac: { valor_m: number; descripcion: string } | null;
   trasladoMin: number;
   config?: ConfigItem[];
   onSaved: () => void;
   esAdmin?: boolean;
 }
 
-export default function AdminPanel({ umbralEval, umbralNR, trasladoMin, config, onSaved, esAdmin = false }: Props) {
+export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbralBajEvac, trasladoMin, config, onSaved, esAdmin = false }: Props) {
   const [abiertoUmbrales, setAbiertoUmbrales] = useState(false);
   const [abiertoEscalones, setAbiertoEscalones] = useState(false);
   const [evalVal, setEvalVal] = useState(umbralEval?.valor_m?.toString() ?? "2.0");
   const [nrVal, setNrVal] = useState(umbralNR?.valor_m?.toString() ?? "2.2");
+  const [bajAlarmaVal, setBajAlarmaVal] = useState(umbralBajAlarma?.valor_m?.toString() ?? "0.00");
+  const [bajEvacVal, setBajEvacVal] = useState(umbralBajEvac?.valor_m?.toString() ?? "-0.10");
   const [traslado, setTraslado] = useState(trasladoMin.toString());
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState("");
@@ -64,6 +68,8 @@ export default function AdminPanel({ umbralEval, umbralNR, trasladoMin, config, 
     { clave: "recomendacion_roja_subiendo", label: "Roja (preparar salida)" },
     { clave: "recomendacion_roja_critico", label: "Roja (salir ahora)" },
     { clave: "recomendacion_verde_default", label: "Verde (por defecto)" },
+    { clave: "recomendacion_bajante_alarma", label: "Bajante (alarma)" },
+    { clave: "recomendacion_bajante_evacuacion", label: "Bajante (evacuación)" },
   ];
 
   useEffect(() => {
@@ -232,6 +238,20 @@ export default function AdminPanel({ umbralEval, umbralNR, trasladoMin, config, 
     });
     if (!nrRes.ok) errors.push("no retorno");
 
+    const bajAlarmaRes = await fetch("/api/umbrales", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre: "bajante_alarma", valor_m: parseFloat(bajAlarmaVal) }),
+    });
+    if (!bajAlarmaRes.ok) errors.push("bajante alarma");
+
+    const bajEvacRes = await fetch("/api/umbrales", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre: "bajante_evacuacion", valor_m: parseFloat(bajEvacVal) }),
+    });
+    if (!bajEvacRes.ok) errors.push("bajante evacuación");
+
     const trasladoRes = await fetch("/api/configuracion", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -282,6 +302,31 @@ export default function AdminPanel({ umbralEval, umbralNR, trasladoMin, config, 
                 onChange={(e) => setNrVal(e.target.value)}
                 className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
               />
+            </div>
+            <div className="pt-2 border-t border-[#D4C9B8]/40 dark:border-gray-700">
+              <p className="text-xs font-serif font-medium text-[#12312B] dark:text-gray-300 mb-2">Bajante</p>
+            </div>
+            <div>
+              <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Bajante alarma (m)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={bajAlarmaVal}
+                onChange={(e) => setBajAlarmaVal(e.target.value)}
+                className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+              />
+              <p className="text-[10px] text-[#5B6E68]/60 dark:text-gray-500 mt-0.5">Alerta azul cuando el río llega a este nivel (p. ej. 0.00 m)</p>
+            </div>
+            <div>
+              <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Bajante evacuación (m)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={bajEvacVal}
+                onChange={(e) => setBajEvacVal(e.target.value)}
+                className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+              />
+              <p className="text-[10px] text-[#5B6E68]/60 dark:text-gray-500 mt-0.5">Evacuación cuando cae por debajo de este nivel (negativo)</p>
             </div>
             <div>
               <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Tiempo de traslado (min)</label>
