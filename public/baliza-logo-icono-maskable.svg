@@ -1,0 +1,11 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Baliza — ícono maskable</title>
+<desc>Ícono cuadrado full-bleed con la boya naranja y ondas centradas en la zona segura, pensado para PWA maskable</desc>
+<rect width="200" height="200" fill="#0E4749"/>
+<g transform="translate(-155 -16.6) scale(0.75)">
+  <circle cx="340" cy="98" r="9" fill="#F2E9DC"/>
+  <path d="M340 108 L372 200 L308 200 Z" fill="#E8823A"/>
+  <path d="M275 205 Q297 194 319 205 T363 205 T405 205" fill="none" stroke="#F2E9DC" stroke-width="7" stroke-linecap="round"/>
+  <path d="M285 222 Q305 212 325 222 T365 222 T395 222" fill="none" stroke="#F2E9DC" stroke-width="7" stroke-linecap="round" opacity="0.7"/>
+</g>
+</svg>

@@ -18,8 +18,8 @@ export const metadata: Metadata = {
   description: "Sistema de anticipación a crecidas para el Delta de Tigre",
   manifest: "/manifest.json",
   icons: {
-    icon: "/baliza-logo-icono.svg",
-    apple: "/baliza-logo-icono.svg",
+    icon: "/icons/icon-192.png",
+    apple: "/icons/apple-touch-icon-180.png",
   },
   appleWebApp: {
     capable: true,
