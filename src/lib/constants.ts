@@ -9,6 +9,8 @@ export const PALETA = {
   atencion: "#C99A3D",
 } as const;
 
+export const ADMINS = ["escuela@baliza.app", "nradaelli122680@gmail.com"] as const;
+
 export const ESTACIONES = {
   SAN_FERNANDO: "san_fernando",
   LA_PLATA: "la_plata",

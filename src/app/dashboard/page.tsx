@@ -12,6 +12,7 @@ import GraficoHistorico from "@/components/GraficoHistorico";
 import ThemeToggle from "@/components/ThemeToggle";
 import PropagacionLP from "@/components/PropagacionLP";
 import EscalaHidrometro from "@/components/EscalaHidrometro";
+import { ADMINS } from "@/lib/constants";
 
 function direccionCardinal(grados: number): string {
   const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
@@ -209,6 +210,7 @@ export default function Dashboard() {
   const trasladoMin = parseInt(datos?.config.find((c) => c.clave === "tiempo_traslado_minutos")?.valor ?? "10", 10);
   const escalones = datos?.escalones ?? [];
   const alertaNivel = alerta?.nivel ?? "verde";
+  const esAdmin = !!user?.email && (ADMINS as readonly string[]).includes(user.email);
 
   function escalonActual(nivel: number | undefined): string {
     if (nivel == null) return "--";
@@ -471,7 +473,7 @@ export default function Dashboard() {
         </div>
 
         {/* Admin Panel */}
-        {user && (
+        {user && esAdmin && (
           <div className="dashboard-section py-4 sm:py-5">
             <AdminPanel
               umbralEval={umbralEval ?? null}
@@ -479,6 +481,7 @@ export default function Dashboard() {
               trasladoMin={trasladoMin}
               config={datos?.config}
               onSaved={() => {}}
+              esAdmin={esAdmin}
             />
           </div>
         )}

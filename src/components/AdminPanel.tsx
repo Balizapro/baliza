@@ -16,15 +16,25 @@ interface ConfigItem {
   descripcion?: string;
 }
 
+interface Usuario {
+  id: string;
+  email: string;
+  nombre: string | null;
+  rol: string | null;
+  created_at: string;
+  confirmed: boolean;
+}
+
 interface Props {
   umbralEval: { valor_m: number; descripcion: string } | null;
   umbralNR: { valor_m: number; descripcion: string } | null;
   trasladoMin: number;
   config?: ConfigItem[];
   onSaved: () => void;
+  esAdmin?: boolean;
 }
 
-export default function AdminPanel({ umbralEval, umbralNR, trasladoMin, config, onSaved }: Props) {
+export default function AdminPanel({ umbralEval, umbralNR, trasladoMin, config, onSaved, esAdmin = false }: Props) {
   const [abiertoUmbrales, setAbiertoUmbrales] = useState(false);
   const [abiertoEscalones, setAbiertoEscalones] = useState(false);
   const [evalVal, setEvalVal] = useState(umbralEval?.valor_m?.toString() ?? "2.0");
@@ -37,6 +47,16 @@ export default function AdminPanel({ umbralEval, umbralNR, trasladoMin, config, 
   const [recVals, setRecVals] = useState<Record<string, string>>({});
   const [guardandoRec, setGuardandoRec] = useState(false);
   const [msgRec, setMsgRec] = useState("");
+
+  const [abiertoUsuarios, setAbiertoUsuarios] = useState(false);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [cargandoUsuarios, setCargandoUsuarios] = useState(false);
+  const [nuevoEmail, setNuevoEmail] = useState("");
+  const [nuevoPass, setNuevoPass] = useState("");
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [nuevoRol, setNuevoRol] = useState("docente");
+  const [creandoUsuario, setCreandoUsuario] = useState(false);
+  const [msgUsu, setMsgUsu] = useState("");
 
   const recomendacionesKeys = [
     { clave: "recomendacion_verde", label: "Verde (normal)" },
@@ -76,6 +96,46 @@ export default function AdminPanel({ umbralEval, umbralNR, trasladoMin, config, 
       onSaved();
     }
     setGuardandoRec(false);
+  }
+
+  useEffect(() => {
+    if (!abiertoUsuarios) return;
+    cargarUsuarios();
+  }, [abiertoUsuarios]);
+
+  async function cargarUsuarios() {
+    setCargandoUsuarios(true);
+    setMsgUsu("");
+    const res = await fetch("/api/usuarios");
+    const json = await res.json();
+    if (json.error) {
+      setMsgUsu(json.error);
+    } else if (json.data) {
+      setUsuarios(json.data);
+    }
+    setCargandoUsuarios(false);
+  }
+
+  async function crearUsuario() {
+    setCreandoUsuario(true);
+    setMsgUsu("");
+    const res = await fetch("/api/usuarios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: nuevoEmail, password: nuevoPass, nombre: nuevoNombre, rol: nuevoRol }),
+    });
+    const json = await res.json();
+    if (json.error) {
+      setMsgUsu(json.error);
+    } else {
+      setMsgUsu("Usuario creado");
+      setNuevoEmail("");
+      setNuevoPass("");
+      setNuevoNombre("");
+      setNuevoRol("docente");
+      await cargarUsuarios();
+    }
+    setCreandoUsuario(false);
   }
 
   const [escalones, setEscalones] = useState<Escalon[]>([]);
@@ -373,6 +433,102 @@ export default function AdminPanel({ umbralEval, umbralNR, trasladoMin, config, 
           </div>
         )}
       </div>
+
+      {esAdmin && (
+        <div>
+          <button
+            onClick={() => setAbiertoUsuarios(!abiertoUsuarios)}
+            className="w-full text-left flex items-center justify-between group"
+          >
+            <p className="text-[11px] uppercase tracking-[0.15em] font-sans text-[#5B6E68] dark:text-gray-400">
+              Usuarios
+            </p>
+            <span className="text-[#5B6E68]/50 group-hover:text-[#5B6E68] dark:text-gray-500 transition-colors">{abiertoUsuarios ? "▲" : "▼"}</span>
+          </button>
+
+          {abiertoUsuarios && (
+            <div className="mt-3 space-y-3">
+              {cargandoUsuarios ? (
+                <p className="text-xs italic text-[#5B6E68]/60 dark:text-gray-500">Cargando...</p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs font-serif font-medium text-[#12312B] dark:text-gray-300">Cuentas existentes</p>
+                  {usuarios.length === 0 ? (
+                    <p className="text-xs italic text-[#5B6E68]/60 dark:text-gray-500">Sin usuarios</p>
+                  ) : (
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {usuarios.map((u) => (
+                        <div key={u.id} className="text-xs flex items-center justify-between border-b border-[#D4C9B8]/50 dark:border-gray-700 pb-1 last:border-0">
+                          <span className="min-w-0">
+                            <span className="font-medium text-[#12312B] dark:text-gray-200 block truncate">
+                              {u.nombre ?? u.email}
+                            </span>
+                            <span className="font-mono text-[#5B6E68]/60 dark:text-gray-500 block truncate">{u.email}</span>
+                          </span>
+                          <span className="flex-shrink-0 ml-2 flex flex-col items-end gap-0.5">
+                            <span className="text-[#5B6E68] dark:text-gray-400">{u.rol ?? "—"}</span>
+                            <span className={`${u.confirmed ? "text-[#4C7A5E] dark:text-green-400" : "text-[#C99A3D]"}`}>
+                              {u.confirmed ? "activo" : "pendiente"}
+                            </span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <p className="text-xs font-serif font-medium text-[#12312B] dark:text-gray-300">Crear cuenta</p>
+                <input
+                  type="text"
+                  value={nuevoNombre}
+                  onChange={(e) => setNuevoNombre(e.target.value)}
+                  placeholder="Nombre y apellido"
+                  className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm"
+                />
+                <input
+                  type="email"
+                  value={nuevoEmail}
+                  onChange={(e) => setNuevoEmail(e.target.value)}
+                  placeholder="email@laconcepciondelta.edu.ar"
+                  className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                />
+                <input
+                  type="password"
+                  value={nuevoPass}
+                  onChange={(e) => setNuevoPass(e.target.value)}
+                  placeholder="Contraseña (mín 6 caracteres)"
+                  className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                />
+                <div>
+                  <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Rol</label>
+                  <select
+                    value={nuevoRol}
+                    onChange={(e) => setNuevoRol(e.target.value)}
+                    className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="docente">Docente</option>
+                    <option value="directivo">Directivo</option>
+                    <option value="administrador">Administrador</option>
+                  </select>
+                </div>
+                <button
+                  onClick={crearUsuario}
+                  disabled={creandoUsuario}
+                  className="bg-[#0E4749] text-white text-xs px-4 py-1.5 rounded hover:bg-[#0E4749]/90 disabled:opacity-50 transition-colors"
+                >
+                  {creandoUsuario ? "Creando..." : "Crear usuario"}
+                </button>
+              </div>
+
+              {msgUsu && (
+                <p className={`text-xs ${msgUsu === "Usuario creado" ? "text-[#4C7A5E] dark:text-green-400" : "text-[#C0442B] dark:text-red-400"}`}>{msgUsu}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
