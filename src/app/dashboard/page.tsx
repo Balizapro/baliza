@@ -511,31 +511,32 @@ export default function Dashboard() {
           );
         })()}
 
-        {/* Bitácora */}
-        <div className="dashboard-section py-4 sm:py-5">
-          <Bitacora
-            nivelActual={sfObs?.nivel_m ?? 0}
-            onRegistro={() => {}}
-            loggedIn={!!user}
-            historial={historial}
-            alertas={alertasList}
-            umbralEval={umbralEval?.valor_m}
-            umbralNR={umbralNR?.valor_m}
-          />
-        </div>
-
-        {/* Admin Panel */}
+        {/* Bitácora y configuración — solo admin */}
         {user && esAdmin && (
-          <div className="dashboard-section py-4 sm:py-5">
-            <AdminPanel
-              umbralEval={umbralEval ?? null}
-              umbralNR={umbralNR ?? null}
-              trasladoMin={trasladoMin}
-              config={datos?.config}
-              onSaved={() => {}}
-              esAdmin={esAdmin}
-            />
-          </div>
+          <>
+            <div className="dashboard-section py-4 sm:py-5">
+              <Bitacora
+                nivelActual={sfObs?.nivel_m ?? 0}
+                onRegistro={() => {}}
+                loggedIn={!!user}
+                historial={historial}
+                alertas={alertasList}
+                umbralEval={umbralEval?.valor_m}
+                umbralNR={umbralNR?.valor_m}
+              />
+            </div>
+
+            <div className="dashboard-section py-4 sm:py-5">
+              <AdminPanel
+                umbralEval={umbralEval ?? null}
+                umbralNR={umbralNR ?? null}
+                trasladoMin={trasladoMin}
+                config={datos?.config}
+                onSaved={() => {}}
+                esAdmin={esAdmin}
+              />
+            </div>
+          </>
         )}
 
         {/* Footer */}
