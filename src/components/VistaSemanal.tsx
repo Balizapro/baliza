@@ -27,7 +27,7 @@ export default function VistaSemanal({ parana }: { parana: Record<string, Lectur
 
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-[0.15em] font-sans text-[#5B6E68] dark:text-gray-400 mb-1">
+      <p className="seccion-titulo mb-1">
         Paraná — vista semanal
       </p>
       <p className="text-xs text-[#5B6E68]/60 dark:text-gray-500 mb-3">

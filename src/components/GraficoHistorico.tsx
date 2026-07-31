@@ -30,7 +30,7 @@ export default function GraficoHistorico({ observaciones, pronosticos, umbralEva
   if (ultimos7d.length < 2) {
     return (
       <div>
-        <p className="text-[11px] uppercase tracking-[0.15em] font-sans text-[#5B6E68] dark:text-gray-400 mb-2">Histórico San Fernando</p>
+        <p className="seccion-titulo mb-2">Histórico San Fernando</p>
         <p className="text-sm italic text-[#5B6E68]/60 dark:text-gray-500">Esperando datos...</p>
       </div>
     );
@@ -88,7 +88,7 @@ export default function GraficoHistorico({ observaciones, pronosticos, umbralEva
 
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-[0.15em] font-sans text-[#5B6E68] dark:text-gray-400 mb-2">
+      <p className="seccion-titulo mb-2">
         Histórico — San Fernando (últimos 7 días)
       </p>
 

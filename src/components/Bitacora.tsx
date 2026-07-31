@@ -172,7 +172,7 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
         onClick={toggle}
         className="w-full text-left flex items-center justify-between group"
       >
-        <p className="text-[11px] uppercase tracking-[0.15em] font-sans text-[#5B6E68] dark:text-gray-400">
+        <p className="seccion-titulo">
           Bitácora de eventos
         </p>
         <span className="text-[#5B6E68]/50 group-hover:text-[#5B6E68] dark:text-gray-500 transition-colors">{abierto ? "▲" : "▼"}</span>

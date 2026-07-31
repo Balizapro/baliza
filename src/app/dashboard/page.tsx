@@ -318,9 +318,9 @@ export default function Dashboard() {
         <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#E8823A]/50 via-[#4C7A5E]/30 to-transparent" />
       </header>
 
-      <main className="max-w-3xl mx-auto px-3 sm:px-4">
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 py-4 space-y-4 sm:space-y-5">
         {/* Alerta / Recomendación */}
-        <div className="dashboard-section">
+        <div className="recomendacion-banner-wrapper">
           <div className={`recomendacion-banner ${alertaNivel === "roja" ? "roja" : alertaNivel === "amarilla" ? "amarilla" : "verde"}`}>
             <p className="recomendacion-titulo">
               {alerta?.mensaje ?? "Sin datos — esperando primera ingesta"}
@@ -337,7 +337,7 @@ export default function Dashboard() {
         </div>
 
         {/* Escala hidrométrica + estado San Fernando */}
-        <div className="dashboard-section py-4 sm:py-5">
+        <section className="dashboard-section">
           <EscalaHidrometro
             nivelActual={sfObs?.nivel_m ?? 0}
             tendencia={tendenciaIcono(historial.filter((h) => h.estacion_id === datos?.sanFernando.observado?.estacion_id).slice(0, 3))}
@@ -347,10 +347,10 @@ export default function Dashboard() {
             umbralNR={umbralNR ?? null}
             alertaNivel={alertaNivel}
           />
-        </div>
+        </section>
 
         {/* Gráfico histórico */}
-        <div className="dashboard-section py-4 sm:py-5">
+        <section className="dashboard-section">
           <GraficoHistorico
             observaciones={historial}
             pronosticos={sfProno ?? []}
@@ -358,13 +358,13 @@ export default function Dashboard() {
             umbralNR={umbralNR?.valor_m ?? 2.2}
             alertas={alertasList}
           />
-        </div>
+        </section>
 
         {/* Viento + Propagación LP */}
-        <div className="dashboard-section py-4 sm:py-5">
+        <section className="dashboard-section">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.15em] font-sans text-[#5B6E68] dark:text-gray-400 mb-2">
+              <p className="seccion-titulo mb-2">
                 Viento
               </p>
               {viento ? (
@@ -384,11 +384,11 @@ export default function Dashboard() {
             </div>
             <PropagacionLP lecturasLP={lecturasLP} nivelSF={sfObs?.nivel_m} />
           </div>
-        </div>
+        </section>
 
         {/* Estaciones exteriores */}
-        <div className="dashboard-section py-4 sm:py-5">
-          <p className="text-[11px] uppercase tracking-[0.15em] font-sans text-[#5B6E68] dark:text-gray-400 mb-3">
+        <section className="dashboard-section">
+          <p className="seccion-titulo mb-3">
             Estaciones exteriores — preaviso temprano
           </p>
           <div className="space-y-3">
@@ -416,12 +416,12 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
         {/* Vista semanal Paraná */}
-        <div className="dashboard-section py-4 sm:py-5">
+        <section className="dashboard-section">
           <VistaSemanal parana={datos?.parana ?? { rosario: null, sanNicolas: null, zarate: null, campana: null, escobar: null }} />
-        </div>
+        </section>
 
         {/* Pronóstico San Fernando */}
         {(() => {
@@ -440,8 +440,8 @@ export default function Dashboard() {
           const maxVal = Math.max(maxP95, umbralNR?.valor_m ?? 2.2) + 0.3;
 
           return (
-            <div className="dashboard-section py-4 sm:py-5">
-              <p className="text-[11px] uppercase tracking-[0.15em] font-sans text-[#5B6E68] dark:text-gray-400 mb-2">
+            <section className="dashboard-section">
+              <p className="seccion-titulo mb-2">
                 Pronóstico San Fernando — INA (modelo regresión)
               </p>
               <p className="text-xs text-[#5B6E68]/70 dark:text-gray-500 mb-3">
@@ -507,14 +507,14 @@ export default function Dashboard() {
                   )}
                 </svg>
               </div>
-            </div>
+            </section>
           );
         })()}
 
         {/* Bitácora y configuración — solo admin */}
         {user && esAdmin && (
           <>
-            <div className="dashboard-section py-4 sm:py-5">
+            <section className="dashboard-section">
               <Bitacora
                 nivelActual={sfObs?.nivel_m ?? 0}
                 onRegistro={() => {}}
@@ -524,9 +524,9 @@ export default function Dashboard() {
                 umbralEval={umbralEval?.valor_m}
                 umbralNR={umbralNR?.valor_m}
               />
-            </div>
+            </section>
 
-            <div className="dashboard-section py-4 sm:py-5">
+            <section className="dashboard-section">
               <AdminPanel
                 umbralEval={umbralEval ?? null}
                 umbralNR={umbralNR ?? null}
@@ -535,7 +535,7 @@ export default function Dashboard() {
                 onSaved={() => {}}
                 esAdmin={esAdmin}
               />
-            </div>
+            </section>
           </>
         )}
 

@@ -255,7 +255,7 @@ export default function AdminPanel({ umbralEval, umbralNR, trasladoMin, config, 
           onClick={() => setAbiertoUmbrales(!abiertoUmbrales)}
           className="w-full text-left flex items-center justify-between group"
         >
-          <p className="text-[11px] uppercase tracking-[0.15em] font-sans text-[#5B6E68] dark:text-gray-400">
+          <p className="seccion-titulo">
             Umbrales
           </p>
           <span className="text-[#5B6E68]/50 group-hover:text-[#5B6E68] dark:text-gray-500 transition-colors">{abiertoUmbrales ? "▲" : "▼"}</span>
@@ -311,7 +311,7 @@ export default function AdminPanel({ umbralEval, umbralNR, trasladoMin, config, 
           onClick={() => setAbiertoEscalones(!abiertoEscalones)}
           className="w-full text-left flex items-center justify-between group"
         >
-          <p className="text-[11px] uppercase tracking-[0.15em] font-sans text-[#5B6E68] dark:text-gray-400">
+          <p className="seccion-titulo">
             Escalones del muelle
           </p>
           <span className="text-[#5B6E68]/50 group-hover:text-[#5B6E68] dark:text-gray-500 transition-colors">{abiertoEscalones ? "▲" : "▼"}</span>
@@ -398,7 +398,7 @@ export default function AdminPanel({ umbralEval, umbralNR, trasladoMin, config, 
           onClick={() => setAbiertoRecomendaciones(!abiertoRecomendaciones)}
           className="w-full text-left flex items-center justify-between group"
         >
-          <p className="text-[11px] uppercase tracking-[0.15em] font-sans text-[#5B6E68] dark:text-gray-400">
+          <p className="seccion-titulo">
             Recomendaciones
           </p>
           <span className="text-[#5B6E68]/50 group-hover:text-[#5B6E68] dark:text-gray-500 transition-colors">{abiertoRecomendaciones ? "▲" : "▼"}</span>
@@ -440,7 +440,7 @@ export default function AdminPanel({ umbralEval, umbralNR, trasladoMin, config, 
             onClick={() => setAbiertoUsuarios(!abiertoUsuarios)}
             className="w-full text-left flex items-center justify-between group"
           >
-            <p className="text-[11px] uppercase tracking-[0.15em] font-sans text-[#5B6E68] dark:text-gray-400">
+            <p className="seccion-titulo">
               Usuarios
             </p>
             <span className="text-[#5B6E68]/50 group-hover:text-[#5B6E68] dark:text-gray-500 transition-colors">{abiertoUsuarios ? "▲" : "▼"}</span>
