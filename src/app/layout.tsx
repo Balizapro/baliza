@@ -56,7 +56,7 @@ export default function RootLayout({
         <AuthProvider>{children}</AuthProvider>
         <script
           dangerouslySetInnerHTML={{
-            __html: `if("serviceWorker" in navigator){window.addEventListener("load",()=>{navigator.serviceWorker.register("/sw.js")})}`,
+            __html: `if("serviceWorker" in navigator){window.addEventListener("load",()=>{navigator.serviceWorker.register("/sw.js").then(r=>r.update())})}`,
           }}
         />
       </body>
