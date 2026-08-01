@@ -40,7 +40,7 @@ function tocarSirena(gravedad: number) {
   setTimeout(() => ctx.close(), duracion * 1000 + 500);
 }
 
-export default function AlertaSonora({ nivel, habilitado = true, onToggle }: Props) {
+export default function AlertaSonora({ nivel, habilitado = false, onToggle }: Props) {
   const [activo, setActivo] = useState(habilitado);
   const prevNivel = useRef<string | null>(null);
 
