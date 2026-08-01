@@ -33,7 +33,7 @@ SELECT cron.schedule('ingest-shn', '*/20 * * * *', $$
   ) as request_id;
 $$);
 
-SELECT cron.schedule('evaluar-alerta', '*/20 * * * *', $$
+SELECT cron.schedule('evaluar-alerta', '*/5 * * * *', $$
   select net.http_post(
     url:='https://tcgzpcfhwytrrhfxtkmt.supabase.co/functions/v1/evaluar-alerta',
     headers:=jsonb_build_object('Content-Type', 'application/json'),
