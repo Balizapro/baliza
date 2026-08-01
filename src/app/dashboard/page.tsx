@@ -466,7 +466,9 @@ export default function Dashboard() {
 
           const maxP95 = Math.max(...p95.filter((p) => new Date(p.timestamp).getTime() > ahora).map((p) => p.valor_m), 0);
           const maxMain = Math.max(...proximos.map((p) => p.valor_m));
+          const minMain = Math.min(...proximos.map((p) => p.valor_m));
           const maxVal = Math.max(maxP95, umbralNR?.valor_m ?? 2.2) + 0.3;
+          const bajanteMin = Math.min(umbralBajEvac?.valor_m ?? -0.1, umbralBajAlarma?.valor_m ?? 0);
 
           return (
             <section className="dashboard-section">
@@ -478,6 +480,9 @@ export default function Dashboard() {
                 {maxP95 > maxMain && (
                   <span> (p95: <strong className="font-mono text-[#C99A3D]">{maxP95.toFixed(2)}m</strong>)</span>
                 )}
+                {minMain <= (umbralBajAlarma?.valor_m ?? 0) && (
+                  <span> · Mínimo: <strong className="font-mono text-[#2563EB]">{minMain.toFixed(2)}m</strong></span>
+                )}
               </p>
               <div className="relative h-36 sm:h-48">
                 <svg viewBox="0 0 480 160" className="w-full h-full overflow-visible">
@@ -486,6 +491,12 @@ export default function Dashboard() {
                   )}
                   {umbralNR && (
                     <line x1="0" y1={160 - (umbralNR.valor_m / maxVal) * 140 - 10} x2="480" y2={160 - (umbralNR.valor_m / maxVal) * 140 - 10} stroke="#C0442B" strokeWidth="1" strokeDasharray="4,3" />
+                  )}
+                  {umbralBajAlarma && (
+                    <line x1="0" y1={160 - (umbralBajAlarma.valor_m / maxVal) * 140 - 10} x2="480" y2={160 - (umbralBajAlarma.valor_m / maxVal) * 140 - 10} stroke="#2563EB" strokeWidth="1" strokeDasharray="4,3" />
+                  )}
+                  {umbralBajEvac && (
+                    <line x1="0" y1={160 - (umbralBajEvac.valor_m / maxVal) * 140 - 10} x2="480" y2={160 - (umbralBajEvac.valor_m / maxVal) * 140 - 10} stroke="#8B1E1E" strokeWidth="1" strokeDasharray="4,3" />
                   )}
 
                   <polygon
@@ -532,6 +543,16 @@ export default function Dashboard() {
                   {umbralNR && (
                     <text x="482" y={160 - (umbralNR.valor_m / maxVal) * 140 - 10 + 4} fontSize="7" fill="#C0442B" fontFamily="ui-monospace, monospace">
                       NR {umbralNR.valor_m.toFixed(1)}
+                    </text>
+                  )}
+                  {umbralBajAlarma && (
+                    <text x="482" y={160 - (umbralBajAlarma.valor_m / maxVal) * 140 - 10 + 4} fontSize="7" fill="#2563EB" fontFamily="ui-monospace, monospace">
+                      baj {umbralBajAlarma.valor_m.toFixed(1)}
+                    </text>
+                  )}
+                  {umbralBajEvac && (
+                    <text x="482" y={160 - (umbralBajEvac.valor_m / maxVal) * 140 - 10 + 4} fontSize="7" fill="#8B1E1E" fontFamily="ui-monospace, monospace">
+                      evac {umbralBajEvac.valor_m.toFixed(1)}
                     </text>
                   )}
                 </svg>

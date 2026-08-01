@@ -16,6 +16,11 @@ interface LecturaRow {
   nivel_m: number;
 }
 
+interface PronosticoRow {
+  timestamp: string;
+  valor_m: number;
+}
+
 type NivelAlerta = "verde" | "amarilla" | "roja" | "azul" | "evacuacion";
 
 const PROPAGACION_LP_A_SF = 2.5;
@@ -23,6 +28,49 @@ const PROPAGACION_BA_A_SF = 1.0;
 
 function reemplazar(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+}
+
+function formatearMomento(iso: string): string {
+  return new Date(iso).toLocaleString("es-AR", { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// Cruces de umbral según el pronóstico INA (qualifier main) de San Fernando.
+function preavisosPronostico(
+  pronos: PronosticoRow[],
+  umbralEval: number,
+  umbralNR: number,
+  bajanteAlarma: number,
+  bajanteEvacuacion: number
+): { preavisos: string[]; severo: boolean } {
+  const preavisos: string[] = [];
+  let severo = false;
+  const ahora = Date.now();
+  const futuros = pronos
+    .filter((p) => new Date(p.timestamp).getTime() >= ahora)
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  if (futuros.length === 0) return { preavisos, severo };
+
+  // Peor escenario de crecida en el horizonte del pronóstico
+  const pico = futuros.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futuros[0]);
+  const pozo = futuros.reduce((m, p) => (p.valor_m < m.valor_m ? p : m), futuros[0]);
+
+  if (pico.valor_m >= umbralNR) {
+    preavisos.push(`Pronóstico alcanza ${pico.valor_m.toFixed(2)}m (no retorno ${umbralNR.toFixed(1)}m) — ${formatearMomento(pico.timestamp)}`);
+    severo = true;
+  } else if (pico.valor_m >= umbralEval) {
+    preavisos.push(`Pronóstico alcanza ${pico.valor_m.toFixed(2)}m (evaluación ${umbralEval.toFixed(1)}m) — ${formatearMomento(pico.timestamp)}`);
+  }
+
+  // Peor escenario de bajante en el horizonte del pronóstico
+  if (pozo.valor_m <= bajanteEvacuacion) {
+    preavisos.push(`Pronóstico baja a ${pozo.valor_m.toFixed(2)}m (evacuación ${bajanteEvacuacion.toFixed(1)}m) — ${formatearMomento(pozo.timestamp)}`);
+    severo = true;
+  } else if (pozo.valor_m <= bajanteAlarma) {
+    preavisos.push(`Pronóstico baja a ${pozo.valor_m.toFixed(2)}m (bajante alarma ${bajanteAlarma.toFixed(2)}m) — ${formatearMomento(pozo.timestamp)}`);
+  }
+
+  return { preavisos, severo };
 }
 
 function calcularVentana(
@@ -251,16 +299,52 @@ serve(async (req) => {
       }
     }
 
+    // Preaviso por tendencia mareológica del SHN (Río de la Plata Interior)
+    const { data: avisosSHN } = await supabase
+      .from("avisos_shn")
+      .select("tendencia")
+      .eq("tipo", "pronostico_mareologico")
+      .order("publicado", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const tendenciaSHN = avisosSHN?.tendencia ?? null;
+
+    // Preaviso por pronóstico INA de San Fernando (qualifier main, próximo horizonte)
+    const { data: pronos } = await supabase
+      .from("pronosticos")
+      .select("timestamp, valor_m")
+      .eq("estacion_id", estaciones.id)
+      .eq("qualifier", "main")
+      .gte("timestamp", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
+      .lte("timestamp", new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString())
+      .order("timestamp", { ascending: true });
+
+    const preavisosProno = preavisosPronostico(
+      (pronos as PronosticoRow[] | null) ?? [],
+      umbralEval, umbralNR, bajanteAlarma, bajanteEvacuacion
+    );
+
+    // Si el SHN está en tendencia descendente y se acerca a la bajante, sumar alerta temprana
+    if (tendenciaSHN === "descendente" && nivelActual <= bajanteAlarma + 0.5) {
+      preavisos.push(`SHN: tendencia descendente en Río de la Plata Interior — vigilar bajante`);
+    }
+    preavisos.push(...preavisosProno.preavisos);
+
     const { alerta, ventanaInicio, ventanaFin, mensaje } = calcularVentana(
       nivelActual, tendencia, umbralEval, umbralNR, bajanteAlarma, bajanteEvacuacion, trasladoMin, mensajes
     );
+
+    // Elevar verde→amarilla si el pronóstico anticipa un cruce severo (no retorno o evacuación por bajante)
+    const alertaFinal: NivelAlerta =
+      alerta === "verde" && preavisosProno.severo ? "amarilla" : alerta;
 
     const mensajeCompleto = preavisos.length
       ? `${mensaje} | Preaviso: ${preavisos.join("; ")}`
       : mensaje;
 
     const alertaRow = {
-      nivel: alerta,
+      nivel: alertaFinal,
       ventana_inicio: ventanaInicio?.toISOString() ?? null,
       ventana_fin: ventanaFin?.toISOString() ?? null,
       mensaje: mensajeCompleto,
@@ -272,6 +356,7 @@ serve(async (req) => {
         bajante_alarma: bajanteAlarma,
         bajante_evacuacion: bajanteEvacuacion,
         traslado_minutos: trasladoMin,
+        tendencia_shn: tendenciaSHN,
         preavisos,
       },
     };
