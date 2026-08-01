@@ -19,7 +19,6 @@ import AlertaSonora from "@/components/AlertaSonora";
 import ComparacionModelo from "@/components/ComparacionModelo";
 import EstadoFuentes from "@/components/EstadoFuentes";
 import VerificacionPronostico from "@/components/VerificacionPronostico";
-import QueHacerAhora from "@/components/QueHacerAhora";
 import { ADMINS } from "@/lib/constants";
 
 function direccionCardinal(grados: number): string {
@@ -327,12 +326,6 @@ export default function Dashboard() {
   const esAdmin = !!user?.email && (ADMINS as readonly string[]).includes(user.email);
   const tendenciaSF = calcularTendencia(historial);
 
-  function escalonActual(nivel: number | undefined): string {
-    if (nivel == null) return "--";
-    const e = escalones.find((x) => nivel >= x.nivel_min_m && nivel < x.nivel_max_m);
-    return e ? e.escalon.toString() : nivel < escalones[0]?.nivel_min_m ? "0" : "> " + escalones[escalones.length - 1]?.escalon;
-  }
-
   if (cargando) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#F2E9DC]">
@@ -499,9 +492,6 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-
-        {/* Qué hacer ahora */}
-        <QueHacerAhora alertaNivel={alertaNivel} escalon={escalonActual(sfObs?.nivel_m)} escalones={escalones} />
 
         {/* Salud de fuentes */}
         <EstadoFuentes
