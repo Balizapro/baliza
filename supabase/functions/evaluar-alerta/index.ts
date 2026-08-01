@@ -364,9 +364,49 @@ serve(async (req) => {
       },
     };
 
+    // Notificar solo cuando el estado EMPEORA respecto de la última alerta registrada
+    const { data: ultima } = await supabase
+      .from("alertas")
+      .select("nivel")
+      .order("timestamp", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const gravedad: Record<NivelAlerta, number> = { verde: 0, azul: 1, amarilla: 2, roja: 3, evacuacion: 4 };
+    const nivelPrevio = (ultima?.nivel as NivelAlerta) ?? "verde";
+    const empeoro = gravedad[alertaFinal] > gravedad[nivelPrevio];
+
     await supabase.from("alertas").insert(alertaRow);
 
-    return new Response(JSON.stringify({ ok: true, alerta: alertaRow }), {
+    if (empeoro) {
+      const titulo =
+        alertaFinal === "evacuacion"
+          ? "Baliza — EVACUACIÓN"
+          : alertaFinal === "roja"
+            ? "Baliza — Alerta roja"
+            : alertaFinal === "amarilla"
+              ? "Baliza — Atención"
+              : "Baliza — Nuevo estado";
+      const cuerpo = mensajeCompleto.split("|")[0]?.trim() ?? "El río cambió su estado en San Fernando";
+
+      try {
+        await fetch(
+          `${Deno.env.get("SUPABASE_URL")}/functions/v1/enviar-notificacion`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
+            },
+            body: JSON.stringify({ titulo, cuerpo, url: "/dashboard" }),
+          }
+        );
+      } catch (notifErr) {
+        console.error("[evaluar-alerta] Error enviando notificación:", notifErr);
+      }
+    }
+
+    return new Response(JSON.stringify({ ok: true, alerta: alertaRow, notifico: empeoro }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {

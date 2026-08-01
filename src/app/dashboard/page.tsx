@@ -14,6 +14,9 @@ import PropagacionLP from "@/components/PropagacionLP";
 import EscalaHidrometro from "@/components/EscalaHidrometro";
 import AlertaSmnCard from "@/components/AlertaSmnCard";
 import AvisoShnCard from "@/components/AvisoShnCard";
+import PushNotifications from "@/components/PushNotifications";
+import AlertaSonora from "@/components/AlertaSonora";
+import ComparacionModelo from "@/components/ComparacionModelo";
 import { ADMINS } from "@/lib/constants";
 
 function direccionCardinal(grados: number): string {
@@ -313,6 +316,8 @@ export default function Dashboard() {
           la señal antes de la crecida
         </p>
         <div className="ml-auto flex items-center gap-2">
+          <AlertaSonora nivel={alertaNivel} />
+          <PushNotifications />
           <ThemeToggle />
           {user ? (
             <>
@@ -480,6 +485,15 @@ export default function Dashboard() {
             </div>
             <PropagacionLP lecturasLP={lecturasLP} nivelSF={sfObs?.nivel_m} />
           </div>
+        </section>
+
+        {/* Modelo INA vs propagación LP */}
+        <section className="dashboard-section">
+          <ComparacionModelo
+            pronostico={sfProno ?? []}
+            lecturasLP={lecturasLP}
+            nivelSF={sfObs?.nivel_m}
+          />
         </section>
 
         {/* Estaciones exteriores — oculto temporalmente (no relevante para la vista principal) */}

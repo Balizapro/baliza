@@ -1,4 +1,4 @@
-const CACHE = "baliza-v3";
+const CACHE = "baliza-v4";
 const ASSETS = [
   "/baliza-boya.svg",
   "/baliza-logo-horizontal.svg",
@@ -20,6 +20,42 @@ self.addEventListener("activate", (e) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
+  );
+});
+
+// Notificación Web Push
+self.addEventListener("push", (e) => {
+  let data = { title: "Baliza", body: "", url: "/dashboard" };
+  try {
+    data = e.data ? e.data.json() : data;
+  } catch {
+    data = { title: "Baliza", body: e.data?.text?.() ?? "", url: "/dashboard" };
+  }
+
+  e.waitUntil(
+    self.registration.showNotification(data.title || "Baliza", {
+      body: data.body || "Nuevo estado del río en San Fernando",
+      icon: "/baliza-boya.svg",
+      badge: "/baliza-boya.svg",
+      data: { url: data.url || "/dashboard" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = e.notification.data?.url || "/dashboard";
+  e.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if ("focus" in client) {
+          client.focus();
+          client.navigate(url);
+          return;
+        }
+      }
+      return clients.openWindow(url);
+    })
   );
 });
 
