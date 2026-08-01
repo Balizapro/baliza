@@ -22,6 +22,10 @@ export interface Marea {
   timestamp_hasta: string;
   correccion_cm: number;
   lugar: string;
+  tipo?: string;
+  punto?: string;
+  timestamp_marea?: string | null;
+  nivel_m?: number | null;
 }
 
 export interface Viento {
@@ -153,4 +157,5 @@ export interface DatosAgregados {
   escalones: EquivalenciaEscalon[];
   alertasSmn: AlertaSmn[];
   avisosShn: AvisoShn[];
+  mareas: Marea[];
 }

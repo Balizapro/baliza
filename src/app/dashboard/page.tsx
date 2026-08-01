@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
-import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn, NivelAlerta } from "@/lib/types";
+import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn, NivelAlerta, Marea } from "@/lib/types";
 import VistaSemanal from "@/components/VistaSemanal";
 import Bitacora from "@/components/Bitacora";
 import { useAuth } from "@/components/AuthProvider";
@@ -17,6 +17,7 @@ import AvisoShnCard from "@/components/AvisoShnCard";
 import PushNotifications from "@/components/PushNotifications";
 import AlertaSonora from "@/components/AlertaSonora";
 import ComparacionModelo from "@/components/ComparacionModelo";
+import GraficoMarea from "@/components/GraficoMarea";
 import { ADMINS } from "@/lib/constants";
 
 function direccionCardinal(grados: number): string {
@@ -197,6 +198,13 @@ export default function Dashboard() {
         .order("publicado", { ascending: false })
         .limit(6);
 
+      const { data: mareas } = await supabase
+        .from("mareas")
+        .select("*")
+        .eq("tipo", "astro")
+        .eq("punto", "Lujan")
+        .order("timestamp_marea", { ascending: true });
+
       setHistorial((historico as Lectura[]) ?? []);
       setAlertasList((alertasHist as { timestamp: string; nivel: NivelAlerta }[]) ?? []);
 
@@ -240,6 +248,7 @@ export default function Dashboard() {
         escalones: (escalones as EquivalenciaEscalon[]) ?? [],
         alertasSmn: (alertasSmn as unknown as { area_id: number; fecha: string; max_level: number; eventos_json: { id: number; max_level: number }[]; actualizado: string }[]) ?? [],
         avisosShn: (avisosShn as AvisoShn[]) ?? [],
+        mareas: (mareas as Marea[]) ?? [],
       };
 
       setDatos(d);
@@ -485,6 +494,11 @@ export default function Dashboard() {
             </div>
             <PropagacionLP lecturasLP={lecturasLP} nivelSF={sfObs?.nivel_m} />
           </div>
+        </section>
+
+        {/* Marea astronómica — señal de mayor antelación (SHN) */}
+        <section className="dashboard-section">
+          <GraficoMarea mareas={datos?.mareas ?? []} umbralEval={umbralEval?.valor_m ?? 2.0} />
         </section>
 
         {/* Modelo INA vs propagación LP */}
