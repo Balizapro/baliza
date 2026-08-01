@@ -30,8 +30,10 @@ function reemplazar(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
 }
 
+const TZ = "America/Argentina/Buenos_Aires";
+
 function formatearMomento(iso: string): string {
-  return new Date(iso).toLocaleString("es-AR", { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString("es-AR", { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: TZ });
 }
 
 // Cruces de umbral según el pronóstico INA (qualifier main) de San Fernando.

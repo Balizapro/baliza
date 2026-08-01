@@ -522,20 +522,124 @@ export default function Dashboard() {
         {/* Pronóstico San Fernando */}
         {(() => {
           const main = sfProno?.filter((p) => p.qualifier === "main") ?? [];
-          const p05 = sfProno?.filter((p) => p.qualifier === "p05") ?? [];
-          const p25 = sfProno?.filter((p) => p.qualifier === "p25") ?? [];
-          const p75 = sfProno?.filter((p) => p.qualifier === "p75") ?? [];
-          const p95 = sfProno?.filter((p) => p.qualifier === "p95") ?? [];
-          const ahora = Date.now();
+          const bandas = new Map<string, { p05?: number; p25?: number; p75?: number; p95?: number }>();
+          for (const p of sfProno ?? []) {
+            if (p.qualifier === "main") continue;
+            const b = bandas.get(p.timestamp) ?? {};
+            b[p.qualifier as "p05" | "p25" | "p75" | "p95"] = p.valor_m;
+            bandas.set(p.timestamp, b);
+          }
 
-          const proximos = main.filter((p) => new Date(p.timestamp).getTime() > ahora).slice(0, 48);
+          const ahora = Date.now();
+          const proximos = main
+            .filter((p) => new Date(p.timestamp).getTime() >= ahora)
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+            .slice(0, 48);
           if (proximos.length === 0) return null;
 
-          const maxP95 = Math.max(...p95.filter((p) => new Date(p.timestamp).getTime() > ahora).map((p) => p.valor_m), 0);
+          // Últimas lecturas observadas (48h) para anclar el pronóstico
+          const obsRecientes = (historial ?? [])
+            .filter((l) => new Date(l.timestamp).getTime() >= ahora - 48 * 60 * 60 * 1000)
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+          const maxP95 = Math.max(
+            ...proximos.map((p) => bandas.get(p.timestamp)?.p95 ?? p.valor_m),
+            ...(obsRecientes.map((o) => o.nivel_m) ?? []),
+            0
+          );
           const maxMain = Math.max(...proximos.map((p) => p.valor_m));
-          const minMain = Math.min(...proximos.map((p) => p.valor_m));
-          const maxVal = Math.max(maxP95, umbralNR?.valor_m ?? 2.2) + 0.3;
-          const bajanteMin = Math.min(umbralBajEvac?.valor_m ?? -0.1, umbralBajAlarma?.valor_m ?? 0);
+          const minP05 = Math.min(
+            ...proximos.map((p) => bandas.get(p.timestamp)?.p05 ?? p.valor_m),
+            ...(obsRecientes.map((o) => o.nivel_m) ?? []),
+            Number.POSITIVE_INFINITY
+          );
+
+          const yMax = Math.max(maxP95, umbralNR?.valor_m ?? 2.2) + 0.3;
+          const yMin = Math.min(minP05, umbralBajAlarma?.valor_m ?? 0, umbralBajEvac?.valor_m ?? -0.3) - 0.1;
+
+          const W = 680;
+          const H = 220;
+          const padL = 40;
+          const padR = 18;
+          const padT = 16;
+          const padB = 30;
+
+          const t0 = Math.min(ahora, ...(obsRecientes.map((o) => new Date(o.timestamp).getTime()) ?? [ahora]));
+          const t1 = new Date(proximos[proximos.length - 1].timestamp).getTime();
+
+          const xPos = (t: number): number => padL + ((t - t0) / Math.max(t1 - t0, 1)) * (W - padL - padR);
+          const yPos = (v: number): number => padT + (1 - (v - yMin) / (yMax - yMin)) * (H - padT - padB);
+
+          const rangoY = yMax - yMin;
+
+          const yLabels: number[] = [];
+          for (let v = Math.ceil(yMin * 2) / 2; v <= Math.floor(yMax * 2) / 2 + 0.001; v += 0.5) {
+            yLabels.push(Math.round(v * 100) / 100);
+          }
+
+          // Labels de hora cada 6hs y de día al cambiar de fecha local
+          const xLabels: { x: number; label: string; esDia: boolean }[] = [];
+          const pasoHs = Math.max(6, Math.round((t1 - t0) / (3600000 * 10)));
+          const horaLocal = (ts: string) => new Date(ts).getTime();
+          let ultimoDia = "";
+          for (let t = t0 + (t1 - t0) * 0.01; t <= t1; t += pasoHs * 3600000) {
+            const d = new Date(t);
+            const dia = d.toLocaleDateString("es-AR", { day: "numeric", month: "numeric" });
+            const esDia = dia !== ultimoDia;
+            if (esDia) ultimoDia = dia;
+            xLabels.push({
+              x: xPos(t),
+              label: esDia ? `${dia} ${String(d.getHours()).padStart(2, "0")}:00` : `${String(d.getHours()).padStart(2, "0")}:00`,
+              esDia,
+            });
+          }
+          void horaLocal;
+
+          const pico = proximos.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), proximos[0]);
+          const picoX = xPos(new Date(pico.timestamp).getTime());
+          const picoY = yPos(pico.valor_m);
+
+          const lineaObs = obsRecientes
+            .map((o) => `${xPos(new Date(o.timestamp).getTime()).toFixed(1)},${yPos(o.nivel_m).toFixed(1)}`)
+            .join(" ");
+
+          const lineaMain = proximos
+            .map((p) => `${xPos(new Date(p.timestamp).getTime()).toFixed(1)},${yPos(p.valor_m).toFixed(1)}`)
+            .join(" ");
+
+          const bandaP05P95 = proximos
+            .map((p) => {
+              const x = xPos(new Date(p.timestamp).getTime()).toFixed(1);
+              const hi = bandas.get(p.timestamp)?.p95 ?? p.valor_m;
+              return `${x},${yPos(hi).toFixed(1)}`;
+            })
+            .join(" ") +
+            " " +
+            [...proximos]
+              .reverse()
+              .map((p) => {
+                const x = xPos(new Date(p.timestamp).getTime()).toFixed(1);
+                const lo = bandas.get(p.timestamp)?.p05 ?? p.valor_m;
+                return `${x},${yPos(lo).toFixed(1)}`;
+              })
+              .join(" ");
+
+          const bandaP25P75 = proximos
+            .map((p) => {
+              const x = xPos(new Date(p.timestamp).getTime()).toFixed(1);
+              const hi = bandas.get(p.timestamp)?.p75 ?? p.valor_m;
+              return `${x},${yPos(hi).toFixed(1)}`;
+            })
+            .join(" ") +
+            " " +
+            [...proximos]
+              .reverse()
+              .map((p) => {
+                const x = xPos(new Date(p.timestamp).getTime()).toFixed(1);
+                const lo = bandas.get(p.timestamp)?.p25 ?? p.valor_m;
+                return `${x},${yPos(lo).toFixed(1)}`;
+              })
+              .join(" ");
 
           return (
             <section className="dashboard-section">
@@ -543,86 +647,95 @@ export default function Dashboard() {
                 Pronóstico San Fernando — INA (modelo regresión)
               </p>
               <p className="text-xs text-[#5B6E68]/70 dark:text-gray-500 mb-3">
-                Máximo estimado: <strong className="font-mono">{maxMain.toFixed(2)}m</strong>
+                Pico estimado: <strong className="font-mono">{pico.valor_m.toFixed(2)}m</strong>
+                <span className="text-[#5B6E68]/70 dark:text-gray-500"> — {formatearFechaHora(pico.timestamp)}</span>
                 {maxP95 > maxMain && (
-                  <span> (p95: <strong className="font-mono text-[#C99A3D]">{maxP95.toFixed(2)}m</strong>)</span>
+                  <span> · p95: <strong className="font-mono text-[#C99A3D]">{maxP95.toFixed(2)}m</strong></span>
                 )}
-                {minMain <= (umbralBajAlarma?.valor_m ?? 0) && (
-                  <span> · Mínimo: <strong className="font-mono text-[#2563EB]">{minMain.toFixed(2)}m</strong></span>
+                {minP05 <= (umbralBajAlarma?.valor_m ?? 0) && (
+                  <span> · Mínimo: <strong className="font-mono text-[#2563EB]">{minP05.toFixed(2)}m</strong></span>
                 )}
               </p>
-              <div className="relative h-36 sm:h-48">
-                <svg viewBox="0 0 480 160" className="w-full h-full overflow-visible">
-                  {umbralEval && (
-                    <line x1="0" y1={160 - (umbralEval.valor_m / maxVal) * 140 - 10} x2="480" y2={160 - (umbralEval.valor_m / maxVal) * 140 - 10} stroke="#C99A3D" strokeWidth="1" strokeDasharray="4,3" />
-                  )}
-                  {umbralNR && (
-                    <line x1="0" y1={160 - (umbralNR.valor_m / maxVal) * 140 - 10} x2="480" y2={160 - (umbralNR.valor_m / maxVal) * 140 - 10} stroke="#C0442B" strokeWidth="1" strokeDasharray="4,3" />
-                  )}
-                  {umbralBajAlarma && (
-                    <line x1="0" y1={160 - (umbralBajAlarma.valor_m / maxVal) * 140 - 10} x2="480" y2={160 - (umbralBajAlarma.valor_m / maxVal) * 140 - 10} stroke="#2563EB" strokeWidth="1" strokeDasharray="4,3" />
-                  )}
-                  {umbralBajEvac && (
-                    <line x1="0" y1={160 - (umbralBajEvac.valor_m / maxVal) * 140 - 10} x2="480" y2={160 - (umbralBajEvac.valor_m / maxVal) * 140 - 10} stroke="#8B1E1E" strokeWidth="1" strokeDasharray="4,3" />
-                  )}
+              <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" style={{ maxHeight: "300px" }}>
+                <defs>
+                  <clipPath id="prono-clip"><rect x={padL} y={padT} width={W - padL - padR} height={H - padT - padB} /></clipPath>
+                </defs>
 
-                  <polygon
-                    fill="#0E4749"
-                    fillOpacity="0.08"
-                    points={proximos.map((p, i) => {
-                      const x = (i / Math.max(proximos.length - 1, 1)) * 460 + 10;
-                      const p05v = p05.find((q) => q.timestamp === p.timestamp)?.valor_m ?? p.valor_m;
-                      const p95v = p95.find((q) => q.timestamp === p.timestamp)?.valor_m ?? p.valor_m;
-                      const y1 = 150 - (p95v / maxVal) * 140;
-                      const y2 = 150 - (p05v / maxVal) * 140;
-                      return `${x},${y1} `;
-                    }).join("") + [...proximos].reverse().map((p) => {
-                      const x = (proximos.indexOf(p) / Math.max(proximos.length - 1, 1)) * 460 + 10;
-                      const p05v = p05.find((q) => q.timestamp === p.timestamp)?.valor_m ?? p.valor_m;
-                      const p95v = p95.find((q) => q.timestamp === p.timestamp)?.valor_m ?? p.valor_m;
-                      const y2 = 150 - (p05v / maxVal) * 140;
-                      return `${x},${y2} `;
-                    }).join("")}
-                  />
+                {/* Grid horizontal + Y */}
+                {yLabels.map((v) => (
+                  <g key={v}>
+                    <line x1={padL} y1={yPos(v)} x2={W - padR} y2={yPos(v)} stroke="#e5e7eb" strokeWidth="1" />
+                    <text x={padL - 6} y={yPos(v) + 3} fontSize="9" fill="#9ca3af" textAnchor="end">{v.toFixed(1)}</text>
+                  </g>
+                ))}
 
-                  <polyline
-                    fill="none"
-                    stroke="#0E4749"
-                    strokeWidth="2"
-                    points={proximos.map((p, i) => {
-                      const x = (i / Math.max(proximos.length - 1, 1)) * 460 + 10;
-                      const y = 150 - (p.valor_m / maxVal) * 140;
-                      return `${x},${y}`;
-                    }).join(" ")}
-                  />
+                {/* Labels X */}
+                {xLabels.map((xl) => (
+                  <text key={xl.label + xl.x.toFixed(0)} x={xl.x} y={H - 8} fontSize={xl.esDia ? "9" : "8"} fontWeight={xl.esDia ? 600 : 400} fill="#9ca3af" textAnchor="middle">
+                    {xl.label}
+                  </text>
+                ))}
 
-                  {[0, 0.5, 1, 1.5, 2, 2.5].filter((v) => v <= maxVal).map((v) => (
-                    <text key={v} x="3" y={150 - (v / maxVal) * 140 + 4} fontSize="8" fill="#9ca3af" fontFamily="ui-monospace, monospace" textAnchor="start">
-                      {v.toFixed(1)}
-                    </text>
-                  ))}
+                {/* Línea AHORA */}
+                <line x1={xPos(ahora)} y1={padT} x2={xPos(ahora)} y2={H - padB} stroke="#6b7280" strokeWidth="1" strokeDasharray="3,3" />
+                <text x={xPos(ahora) + 3} y={padT + 9} fontSize="8" fill="#6b7280" fontWeight="600">AHORA</text>
 
-                  {umbralEval && (
-                    <text x="482" y={160 - (umbralEval.valor_m / maxVal) * 140 - 10 + 4} fontSize="7" fill="#C99A3D" fontFamily="ui-monospace, monospace">
-                      eval {umbralEval.valor_m.toFixed(1)}
-                    </text>
-                  )}
-                  {umbralNR && (
-                    <text x="482" y={160 - (umbralNR.valor_m / maxVal) * 140 - 10 + 4} fontSize="7" fill="#C0442B" fontFamily="ui-monospace, monospace">
-                      NR {umbralNR.valor_m.toFixed(1)}
-                    </text>
-                  )}
-                  {umbralBajAlarma && (
-                    <text x="482" y={160 - (umbralBajAlarma.valor_m / maxVal) * 140 - 10 + 4} fontSize="7" fill="#2563EB" fontFamily="ui-monospace, monospace">
-                      baj {umbralBajAlarma.valor_m.toFixed(1)}
-                    </text>
-                  )}
-                  {umbralBajEvac && (
-                    <text x="482" y={160 - (umbralBajEvac.valor_m / maxVal) * 140 - 10 + 4} fontSize="7" fill="#8B1E1E" fontFamily="ui-monospace, monospace">
-                      evac {umbralBajEvac.valor_m.toFixed(1)}
-                    </text>
-                  )}
-                </svg>
+                {/* Umbrales */}
+                {umbralEval && (
+                  <g>
+                    <line x1={padL} y1={yPos(umbralEval.valor_m)} x2={W - padR} y2={yPos(umbralEval.valor_m)} stroke="#C99A3D" strokeWidth="1.5" strokeDasharray="6,4" />
+                    <text x={padL + 3} y={yPos(umbralEval.valor_m) - 4} fontSize="8" fill="#C99A3D" fontStyle="italic" fontWeight="600">eval {umbralEval.valor_m.toFixed(1)}</text>
+                  </g>
+                )}
+                {umbralNR && (
+                  <g>
+                    <line x1={padL} y1={yPos(umbralNR.valor_m)} x2={W - padR} y2={yPos(umbralNR.valor_m)} stroke="#C0442B" strokeWidth="1.5" strokeDasharray="6,4" />
+                    <text x={padL + 3} y={yPos(umbralNR.valor_m) - 4} fontSize="8" fill="#C0442B" fontStyle="italic" fontWeight="600">NR {umbralNR.valor_m.toFixed(1)}</text>
+                  </g>
+                )}
+                {umbralBajAlarma && (
+                  <g>
+                    <line x1={padL} y1={yPos(umbralBajAlarma.valor_m)} x2={W - padR} y2={yPos(umbralBajAlarma.valor_m)} stroke="#2563EB" strokeWidth="1.5" strokeDasharray="6,4" />
+                    <text x={padL + 3} y={yPos(umbralBajAlarma.valor_m) + 11} fontSize="8" fill="#2563EB" fontStyle="italic" fontWeight="600">baj {umbralBajAlarma.valor_m.toFixed(1)}</text>
+                  </g>
+                )}
+                {umbralBajEvac && (
+                  <g>
+                    <line x1={padL} y1={yPos(umbralBajEvac.valor_m)} x2={W - padR} y2={yPos(umbralBajEvac.valor_m)} stroke="#8B1E1E" strokeWidth="1.5" strokeDasharray="6,4" />
+                    <text x={padL + 3} y={yPos(umbralBajEvac.valor_m) + 11} fontSize="8" fill="#8B1E1E" fontStyle="italic" fontWeight="600">evac {umbralBajEvac.valor_m.toFixed(1)}</text>
+                  </g>
+                )}
+
+                {/* Bandas */}
+                <polygon points={bandaP25P75} fill="#0E4749" fillOpacity="0.16" clipPath="url(#prono-clip)" />
+                <polygon points={bandaP05P95} fill="#0E4749" fillOpacity="0.08" clipPath="url(#prono-clip)" />
+
+                {/* Observado */}
+                {obsRecientes.length >= 2 && (
+                  <polyline fill="none" stroke="#0E4749" strokeWidth="2" points={lineaObs} clipPath="url(#prono-clip)" />
+                )}
+
+                {/* Línea main */}
+                <polyline fill="none" stroke="#E8823A" strokeWidth="2" points={lineaMain} clipPath="url(#prono-clip)" />
+
+                {/* Pico */}
+                <g>
+                  <circle cx={picoX} cy={picoY} r="4" fill="#E8823A" stroke="#fff" strokeWidth="1.5" />
+                  <text x={picoX} y={picoY - 8} fontSize="10" fill="#E8823A" fontWeight="700" textAnchor="middle">
+                    {pico.valor_m.toFixed(2)}m
+                  </text>
+                  <text x={picoX} y={picoY + 18} fontSize="8" fill="#E8823A" textAnchor="middle">
+                    {formatearFechaHora(pico.timestamp)}
+                  </text>
+                </g>
+              </svg>
+
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-[#5B6E68] dark:text-gray-400">
+                <span className="flex items-center gap-1"><span className="w-3 h-[2px] bg-[#0E4749] inline-block" /> Observado</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-2 border-[#E8823A]" /> Pronóstico main</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-[6px] bg-[#0E4749]/10 inline-block" /> p05–p95</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-[6px] bg-[#0E4749]/20 inline-block" /> p25–p75</span>
+                {umbralNR && <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-[1.5px] border-dashed border-[#C0442B]" /> NR {umbralNR.valor_m.toFixed(1)}m</span>}
               </div>
             </section>
           );
