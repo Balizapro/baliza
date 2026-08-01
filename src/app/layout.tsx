@@ -26,12 +26,16 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "Baliza",
   },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#0E4749",
 };
 
 export default function RootLayout({
@@ -46,6 +50,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <head>
+          <meta name="apple-mobile-web-app-capable" content="yes" />
           <script
             dangerouslySetInnerHTML={{
               __html: `(function(){try{var t=localStorage.getItem("theme");if(t==="dark"||(!t&&window.matchMedia("(prefers-color-scheme:dark)").matches))document.documentElement.classList.add("dark")}catch(e){}})()`,
