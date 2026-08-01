@@ -269,9 +269,26 @@ serve(async (req) => {
       else if (diff < -0.01) tendencia = "bajando";
     }
 
-    // Preaviso por estaciones exteriores
-    const nombresExternas = ["La Plata", "Puerto de Buenos Aires"];
+    // Preaviso por pronóstico INA de San Fernando (qualifier main, próximo horizonte)
+    // Va primero: es el dato clave — cuándo llega el pico a San Fernando.
+    const { data: pronos } = await supabase
+      .from("pronosticos")
+      .select("timestamp, valor_m")
+      .eq("estacion_id", estaciones.id)
+      .eq("qualifier", "main")
+      .gte("timestamp", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
+      .lte("timestamp", new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString())
+      .order("timestamp", { ascending: true });
+
     const preavisos: string[] = [];
+    const preavisosProno = preavisosPronostico(
+      (pronos as PronosticoRow[] | null) ?? [],
+      umbralEval, umbralNR, bajanteAlarma, bajanteEvacuacion
+    );
+    preavisos.push(...preavisosProno.preavisos);
+
+    // Preaviso por estaciones exteriores (señales tempranas)
+    const nombresExternas = ["La Plata", "Puerto de Buenos Aires"];
 
     for (const nombre of nombresExternas) {
       const { data: extEst } = await supabase
@@ -293,7 +310,8 @@ serve(async (req) => {
           const diff = (extLect as LecturaRow[])[0].nivel_m - (extLect as LecturaRow[])[1].nivel_m;
           if (diff > 0.01) {
             const horas = nombre.includes("Plata") ? PROPAGACION_LP_A_SF : PROPAGACION_BA_A_SF;
-            preavisos.push(`${nombre} viene subiendo — el pico llegaría a San Fernando en ~${Math.round(horas)}hs`);          }
+            preavisos.push(`${nombre} viene subiendo — señal temprana, el agua tardaría ~${Math.round(horas)}hs en llegar a San Fernando`);
+          }
         }
       }
     }
@@ -309,26 +327,10 @@ serve(async (req) => {
 
     const tendenciaSHN = avisosSHN?.tendencia ?? null;
 
-    // Preaviso por pronóstico INA de San Fernando (qualifier main, próximo horizonte)
-    const { data: pronos } = await supabase
-      .from("pronosticos")
-      .select("timestamp, valor_m")
-      .eq("estacion_id", estaciones.id)
-      .eq("qualifier", "main")
-      .gte("timestamp", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
-      .lte("timestamp", new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString())
-      .order("timestamp", { ascending: true });
-
-    const preavisosProno = preavisosPronostico(
-      (pronos as PronosticoRow[] | null) ?? [],
-      umbralEval, umbralNR, bajanteAlarma, bajanteEvacuacion
-    );
-
     // Si el SHN está en tendencia descendente y se acerca a la bajante, sumar alerta temprana
     if (tendenciaSHN === "descendente" && nivelActual <= bajanteAlarma + 0.5) {
       preavisos.push(`SHN: el Río de la Plata Interior está en bajante — vigilar el nivel`);
     }
-    preavisos.push(...preavisosProno.preavisos);
 
     const { alerta, ventanaInicio, ventanaFin, mensaje } = calcularVentana(
       nivelActual, tendencia, umbralEval, umbralNR, bajanteAlarma, bajanteEvacuacion, trasladoMin, mensajes

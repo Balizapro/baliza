@@ -482,8 +482,8 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* Estaciones exteriores */}
-        <section className="dashboard-section">
+        {/* Estaciones exteriores — oculto temporalmente (no relevante para la vista principal) */}
+        {/* <section className="dashboard-section">
           <p className="seccion-titulo mb-3">
             Estaciones exteriores — preaviso temprano
           </p>
@@ -512,12 +512,12 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-        </section>
+        </section> */}
 
-        {/* Vista semanal Paraná */}
-        <section className="dashboard-section">
+        {/* Vista semanal Paraná — oculto temporalmente */}
+        {/* <section className="dashboard-section">
           <VistaSemanal parana={datos?.parana ?? { rosario: null, sanNicolas: null, zarate: null, campana: null, escobar: null }} />
-        </section>
+        </section> */}
 
         {/* Pronóstico San Fernando */}
         {(() => {
