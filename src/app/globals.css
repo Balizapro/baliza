@@ -280,6 +280,27 @@ html {
   color: rgba(255, 255, 255, 0.85);
 }
 
+.rb-whatsapp {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #25D366;
+  color: #fff;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 9px 16px;
+  text-decoration: none;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+
+.rb-whatsapp:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
 @media (max-width: 480px) {
   .recomendacion-titulo {
     font-size: 21px;
