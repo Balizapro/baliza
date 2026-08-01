@@ -17,6 +17,9 @@ import AvisoShnCard from "@/components/AvisoShnCard";
 import PushNotifications from "@/components/PushNotifications";
 import AlertaSonora from "@/components/AlertaSonora";
 import ComparacionModelo from "@/components/ComparacionModelo";
+import EstadoFuentes from "@/components/EstadoFuentes";
+import VerificacionPronostico from "@/components/VerificacionPronostico";
+import QueHacerAhora from "@/components/QueHacerAhora";
 import { ADMINS } from "@/lib/constants";
 
 function direccionCardinal(grados: number): string {
@@ -426,6 +429,18 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Qué hacer ahora */}
+        <QueHacerAhora alertaNivel={alertaNivel} escalon={escalonActual(sfObs?.nivel_m)} escalones={escalones} />
+
+        {/* Salud de fuentes */}
+        <EstadoFuentes
+          observadoSF={sfObs}
+          pronosticos={sfProno ?? []}
+          viento={viento}
+          avisosShn={datos?.avisosShn ?? []}
+          alertasSmn={datos?.alertasSmn ?? []}
+        />
+
         {/* Escala hidrométrica + estado San Fernando */}
         <section className="dashboard-section">
           <EscalaHidrometro
@@ -495,6 +510,9 @@ export default function Dashboard() {
             nivelSF={sfObs?.nivel_m}
           />
         </section>
+
+        {/* Verificación de pronóstico */}
+        <VerificacionPronostico observaciones={historial} pronosticos={sfProno ?? []} />
 
         {/* Estaciones exteriores — oculto temporalmente (no relevante para la vista principal) */}
         {/* <section className="dashboard-section">
