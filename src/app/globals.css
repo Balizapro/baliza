@@ -130,6 +130,16 @@ html {
   color: #12312B;
 }
 
+@media (max-width: 480px) {
+  .recomendacion-titulo {
+    font-size: 20px;
+    line-height: 1.35;
+  }
+  .recomendacion-banner {
+    padding-left: 16px;
+  }
+}
+
 .dark .recomendacion-titulo {
   color: #E6E4DC;
 }

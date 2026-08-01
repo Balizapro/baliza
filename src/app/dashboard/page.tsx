@@ -344,8 +344,19 @@ export default function Dashboard() {
         <div className="recomendacion-banner-wrapper">
           <div className={`recomendacion-banner ${alertaNivel === "roja" ? "roja" : alertaNivel === "evacuacion" ? "evacuacion" : alertaNivel === "amarilla" ? "amarilla" : alertaNivel === "azul" ? "azul" : "verde"}`}>
             <p className="recomendacion-titulo">
-              {alerta?.mensaje ?? "Sin datos — esperando primera ingesta"}
+              {alerta?.mensaje?.split("| Preaviso:")[0]?.trim() ?? "Sin datos — esperando primera ingesta"}
             </p>
+            {(() => {
+              const preavisos = alerta?.disparadores_json?.preavisos as string[] | undefined;
+              if (preavisos && preavisos.length > 0) {
+                return (
+                  <p className="recomendacion-subtexto mt-2">
+                    Preaviso: {preavisos.join("; ")}
+                  </p>
+                );
+              }
+              return null;
+            })()}
             {(cuentaRegresiva && alertaNivel === "roja") && (
               <div className="mt-3 flex items-center gap-4">
                 <span className="font-mono text-2xl font-bold text-[#C0442B]">{cuentaRegresiva}</span>
