@@ -286,6 +286,7 @@ export default function Dashboard() {
   const escalones = datos?.escalones ?? [];
   const alertaNivel = alerta?.nivel ?? "verde";
   const esAdmin = !!user?.email && (ADMINS as readonly string[]).includes(user.email);
+  const tendenciaSF = calcularTendencia(historial);
 
   function escalonActual(nivel: number | undefined): string {
     if (nivel == null) return "--";
@@ -343,28 +344,65 @@ export default function Dashboard() {
         {/* Alerta / Recomendación */}
         <div className="recomendacion-banner-wrapper">
           <div className={`recomendacion-banner ${alertaNivel === "roja" ? "roja" : alertaNivel === "evacuacion" ? "evacuacion" : alertaNivel === "amarilla" ? "amarilla" : alertaNivel === "azul" ? "azul" : "verde"}`}>
-            <p className="recomendacion-titulo">
-              {alerta?.mensaje?.split("| Preaviso:")[0]?.trim() ?? "Sin datos — esperando primera ingesta"}
-            </p>
-            {(() => {
-              const preavisos = alerta?.disparadores_json?.preavisos as string[] | undefined;
-              if (preavisos && preavisos.length > 0) {
-                return (
-                  <p className="recomendacion-subtexto mt-2">
-                    Preaviso: {preavisos.join("; ")}
-                  </p>
-                );
-              }
-              return null;
-            })()}
-            {(cuentaRegresiva && alertaNivel === "roja") && (
-              <div className="mt-3 flex items-center gap-4">
-                <span className="font-mono text-2xl font-bold text-[#C0442B]">{cuentaRegresiva}</span>
-                <span className="recomendacion-subtexto">
-                  hasta punto de no retorno ({umbralNR?.valor_m.toFixed(1) ?? "--"}m)
-                </span>
-              </div>
-            )}
+            <div className="rb-icono">
+              {alertaNivel === "roja" || alertaNivel === "evacuacion" ? (
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 1 21h22L12 2zm1 14h-2v2h2v-2zm0-7h-2v5h2V9z"/></svg>
+              ) : alertaNivel === "amarilla" || alertaNivel === "azul" ? (
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              ) : (
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+              )}
+            </div>
+            <div className="rb-cuerpo">
+              <p className="rb-etiqueta">
+                {alertaNivel === "roja" ? "Alerta roja" : alertaNivel === "evacuacion" ? "Evacuación" : alertaNivel === "amarilla" ? "Atención" : alertaNivel === "azul" ? "Bajante" : "Normal"}
+              </p>
+              <p className="recomendacion-titulo">
+                {alerta?.mensaje?.split("| Preaviso:")[0]?.trim() ?? "Sin datos — esperando primera ingesta"}
+              </p>
+              <p className="recomendacion-subtexto">
+                {sfObs?.nivel_m != null
+                  ? `Nivel actual: ${sfObs.nivel_m.toFixed(2)}m ${tendenciaSF?.direccion === "subiendo" ? "subiendo" : tendenciaSF?.direccion === "bajando" ? "bajando" : "estable"}`
+                  : "Esperando primera ingesta de datos"}
+              </p>
+              {(() => {
+                const preavisos = alerta?.disparadores_json?.preavisos as string[] | undefined;
+                if (preavisos && preavisos.length > 0) {
+                  return (
+                    <div className="rb-seccion">
+                      <p className="rb-seccion-titulo">Preaviso</p>
+                      <ul className="rb-preavisos">
+                        {preavisos.map((p, i) => (
+                          <li key={i}>{p}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+              {alertaNivel !== "verde" && (
+                <div className="rb-accion">
+                  <span>
+                    {alertaNivel === "evacuacion"
+                      ? "Evacuar ahora — alejarse de la zona de riesgo"
+                      : alertaNivel === "roja"
+                        ? "Preparar salida — no esperar a último momento"
+                        : alertaNivel === "amarilla"
+                          ? "Vigilar de cerca — nivel subiendo"
+                          : "Cuidado con la bajante"}
+                  </span>
+                </div>
+              )}
+              {(cuentaRegresiva && alertaNivel === "roja") && (
+                <div className="rb-cuenta-regresiva">
+                  <span className="rb-tiempo">{cuentaRegresiva}</span>
+                  <span className="rb-tiempo-label">
+                    hasta punto de no retorno ({umbralNR?.valor_m.toFixed(1) ?? "--"}m)
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

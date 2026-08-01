@@ -93,63 +93,188 @@ html {
 }
 
 .recomendacion-banner {
-  background: transparent;
-  border-left: 4px solid #4C7A5E;
-  padding: 12px 0 12px 20px;
-  border-radius: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border-radius: 16px;
+  padding: 18px 18px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+  color: #fff;
+}
+
+.recomendacion-banner .rb-icono {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.18);
+  margin-top: 2px;
+}
+
+.recomendacion-banner .rb-icono svg {
+  width: 28px;
+  height: 28px;
+  fill: #fff;
+}
+
+.recomendacion-banner .rb-cuerpo {
+  flex: 1;
+  min-width: 0;
 }
 
 .recomendacion-banner.verde {
-  border-left-color: #4C7A5E;
+  background: linear-gradient(135deg, #3E6B4F 0%, #4C7A5E 100%);
 }
 
 .recomendacion-banner.amarilla {
-  border-left-color: #C99A3D;
+  background: linear-gradient(135deg, #D07A24 0%, #E8823A 100%);
 }
 
 .recomendacion-banner.roja {
-  border-left-color: #C0442B;
+  background: linear-gradient(135deg, #B3341C 0%, #C0442B 100%);
 }
 
 .recomendacion-banner.azul {
-  border-left-color: #2563EB;
+  background: linear-gradient(135deg, #1E4FD8 0%, #2563EB 100%);
 }
 
 .recomendacion-banner.evacuacion {
-  border-left-color: #8B1E1E;
+  background: linear-gradient(135deg, #6E1212 0%, #8B1E1E 100%);
 }
 
-.dark .recomendacion-banner.evacuacion {
-  border-left-color: #E5604A;
+.recomendacion-banner .rb-etiqueta {
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 4px;
 }
 
 .recomendacion-titulo {
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 26px;
-  font-weight: 400;
-  color: #12312B;
-}
-
-@media (max-width: 480px) {
-  .recomendacion-titulo {
-    font-size: 20px;
-    line-height: 1.35;
-  }
-  .recomendacion-banner {
-    padding-left: 16px;
-  }
-}
-
-.dark .recomendacion-titulo {
-  color: #E6E4DC;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #fff;
 }
 
 .recomendacion-subtexto {
   font-family: system-ui, sans-serif;
   font-size: 14px;
-  color: #5B6E68;
+  color: rgba(255, 255, 255, 0.92);
+  margin-top: 8px;
+  line-height: 1.45;
 }
 
-.dark .recomendacion-subtexto {
-  color: #A3B2AC;
+.rb-seccion {
+  margin-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  padding-top: 12px;
+}
+
+.rb-seccion-titulo {
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 6px;
+}
+
+.rb-preavisos {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rb-preavisos li {
+  position: relative;
+  padding-left: 18px;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.rb-preavisos li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.rb-accion {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.rb-accion .rb-accion-detalley {
+  font-weight: 400;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.rb-cuenta-regresiva {
+  margin-top: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: system-ui, sans-serif;
+}
+
+.rb-cuenta-regresiva .rb-tiempo {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.rb-cuenta-regresiva .rb-tiempo-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+@media (max-width: 480px) {
+  .recomendacion-titulo {
+    font-size: 21px;
+    line-height: 1.3;
+  }
+  .recomendacion-banner {
+    padding: 14px 14px;
+    gap: 12px;
+    border-radius: 14px;
+  }
+  .recomendacion-banner .rb-icono {
+    width: 38px;
+    height: 38px;
+  }
+  .recomendacion-banner .rb-icono svg {
+    width: 24px;
+    height: 24px;
+  }
+  .rb-preavisos li {
+    font-size: 13px;
+  }
 }

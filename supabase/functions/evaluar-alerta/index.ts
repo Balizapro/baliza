@@ -56,18 +56,18 @@ function preavisosPronostico(
   const pozo = futuros.reduce((m, p) => (p.valor_m < m.valor_m ? p : m), futuros[0]);
 
   if (pico.valor_m >= umbralNR) {
-    preavisos.push(`Pronóstico alcanza ${pico.valor_m.toFixed(2)}m (no retorno ${umbralNR.toFixed(1)}m) — ${formatearMomento(pico.timestamp)}`);
+    preavisos.push(`Pronóstico: pico de ${pico.valor_m.toFixed(2)}m el ${formatearMomento(pico.timestamp)} — supera el no retorno (${umbralNR.toFixed(1)}m)`);
     severo = true;
   } else if (pico.valor_m >= umbralEval) {
-    preavisos.push(`Pronóstico alcanza ${pico.valor_m.toFixed(2)}m (evaluación ${umbralEval.toFixed(1)}m) — ${formatearMomento(pico.timestamp)}`);
+    preavisos.push(`Pronóstico: pico de ${pico.valor_m.toFixed(2)}m el ${formatearMomento(pico.timestamp)} — supera la evaluación (${umbralEval.toFixed(1)}m)`);
   }
 
   // Peor escenario de bajante en el horizonte del pronóstico
   if (pozo.valor_m <= bajanteEvacuacion) {
-    preavisos.push(`Pronóstico baja a ${pozo.valor_m.toFixed(2)}m (evacuación ${bajanteEvacuacion.toFixed(1)}m) — ${formatearMomento(pozo.timestamp)}`);
+    preavisos.push(`Pronóstico: baja a ${pozo.valor_m.toFixed(2)}m el ${formatearMomento(pozo.timestamp)} — nivel de evacuación (${bajanteEvacuacion.toFixed(1)}m)`);
     severo = true;
   } else if (pozo.valor_m <= bajanteAlarma) {
-    preavisos.push(`Pronóstico baja a ${pozo.valor_m.toFixed(2)}m (bajante alarma ${bajanteAlarma.toFixed(2)}m) — ${formatearMomento(pozo.timestamp)}`);
+    preavisos.push(`Pronóstico: baja a ${pozo.valor_m.toFixed(2)}m el ${formatearMomento(pozo.timestamp)} — nivel de bajante (${bajanteAlarma.toFixed(2)}m)`);
   }
 
   return { preavisos, severo };
@@ -293,8 +293,7 @@ serve(async (req) => {
           const diff = (extLect as LecturaRow[])[0].nivel_m - (extLect as LecturaRow[])[1].nivel_m;
           if (diff > 0.01) {
             const horas = nombre.includes("Plata") ? PROPAGACION_LP_A_SF : PROPAGACION_BA_A_SF;
-            preavisos.push(`${nombre} subiendo (~${Math.round(horas)}hs antes que SF)`);
-          }
+            preavisos.push(`${nombre} viene subiendo — el pico llegaría a San Fernando en ~${Math.round(horas)}hs`);          }
         }
       }
     }
@@ -327,7 +326,7 @@ serve(async (req) => {
 
     // Si el SHN está en tendencia descendente y se acerca a la bajante, sumar alerta temprana
     if (tendenciaSHN === "descendente" && nivelActual <= bajanteAlarma + 0.5) {
-      preavisos.push(`SHN: tendencia descendente en Río de la Plata Interior — vigilar bajante`);
+      preavisos.push(`SHN: el Río de la Plata Interior está en bajante — vigilar el nivel`);
     }
     preavisos.push(...preavisosProno.preavisos);
 
