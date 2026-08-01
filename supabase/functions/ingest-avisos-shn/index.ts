@@ -60,6 +60,21 @@ function extraerTendencia(texto: string): string | null {
   return m[1].toLowerCase();
 }
 
+// Altura máxima pronosticada para San Fernando (m), extraída de la tabla
+// "Corrección de altura de Tablas de Marea". Toma el mayor valor PLEAMAR/BAJAMAR.
+function extraerNivelMaxSanFernando(texto: string): number | null {
+  const bloque = texto.match(/SAN\s+FERNANDO([\s\S]*?)(?:RIO DE LA PLATA EXTERIOR:|PUERTO\s+[A-Z]|$)/i);
+  if (!bloque) return null;
+
+  const alturas: number[] = [];
+  for (const linea of bloque[1].split("\n")) {
+    const m = linea.match(/(?:BAJAMAR|PLEAMAR)\s+\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}\s+([+-]?\d+(?:\.\d+)?)/i);
+    if (m) alturas.push(parseFloat(m[1]));
+  }
+  if (alturas.length === 0) return null;
+  return Math.max(...alturas);
+}
+
 interface Aviso {
   numero: string;
   tipo: string;
@@ -67,6 +82,7 @@ interface Aviso {
   texto: string;
   tendencia: string | null;
   publicado: string | null;
+  nivel_max_m: number | null;
 }
 
 function parsearAvisos(html: string): Aviso[] {
@@ -97,6 +113,7 @@ function parsearAvisos(html: string): Aviso[] {
       titulo,
       texto,
       tendencia: extraerTendencia(texto),
+      nivel_max_m: extraerNivelMaxSanFernando(texto),
       publicado: fechaMatch[1],
     });
   }
@@ -141,6 +158,7 @@ serve(async (req) => {
       titulo: a.titulo,
       texto: a.texto,
       tendencia: a.tendencia,
+      nivel_max_m: a.nivel_max_m,
       publicado: a.publicado ? fechaISO(a.publicado) : null,
       actualizado: new Date().toISOString(),
     }));

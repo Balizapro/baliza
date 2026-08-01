@@ -42,7 +42,7 @@ function vigencia(texto: string): string | null {
   return `${m[1].trim()} → ${m[2].trim()}`;
 }
 
-export default function AvisoShnCard({ avisos }: { avisos: AvisoShn[] }) {
+export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[]; umbralNR?: number | null }) {
   const mareologico = [...avisos]
     .filter((a) => a.tipo === "pronostico_mareologico")
     .sort((a, b) => (b.publicado ?? "").localeCompare(a.publicado ?? ""))[0];
@@ -58,8 +58,12 @@ export default function AvisoShnCard({ avisos }: { avisos: AvisoShn[] }) {
   const vig = mareologico ? vigencia(mareologico.texto) : null;
   const tend = mareologico?.tendencia ? TENDENCIA_UI[mareologico.tendencia] : null;
 
+  const nivelMax = mareologico?.nivel_max_m ?? null;
+  const umbral = umbralNR ?? 2.2;
+  const superaNR = nivelMax != null && nivelMax > umbral;
+
   return (
-    <section className="dashboard-section">
+    <section className={`dashboard-section ${superaNR ? "shn-alerta" : ""}`}>
       <p className="seccion-titulo mb-2">
         Aviso del SHN — Río de la Plata
       </p>
@@ -88,6 +92,15 @@ export default function AvisoShnCard({ avisos }: { avisos: AvisoShn[] }) {
               </p>
             )}
           </div>
+
+          {superaNR && (
+            <div className="flex items-center gap-2 text-[#C0442B] dark:text-[#E5604A] font-bold text-sm">
+              <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current flex-shrink-0"><path d="M12 2 1 21h22L12 2zm1 14h-2v2h2v-2zm0-7h-2v5h2V9z"/></svg>
+              <span>
+                SHN pronostica {nivelMax?.toFixed(2)}m en San Fernando — supera el nivel de no retorno ({umbral.toFixed(1)}m)
+              </span>
+            </div>
+          )}
 
           {obs && (
             <p className="text-sm text-[#5B6E68] dark:text-gray-400 whitespace-pre-line leading-snug">

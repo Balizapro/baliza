@@ -92,6 +92,15 @@ html {
   padding-top: 12px;
 }
 
+.shn-alerta {
+  border: 2px solid #C0442B;
+  border-radius: 16px;
+}
+
+.dark .shn-alerta {
+  border-color: #E5604A;
+}
+
 .recomendacion-banner {
   display: flex;
   align-items: flex-start;
@@ -169,6 +178,21 @@ html {
   color: rgba(255, 255, 255, 0.92);
   margin-top: 8px;
   line-height: 1.45;
+}
+
+.rb-pico {
+  margin-top: 10px;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: inline-block;
+}
+
+.rb-pico strong {
+  font-size: 16px;
 }
 
 .rb-seccion {

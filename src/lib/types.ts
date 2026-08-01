@@ -119,6 +119,7 @@ export interface AvisoShn {
   titulo: string;
   texto: string;
   tendencia: "ascendente" | "descendente" | null;
+  nivel_max_m: number | null;
   publicado: string | null;
   actualizado: string;
 }

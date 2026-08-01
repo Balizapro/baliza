@@ -366,6 +366,21 @@ export default function Dashboard() {
                   : "Esperando primera ingesta de datos"}
               </p>
               {(() => {
+                const futuros = (sfProno ?? [])
+                  .filter((p) => p.qualifier === "main")
+                  .filter((p) => new Date(p.timestamp).getTime() >= Date.now())
+                  .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                if (futuros.length === 0) return null;
+                const pico = futuros.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futuros[0]);
+                const umbral = umbralEval?.valor_m ?? 2.0;
+                if (pico.valor_m < umbral) return null;
+                return (
+                  <p className="rb-pico">
+                    Pico esperado en San Fernando: <strong>{pico.valor_m.toFixed(2)}m</strong> — {formatearFechaHora(pico.timestamp)}
+                  </p>
+                );
+              })()}
+              {(() => {
                 const preavisos = alerta?.disparadores_json?.preavisos as string[] | undefined;
                 if (preavisos && preavisos.length > 0) {
                   return (
@@ -406,17 +421,11 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Alerta meteorológica SMN */}
-        <AlertaSmnCard alertas={datos?.alertasSmn ?? []} />
-
-        {/* Aviso del SHN (pronóstico mareológico) */}
-        <AvisoShnCard avisos={datos?.avisosShn ?? []} />
-
         {/* Escala hidrométrica + estado San Fernando */}
         <section className="dashboard-section">
           <EscalaHidrometro
             nivelActual={sfObs?.nivel_m ?? 0}
-            tendencia={tendenciaIcono(historial.filter((h) => h.estacion_id === datos?.sanFernando.observado?.estacion_id).slice(0, 3))}
+            tendencia={tendenciaIcono(historial.filter((h) => h.estacion_id === datos?.sanFernando.observado?.estacion_id).slice(-3))}
             timestamp={sfObs?.timestamp ?? ""}
             escalones={escalones}
             umbralEval={umbralEval ?? null}
@@ -426,6 +435,15 @@ export default function Dashboard() {
             alertaNivel={alertaNivel}
           />
         </section>
+
+        {/* SHN + SMN en paralelo */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          {/* Aviso del SHN (pronóstico mareológico) */}
+          <AvisoShnCard avisos={datos?.avisosShn ?? []} umbralNR={umbralNR?.valor_m ?? null} />
+
+          {/* Alerta meteorológica SMN */}
+          <AlertaSmnCard alertas={datos?.alertasSmn ?? []} />
+        </div>
 
         {/* Gráfico histórico */}
         <section className="dashboard-section">
