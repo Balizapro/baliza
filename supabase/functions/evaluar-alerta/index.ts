@@ -396,7 +396,9 @@ serve(async (req) => {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
+              // El gateway de Supabase exige un JWT válido; el secret dedicado valida la autorización real.
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") ?? ""}`,
+              "x-notificacion-secret": Deno.env.get("NOTIFICACION_SECRET") ?? "",
             },
             body: JSON.stringify({ titulo, cuerpo, url: "/dashboard" }),
           }

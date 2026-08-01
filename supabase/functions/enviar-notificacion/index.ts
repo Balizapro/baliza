@@ -16,6 +16,14 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   );
 
+  // Seguridad: el gateway de Supabase ya exige un JWT válido (Authorization).
+  // Como protección adicional, exigimos el secret dedicado NOTIFICACION_SECRET
+  // (lo envía evaluar-alerta). Evita que un usuario común dispare notificaciones masivas.
+  const secretOk = req.headers.get("x-notificacion-secret") === Deno.env.get("NOTIFICACION_SECRET");
+  if (!secretOk) {
+    return new Response(JSON.stringify({ ok: false, error: "no autorizado" }), { status: 401 });
+  }
+
   const vapidSubject = Deno.env.get("VAPID_SUBJECT") ?? "mailto:soporte@baliza.local";
   const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
   const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
