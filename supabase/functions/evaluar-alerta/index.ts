@@ -336,13 +336,20 @@ serve(async (req) => {
 
     // Aviso oficial de crecida del SHN (el más importante). Si avisa niveles que superan
     // la evaluación o el no retorno en San Fernando, sumarlo como preaviso prioritario.
-    const { data: avisoCrecida } = await supabase
+    const { data: avisoCrecidaRaw } = await supabase
       .from("avisos_crecida")
       .select("*")
       .eq("vigente", true)
       .order("emitido", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    // Un CESE de aviso solo informa durante 2 horas; pasado ese tiempo se descarta
+    const avisoCrecida = avisoCrecidaRaw &&
+      avisoCrecidaRaw.tipo.startsWith("cese_") &&
+      new Date(avisoCrecidaRaw.emitido).getTime() + 2 * 60 * 60 * 1000 < Date.now()
+      ? null
+      : avisoCrecidaRaw;
 
     if (avisoCrecida) {
       const alturas = (avisoCrecida.alturas ?? []) as { puerto: string; altura_m: number }[];

@@ -8,7 +8,6 @@ import VistaSemanal from "@/components/VistaSemanal";
 import Bitacora from "@/components/Bitacora";
 import { useAuth } from "@/components/AuthProvider";
 import AdminPanel from "@/components/AdminPanel";
-import GraficoHistorico from "@/components/GraficoHistorico";
 import ThemeToggle from "@/components/ThemeToggle";
 import PropagacionLP from "@/components/PropagacionLP";
 import EscalaHidrometro from "@/components/EscalaHidrometro";
@@ -202,13 +201,20 @@ export default function Dashboard() {
         .order("publicado", { ascending: false })
         .limit(6);
 
-      const { data: avisoCrecida } = await supabase
+      const { data: avisoCrecidaRaw } = await supabase
         .from("avisos_crecida")
         .select("*")
         .eq("vigente", true)
         .order("emitido", { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      // Un CESE de aviso solo informa durante 2 horas; pasado ese tiempo se descarta
+      const avisoCrecida = avisoCrecidaRaw &&
+        avisoCrecidaRaw.tipo.startsWith("cese_") &&
+        new Date(avisoCrecidaRaw.emitido).getTime() + 2 * 60 * 60 * 1000 < Date.now()
+        ? null
+        : avisoCrecidaRaw;
 
       setHistorial((historico as Lectura[]) ?? []);
       setAlertasList((alertasHist as { timestamp: string; nivel: NivelAlerta }[]) ?? []);
@@ -500,15 +506,6 @@ export default function Dashboard() {
           <AvisoCrecidaCard aviso={datos.avisoCrecida} umbralNR={umbralNR?.valor_m ?? null} />
         )}
 
-        {/* Salud de fuentes */}
-        <EstadoFuentes
-          observadoSF={sfObs}
-          pronosticos={sfProno ?? []}
-          viento={viento}
-          avisosShn={datos?.avisosShn ?? []}
-          alertasSmn={datos?.alertasSmn ?? []}
-        />
-
         {/* Escala hidrométrica + estado San Fernando */}
         <section className="dashboard-section">
           <EscalaHidrometro
@@ -533,27 +530,16 @@ export default function Dashboard() {
           <AlertaSmnCard alertas={datos?.alertasSmn ?? []} />
         </div>
 
-        {/* Gráfico histórico */}
-        <section className="dashboard-section">
-          <GraficoHistorico
-            observaciones={historial}
-            pronosticos={sfProno ?? []}
-            umbralEval={umbralEval?.valor_m ?? 2.0}
-            umbralNR={umbralNR?.valor_m ?? 2.2}
-            alertas={alertasList}
-          />
-        </section>
-
         {/* Viento + Propagación LP */}
         <section className="dashboard-section">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div>
-              <p className="seccion-titulo mb-2">
+              <p className="seccion-titulo mb-1">
                 Viento
               </p>
               {viento ? (
                 <>
-                  <p className="font-mono text-2xl sm:text-3xl font-bold text-[#0E4749] dark:text-[#4fc3c5]">
+                  <p className="font-mono text-lg sm:text-xl font-bold text-[#0E4749] dark:text-[#4fc3c5]">
                     {viento.velocidad_kmh}
                     <span className="text-sm font-normal ml-1 font-sans text-[#5B6E68]">km/h</span>
                   </p>
@@ -840,6 +826,15 @@ export default function Dashboard() {
             </section>
           );
         })()}
+
+        {/* Salud de fuentes */}
+        <EstadoFuentes
+          observadoSF={sfObs}
+          pronosticos={sfProno ?? []}
+          viento={viento}
+          avisosShn={datos?.avisosShn ?? []}
+          alertasSmn={datos?.alertasSmn ?? []}
+        />
 
         {/* Bitácora y configuración — solo admin */}
         {user && esAdmin && (
