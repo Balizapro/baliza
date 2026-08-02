@@ -534,7 +534,7 @@ export default function Dashboard() {
         <section className="dashboard-section">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
             <div className="space-y-4">
-              <div>
+              <section className="dashboard-section">
                 <p className="seccion-titulo mb-1">
                   Viento
                 </p>
@@ -552,8 +552,10 @@ export default function Dashboard() {
                 ) : (
                   <p className="text-sm text-[#5B6E68]/60 dark:text-gray-500 italic">sin datos</p>
                 )}
-              </div>
-              <PropagacionLP lecturasLP={lecturasLP} nivelSF={sfObs?.nivel_m} />
+              </section>
+              <section className="dashboard-section">
+                <PropagacionLP lecturasLP={lecturasLP} nivelSF={sfObs?.nivel_m} />
+              </section>
             </div>
             <ComparacionModelo
               pronostico={sfProno ?? []}
