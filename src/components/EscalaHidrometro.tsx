@@ -25,10 +25,11 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
 
   const rango = Math.max(escalaTecho - escalaPiso, 1);
   const H = 360;
-  const barraX = 50;
-  const barraW = 24;
-  const labelX = barraX + barraW + 8;
-  const scalasX = barraX - 8;
+  const barraX = 70;
+  const barraW = 40;
+  const labelX = barraX + barraW + 12;
+  const scalasX = barraX - 10;
+  const gaugeW = labelX + 110;
 
   function yPos(val: number): number {
     return H - ((val - escalaPiso) / rango) * (H - 20) - 10;
@@ -62,8 +63,8 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
 
       <div className="flex gap-6 sm:gap-8 items-start">
         {/* Vertical gauge */}
-        <div className="relative flex-shrink-0" style={{ width: labelX + 80, height: H }}>
-          <svg width={labelX + 80} height={H} className="overflow-visible">
+        <div className="relative flex-shrink-0" style={{ width: gaugeW, height: H }}>
+          <svg width={gaugeW} height={H} className="overflow-visible">
             {/* Barra de fondo */}
             <rect x={barraX} y={10} width={barraW} height={H - 20} rx={4} className="fill-[#E8DFD0] dark:fill-[#334155]" />
 
@@ -147,34 +148,36 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
         </div>
 
         {/* Info panel right side */}
-        <div className="flex-1 min-w-0 pt-1 space-y-3">
-          <div>
-            <p className="text-xs text-[#5B6E68] dark:text-gray-400 uppercase tracking-wide">Nivel actual</p>
-            <p className="font-mono text-3xl sm:text-4xl font-bold text-[#0E4749] dark:text-[#4fc3c5] leading-tight">
-              {nivelActual != null ? `${nivelActual.toFixed(2)}m` : "--"}
-              <span className="text-base sm:text-lg ml-2 font-sans text-[#5B6E68] dark:text-gray-400">{tendencia}</span>
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 text-xs text-[#5B6E68] dark:text-gray-400">
-            <span className="font-mono">{timestamp ? formatearFecha(timestamp) : "--"}</span>
-          </div>
-
-          <div className="border-t border-[#D4C9B8] dark:border-gray-700 pt-3 space-y-1.5">
-            {escalones.filter((e) => nivelActual >= e.nivel_min_m && nivelActual < e.nivel_max_m).map((e) => (
-              <p key={e.escalon} className="text-sm">
-                <span className="font-bold text-[#0E4749] dark:text-[#4fc3c5]">Escalón e{e.escalon}</span>
-                <span className="text-[#5B6E68] dark:text-gray-400 ml-1">({e.nivel_min_m.toFixed(1)}–{e.nivel_max_m.toFixed(1)}m)</span>
+        <div className="flex-1 min-w-0 pt-1">
+          <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
+            <div>
+              <p className="text-xs text-[#5B6E68] dark:text-gray-400 uppercase tracking-wide">Nivel actual</p>
+              <p className="font-mono text-3xl sm:text-4xl font-bold text-[#0E4749] dark:text-[#4fc3c5] leading-tight">
+                {nivelActual != null ? `${nivelActual.toFixed(2)}m` : "--"}
+                <span className="text-base sm:text-lg ml-2 font-sans text-[#5B6E68] dark:text-gray-400">{tendencia}</span>
               </p>
-            ))}
-            {!escalones.some((e) => nivelActual >= e.nivel_min_m && nivelActual < e.nivel_max_m) && (
-              <p className="text-sm text-[#5B6E68] dark:text-gray-400">
-                {nivelActual < escalones[0]?.nivel_min_m ? "Debajo del escalón mínimo" : `Sobre escalón ${escalones[escalones.length - 1]?.escalon}`}
-              </p>
-            )}
+            </div>
+
+            <div className="text-xs text-[#5B6E68] dark:text-gray-400 font-mono">
+              {timestamp ? formatearFecha(timestamp) : "--"}
+            </div>
+
+            <div className="text-sm">
+              {escalones.filter((e) => nivelActual >= e.nivel_min_m && nivelActual < e.nivel_max_m).map((e) => (
+                <p key={e.escalon}>
+                  <span className="font-bold text-[#0E4749] dark:text-[#4fc3c5]">Escalón e{e.escalon}</span>
+                  <span className="text-[#5B6E68] dark:text-gray-400 ml-1">({e.nivel_min_m.toFixed(1)}–{e.nivel_max_m.toFixed(1)}m)</span>
+                </p>
+              ))}
+              {!escalones.some((e) => nivelActual >= e.nivel_min_m && nivelActual < e.nivel_max_m) && (
+                <p className="text-[#5B6E68] dark:text-gray-400">
+                  {nivelActual < escalones[0]?.nivel_min_m ? "Debajo del escalón mínimo" : `Sobre escalón ${escalones[escalones.length - 1]?.escalon}`}
+                </p>
+              )}
+            </div>
           </div>
 
-          <div className="space-y-1 text-xs">
+          <div className="mt-3 border-t border-[#D4C9B8] dark:border-gray-700 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
             {umbralEval && (
               <p className="flex items-center gap-2">
                 <span className="w-3 h-[2px] bg-[#C99A3D] inline-block" />
