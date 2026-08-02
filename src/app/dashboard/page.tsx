@@ -530,39 +530,37 @@ export default function Dashboard() {
           <AlertaSmnCard alertas={datos?.alertasSmn ?? []} />
         </div>
 
-        {/* Viento + Propagación LP */}
+        {/* Viento + Propagación LP + Modelo INA vs propagación LP en paralelo */}
         <section className="dashboard-section">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-            <div>
-              <p className="seccion-titulo mb-1">
-                Viento
-              </p>
-              {viento ? (
-                <>
-                  <p className="font-mono text-lg sm:text-xl font-bold text-[#0E4749] dark:text-[#4fc3c5]">
-                    {viento.velocidad_kmh}
-                    <span className="text-sm font-normal ml-1 font-sans text-[#5B6E68]">km/h</span>
-                  </p>
-                  <p className="text-sm text-[#5B6E68] dark:text-gray-400 mt-0.5">
-                    {direccionCardinal(viento.direccion_grados)} ({viento.direccion_grados}°)
-                  </p>
-                  <p className="text-xs text-[#5B6E68]/60 dark:text-gray-500 mt-0.5 font-mono">{formatearFechaHora(viento.timestamp)}</p>
-                </>
-              ) : (
-                <p className="text-sm text-[#5B6E68]/60 dark:text-gray-500 italic">sin datos</p>
-              )}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
+            <div className="space-y-4">
+              <div>
+                <p className="seccion-titulo mb-1">
+                  Viento
+                </p>
+                {viento ? (
+                  <>
+                    <p className="font-mono text-lg sm:text-xl font-bold text-[#0E4749] dark:text-[#4fc3c5]">
+                      {viento.velocidad_kmh}
+                      <span className="text-sm font-normal ml-1 font-sans text-[#5B6E68]">km/h</span>
+                    </p>
+                    <p className="text-sm text-[#5B6E68] dark:text-gray-400 mt-0.5">
+                      {direccionCardinal(viento.direccion_grados)} ({viento.direccion_grados}°)
+                    </p>
+                    <p className="text-xs text-[#5B6E68]/60 dark:text-gray-500 mt-0.5 font-mono">{formatearFechaHora(viento.timestamp)}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-[#5B6E68]/60 dark:text-gray-500 italic">sin datos</p>
+                )}
+              </div>
+              <PropagacionLP lecturasLP={lecturasLP} nivelSF={sfObs?.nivel_m} />
             </div>
-            <PropagacionLP lecturasLP={lecturasLP} nivelSF={sfObs?.nivel_m} />
+            <ComparacionModelo
+              pronostico={sfProno ?? []}
+              lecturasLP={lecturasLP}
+              nivelSF={sfObs?.nivel_m}
+            />
           </div>
-        </section>
-
-        {/* Modelo INA vs propagación LP */}
-        <section className="dashboard-section">
-          <ComparacionModelo
-            pronostico={sfProno ?? []}
-            lecturasLP={lecturasLP}
-            nivelSF={sfObs?.nivel_m}
-          />
         </section>
 
         {/* Verificación de pronóstico */}
