@@ -334,6 +334,28 @@ serve(async (req) => {
       preavisos.push(`SHN: el Río de la Plata Interior está en bajante — vigilar el nivel`);
     }
 
+    // Aviso oficial de crecida del SHN (el más importante). Si avisa niveles que superan
+    // la evaluación o el no retorno en San Fernando, sumarlo como preaviso prioritario.
+    const { data: avisoCrecida } = await supabase
+      .from("avisos_crecida")
+      .select("*")
+      .eq("vigente", true)
+      .order("emitido", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (avisoCrecida) {
+      const alturas = (avisoCrecida.alturas ?? []) as { puerto: string; altura_m: number }[];
+      const sf = alturas.find((a) => a.puerto.toUpperCase().includes("SAN FERNANDO")) ?? null;
+      if (sf && sf.altura_m > umbralEval) {
+        preavisos.push(
+          `SHN aviso oficial: San Fernando ${sf.altura_m.toFixed(2)}m${sf.altura_m > umbralNR ? ` — supera el nivel de no retorno (${umbralNR.toFixed(1)}m)` : " — supera la evaluación"}`
+        );
+      } else if (avisoCrecida.titulo) {
+        preavisos.push(`SHN: ${avisoCrecida.titulo}`);
+      }
+    }
+
     const { alerta, ventanaInicio, ventanaFin, mensaje } = calcularVentana(
       nivelActual, tendencia, umbralEval, umbralNR, bajanteAlarma, bajanteEvacuacion, trasladoMin, mensajes
     );

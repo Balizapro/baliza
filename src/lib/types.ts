@@ -153,4 +153,24 @@ export interface DatosAgregados {
   escalones: EquivalenciaEscalon[];
   alertasSmn: AlertaSmn[];
   avisosShn: AvisoShn[];
+  avisoCrecida: AvisoCrecida | null;
+}
+
+export interface AlturaCrecida {
+  puerto: string;
+  altura_m: number;
+  hora: string;
+  fecha: string;
+}
+
+export interface AvisoCrecida {
+  numero: string;
+  tipo: string;
+  titulo: string;
+  texto: string;
+  emitido: string | null;
+  nota: string | null;
+  alturas: AlturaCrecida[] | null;
+  vigente: boolean;
+  actualizado: string;
 }

@@ -38,7 +38,12 @@ export default function EstadoFuentes({ observadoSF, pronosticos, viento, avisos
   const pronoTs = pronoEmision ? new Date(pronoEmision).getTime() : null;
   const vientoTs = viento ? new Date(viento.timestamp).getTime() : null;
   const shnTs = avisosShn.length > 0 ? new Date(avisosShn[0].actualizado).getTime() : null;
-  const smnTs = alertasSmn.length > 0 ? new Date(alertasSmn[0].actualizado).getTime() : null;
+  const smnTs = alertasSmn.length > 0
+    ? alertasSmn.reduce((maxT, a) => {
+        const t = new Date(a.actualizado).getTime();
+        return isNaN(t) ? maxT : Math.max(maxT, t);
+      }, new Date(alertasSmn[0].actualizado).getTime())
+    : null;
 
   const fuentes = [
     estadoFuente("INA — observado", obsTs, 6, hoy),

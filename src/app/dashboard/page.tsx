@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
-import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn, NivelAlerta } from "@/lib/types";
+import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn, AvisoCrecida, NivelAlerta } from "@/lib/types";
 import VistaSemanal from "@/components/VistaSemanal";
 import Bitacora from "@/components/Bitacora";
 import { useAuth } from "@/components/AuthProvider";
@@ -20,6 +20,7 @@ import ComparacionModelo from "@/components/ComparacionModelo";
 import EstadoFuentes from "@/components/EstadoFuentes";
 import VerificacionPronostico from "@/components/VerificacionPronostico";
 import CompartirWhatsApp from "@/components/CompartirWhatsApp";
+import AvisoCrecidaCard from "@/components/AvisoCrecidaCard";
 import { ADMINS } from "@/lib/constants";
 
 function direccionCardinal(grados: number): string {
@@ -201,6 +202,14 @@ export default function Dashboard() {
         .order("publicado", { ascending: false })
         .limit(6);
 
+      const { data: avisoCrecida } = await supabase
+        .from("avisos_crecida")
+        .select("*")
+        .eq("vigente", true)
+        .order("emitido", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
       setHistorial((historico as Lectura[]) ?? []);
       setAlertasList((alertasHist as { timestamp: string; nivel: NivelAlerta }[]) ?? []);
 
@@ -244,6 +253,7 @@ export default function Dashboard() {
         escalones: (escalones as EquivalenciaEscalon[]) ?? [],
         alertasSmn: (alertasSmn as unknown as { area_id: number; fecha: string; max_level: number; eventos_json: { id: number; max_level: number }[]; actualizado: string }[]) ?? [],
         avisosShn: (avisosShn as AvisoShn[]) ?? [],
+        avisoCrecida: (avisoCrecida as AvisoCrecida | null) ?? null,
       };
 
       setDatos(d);
@@ -484,6 +494,11 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+        {/* Aviso oficial de crecida del SHN (el más importante) */}
+        {datos?.avisoCrecida && (
+          <AvisoCrecidaCard aviso={datos.avisoCrecida} umbralNR={umbralNR?.valor_m ?? null} />
+        )}
 
         {/* Salud de fuentes */}
         <EstadoFuentes
