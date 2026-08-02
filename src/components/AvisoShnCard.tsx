@@ -1,4 +1,5 @@
 import type { AvisoShn } from "@/lib/types";
+import CompartirWhatsApp from "@/components/CompartirWhatsApp";
 
 const TENDENCIA_UI = {
   ascendente: { label: "ascendente", arrow: "↑", color: "text-[#C0442B]" },
@@ -122,6 +123,20 @@ export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[];
             {obs}
           </p>
         )}
+      </div>
+
+      <div className="mt-3">
+        <CompartirWhatsApp
+          small
+          mensaje={[
+            `🌊 Baliza — Aviso SHN (${mareologico.numero})`,
+            `Pronóstico mareológico — Río de la Plata`,
+            vig ? `Vigencia: ${vig}` : null,
+            alturas.length > 0 ? alturas.map((a) => `${a.estado === "PLEAMAR" ? "Pleamar" : "Bajamar"} ${formatearAlturaFecha(a.fecha)} ${a.hora}: ${a.altura.toFixed(2)}m`).join("\n") : null,
+            superaNR ? `⚠ Supera el nivel de no retorno (${umbral.toFixed(1)}m)` : null,
+            `⚠ Más info: https://baliza-ashy.vercel.app`,
+          ].filter(Boolean).join("\n")}
+        />
       </div>
 
       <p className="text-[10px] text-[#5B6E68]/40 dark:text-gray-600 mt-3">

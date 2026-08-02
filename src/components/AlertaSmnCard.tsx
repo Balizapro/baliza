@@ -1,4 +1,5 @@
 import type { AlertaSmn, EventoSmn } from "@/lib/types";
+import CompartirWhatsApp from "@/components/CompartirWhatsApp";
 
 const NOMBRE_EVENTO: Record<number, string> = {
   37: "Lluvia",
@@ -95,6 +96,19 @@ export default function AlertaSmnCard({ alertas }: { alertas: AlertaSmn[] }) {
               ))}
             </div>
           )}
+
+          <div className="pt-1">
+            <CompartirWhatsApp
+              small
+              mensaje={[
+                `⚡ Baliza — Alerta meteorológica SMN`,
+                `Alerta ${nivelColor(principal.max_level).label.toUpperCase()} para ${formatearFecha(principal.fecha)}`,
+                ...eventosRelevantes(principal).map((e) => `• ${nombreEvento(e.id)}`),
+                ...proximas.map((a) => `${formatearFecha(a.fecha)}: ${a.max_level >= 3 ? nivelColor(a.max_level).label : "sin alerta"}`),
+                `⚠ Más info: https://baliza-ashy.vercel.app`,
+              ].join("\n")}
+            />
+          </div>
         </div>
       )}
 
