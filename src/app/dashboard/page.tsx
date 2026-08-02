@@ -411,7 +411,7 @@ export default function Dashboard() {
                 return (
                   <p className="rb-pico">
                     Pico esperado en San Fernando: <strong>{pico.valor_m.toFixed(2)}m</strong> — {formatearFechaHora(pico.timestamp)}
-                    {cuentaPico && alertaNivel !== "verde" && (
+                    {cuentaPico && (
                       <span className="ml-2 inline-block text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#8B1E1E]/10 text-[#8B1E1E] dark:bg-red-400/10 dark:text-red-300 border border-[#8B1E1E]/20">
                         ⏱ en {cuentaPico}
                       </span>
