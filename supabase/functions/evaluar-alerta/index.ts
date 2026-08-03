@@ -83,7 +83,7 @@ serve(async (req) => {
     const { data: umbrales } = await supabase
       .from("umbrales")
       .select("nombre, valor_m")
-      .in("nombre", ["evaluacion", "no_retorno", "bajante_alarma", "bajante_evacuacion"]);
+      .in("nombre", ["evaluacion", "no_retorno", "bajante_alarma", "bajante_evacuacion", "pronostico_crecida"]);
 
     if (!umbrales || (umbrales as UmbralRow[]).length < 2) {
       return new Response(
@@ -96,6 +96,7 @@ serve(async (req) => {
     const umbralNR = (umbrales as UmbralRow[]).find((u) => u.nombre === "no_retorno")!.valor_m;
     const bajanteAlarma = (umbrales as UmbralRow[]).find((u) => u.nombre === "bajante_alarma")?.valor_m ?? 0;
     const bajanteEvacuacion = (umbrales as UmbralRow[]).find((u) => u.nombre === "bajante_evacuacion")?.valor_m ?? -0.1;
+    const umbralProno = (umbrales as UmbralRow[]).find((u) => u.nombre === "pronostico_crecida")?.valor_m ?? 2.1;
 
     // Leer tiempo de traslado desde configuracion
     let trasladoMin = 10;
@@ -175,6 +176,30 @@ serve(async (req) => {
       umbralEval, umbralNR, bajanteAlarma, bajanteEvacuacion
     );
     preavisos.push(...preavisosProno.preavisos);
+
+    // Aviso por crecida pronosticada INA (ventana 4 días): notificar solo cuando
+    // el pico supera el umbral de crecida y marca un nuevo récord (mayor al último
+    // pico notificado). El récord se persiste en configuracion.
+    const futurosProno = ((pronos as PronosticoRow[] | null) ?? [])
+      .filter((p) => new Date(p.timestamp).getTime() >= Date.now());
+    const picoProno = futurosProno.length
+      ? futurosProno.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futurosProno[0])
+      : null;
+    let recordProno = false;
+    if (picoProno && picoProno.valor_m > umbralProno) {
+      const { data: cfgRecord } = await supabase
+        .from("configuracion")
+        .select("valor")
+        .eq("clave", "ultimo_pico_pronostico_notificado")
+        .maybeSingle();
+      const ultimo = cfgRecord ? parseFloat((cfgRecord as ConfigRow).valor) : -Infinity;
+      if (picoProno.valor_m > ultimo) {
+        recordProno = true;
+        preavisos.push(
+          `INA pronostica crecida de ${picoProno.valor_m.toFixed(2)}m el ${formatearMomento(picoProno.timestamp)} — supera el umbral de crecida (${umbralProno.toFixed(2)}m)`
+        );
+      }
+    }
 
     // Preaviso por estaciones exteriores (señales tempranas)
     const nombresExternas = ["La Plata", "Puerto de Buenos Aires"];
@@ -278,6 +303,8 @@ serve(async (req) => {
         bajante_evacuacion: bajanteEvacuacion,
         traslado_minutos: trasladoMin,
         tendencia_shn: tendenciaSHN,
+        pico_pronostico_m: picoProno?.valor_m ?? null,
+        record_pronostico: recordProno,
         preavisos,
       },
     };
@@ -296,7 +323,23 @@ serve(async (req) => {
 
     await supabase.from("alertas").insert(alertaRow);
 
-    if (empeoro) {
+    // Persistir el nuevo récord de pico pronosticado notificado
+    if (picoProno && picoProno.valor_m > umbralProno) {
+      const { data: cfgRecord } = await supabase
+        .from("configuracion")
+        .select("valor")
+        .eq("clave", "ultimo_pico_pronostico_notificado")
+        .maybeSingle();
+      const ultimo = cfgRecord ? parseFloat((cfgRecord as ConfigRow).valor) : -Infinity;
+      if (picoProno.valor_m > ultimo) {
+        await supabase.from("configuracion").upsert(
+          { clave: "ultimo_pico_pronostico_notificado", valor: picoProno.valor_m.toFixed(3) },
+          { onConflict: "clave" }
+        );
+      }
+    }
+
+    if (empeoro || recordProno) {
       const titulo =
         alertaFinal === "evacuacion"
           ? "Baliza — EVACUACIÓN"
@@ -304,7 +347,9 @@ serve(async (req) => {
             ? "Baliza — Alerta roja"
             : alertaFinal === "amarilla"
               ? "Baliza — Atención"
-              : "Baliza — Nuevo estado";
+              : recordProno
+                ? "Baliza — Crecida pronosticada"
+                : "Baliza — Nuevo estado";
       const cuerpo = mensajeCompleto.split("|")[0]?.trim() ?? "El río cambió su estado en San Fernando";
 
       try {
@@ -326,7 +371,7 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, alerta: alertaRow, notifico: empeoro }), {
+    return new Response(JSON.stringify({ ok: true, alerta: alertaRow, notifico: empeoro || recordProno }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {

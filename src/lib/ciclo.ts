@@ -30,7 +30,8 @@ function direccionEntre(a: number, b: number): DireccionCiclo {
 }
 
 // Fase actual: dirección y horas que lleva sosteniéndola (lecturas desc).
-function faseActual(l: Punto[]): { direccion: DireccionCiclo; horas: number } {
+// `ahora` (ms) permite sumar el tiempo desde la última lectura hasta el presente.
+function faseActual(l: Punto[], ahora?: number): { direccion: DireccionCiclo; horas: number } {
   if (!l || l.length < 2) return { direccion: "estable", horas: 0 };
   const ord = ordenarDesc(l);
   const dt = (new Date(ord[0].timestamp).getTime() - new Date(ord[1].timestamp).getTime()) / 3600000;
@@ -42,6 +43,10 @@ function faseActual(l: Punto[]): { direccion: DireccionCiclo; horas: number } {
       const mismaDir = dir === "subiendo" ? ord[i].nivel_m - ord[i + 1].nivel_m > UMBRAL_CM_H : ord[i].nivel_m - ord[i + 1].nivel_m < -UMBRAL_CM_H;
       if (!mismaDir) break;
       horas += (new Date(ord[i].timestamp).getTime() - new Date(ord[i + 1].timestamp).getTime()) / 3600000;
+    }
+    if (ahora != null) {
+      const desdeUltima = (ahora - new Date(ord[0].timestamp).getTime()) / 3600000;
+      if (desdeUltima > 0) horas += desdeUltima;
     }
   }
   return { direccion: dir, horas };
@@ -83,9 +88,10 @@ function promedio(ns: number[]): number | null {
 export function analizarCiclo(
   lecturasSF: Punto[],
   lecturasExterna: Punto[],
-  propagacionHS: number
+  propagacionHS: number,
+  ahora?: number
 ): AnalisisCiclo {
-  const sf = faseActual(lecturasSF);
+  const sf = faseActual(lecturasSF, ahora);
   const base: AnalisisCiclo = {
     direccion: sf.direccion,
     horasActuales: sf.horas,
@@ -103,7 +109,7 @@ export function analizarCiclo(
   let restante: number | null = tipica != null ? Math.max(0, tipica - sf.horas) : null;
 
   // Refinar con señal externa: si la externa ya cambió de fase, SF lo hará en ~propagacionHS.
-  const ext = faseActual(lecturasExterna);
+  const ext = faseActual(lecturasExterna, ahora);
   if (ext.direccion !== "estable" && ext.direccion !== sf.direccion) {
     const restanteProp = Math.max(0, propagacionHS - ext.horas);
     if (restante == null || restanteProp < restante) {

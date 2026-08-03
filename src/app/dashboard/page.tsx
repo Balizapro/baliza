@@ -338,6 +338,7 @@ export default function Dashboard() {
   const umbralNR = datos?.umbrales.find((u) => u.nombre === "no_retorno");
   const umbralBajAlarma = datos?.umbrales.find((u) => u.nombre === "bajante_alarma") ?? null;
   const umbralBajEvac = datos?.umbrales.find((u) => u.nombre === "bajante_evacuacion") ?? null;
+  const umbralProno = datos?.umbrales.find((u) => u.nombre === "pronostico_crecida") ?? null;
   const trasladoMin = parseInt(datos?.config.find((c) => c.clave === "tiempo_traslado_minutos")?.valor ?? "10", 10);
   const escalones = datos?.escalones ?? [];
   const alertaNivel = alerta?.nivel ?? "verde";
@@ -346,9 +347,16 @@ export default function Dashboard() {
 
   // Análisis del ciclo de marea: usa el historial de SF y la señal adelantada de La Plata
   // (propagación ~2.5hs) para estimar cuánto resta de la subida/bajada actual.
+  // `ahora` fuerza recálculo periódico para que las horas se actualicen solas.
+  const [ahora, setAhora] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setAhora(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
+
   const ciclo = useMemo(
-    () => analizarCiclo(historial, lecturasLP.slice(0, 24), 2.5),
-    [historial, lecturasLP]
+    () => analizarCiclo(historial, lecturasLP.slice(0, 24), 2.5, ahora),
+    [historial, lecturasLP, ahora]
   );
 
   if (cargando) {
@@ -513,6 +521,41 @@ export default function Dashboard() {
         {datos?.avisoCrecida && (
           <AvisoCrecidaCard aviso={datos.avisoCrecida} umbralNR={umbralNR?.valor_m ?? null} />
         )}
+
+        {/* Aviso de crecida pronosticada por INA (ventana 4 días) */}
+        {(() => {
+          const mainPronos = (sfProno ?? [])
+            .filter((p) => p.qualifier === "main")
+            .filter((p) => new Date(p.timestamp).getTime() >= Date.now())
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          const pico = mainPronos.length
+            ? mainPronos.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), mainPronos[0])
+            : null;
+          const umbralPro = umbralProno?.valor_m ?? 2.1;
+          if (!pico || pico.valor_m <= umbralPro) return null;
+          const picoFuturo = new Date(pico.timestamp).getTime() >= Date.now();
+          return (
+            <section className={`dashboard-section ${pico.valor_m >= (umbralNR?.valor_m ?? 2.2) ? "shn-alerta" : ""}`}>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <p className="seccion-titulo">
+                  Pronóstico INA — crecida pronosticada
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-[#C0442B] dark:text-[#E5604A] font-bold text-sm">
+                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current flex-shrink-0"><path d="M12 2 1 21h22L12 2zm1 14h-2v2h2v-2zm0-7h-2v5h2V9z"/></svg>
+                <span>
+                  INA pronostica un pico de {pico.valor_m.toFixed(2)}m{picoFuturo ? ` el ${formatearFechaHora(pico.timestamp)}` : ""} en San Fernando — supera el umbral de crecida ({umbralPro.toFixed(2)}m)
+                </span>
+              </div>
+              <p className="text-xs text-[#5B6E68]/70 dark:text-gray-500 mt-1">
+                Se avisará de nuevo solo si el pronóstico marca una altura aún mayor.
+              </p>
+              <p className="text-[10px] text-[#5B6E68]/40 dark:text-gray-600 mt-3">
+                Fuente: INA — pronóstico a 4 días (qualifier main)
+              </p>
+            </section>
+          );
+        })()}
 
         {/* Escala hidrométrica + estado San Fernando */}
         <section className="dashboard-section">
@@ -751,6 +794,11 @@ export default function Dashboard() {
                   <span> · Mínimo: <strong className="font-mono text-[#2563EB]">{minP05.toFixed(2)}m</strong></span>
                 )}
               </p>
+              {proximos.length > 0 && (
+                <p className="text-[11px] text-[#5B6E68]/70 dark:text-gray-500 mb-3">
+                  Pronóstico válido hasta: <strong className="font-mono">{formatearFechaHora(proximos[proximos.length - 1].timestamp)}</strong>
+                </p>
+              )}
               <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" style={{ maxHeight: "300px" }}>
                 <defs>
                   <clipPath id="prono-clip"><rect x={padL} y={padT} width={W - padL - padR} height={H - padT - padB} /></clipPath>
@@ -866,6 +914,7 @@ export default function Dashboard() {
                 umbralNR={umbralNR ?? null}
                 umbralBajAlarma={umbralBajAlarma}
                 umbralBajEvac={umbralBajEvac}
+                umbralProno={umbralProno ?? null}
                 trasladoMin={trasladoMin}
                 config={datos?.config}
                 onSaved={() => {}}

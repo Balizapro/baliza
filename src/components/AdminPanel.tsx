@@ -30,19 +30,21 @@ interface Props {
   umbralNR: { valor_m: number; descripcion: string } | null;
   umbralBajAlarma: { valor_m: number; descripcion: string } | null;
   umbralBajEvac: { valor_m: number; descripcion: string } | null;
+  umbralProno: { valor_m: number; descripcion: string } | null;
   trasladoMin: number;
   config?: ConfigItem[];
   onSaved: () => void;
   esAdmin?: boolean;
 }
 
-export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbralBajEvac, trasladoMin, config, onSaved, esAdmin = false }: Props) {
+export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbralBajEvac, umbralProno, trasladoMin, config, onSaved, esAdmin = false }: Props) {
   const [abiertoUmbrales, setAbiertoUmbrales] = useState(false);
   const [abiertoEscalones, setAbiertoEscalones] = useState(false);
   const [evalVal, setEvalVal] = useState(umbralEval?.valor_m?.toString() ?? "2.0");
   const [nrVal, setNrVal] = useState(umbralNR?.valor_m?.toString() ?? "2.2");
   const [bajAlarmaVal, setBajAlarmaVal] = useState(umbralBajAlarma?.valor_m?.toString() ?? "0.00");
   const [bajEvacVal, setBajEvacVal] = useState(umbralBajEvac?.valor_m?.toString() ?? "-0.10");
+  const [pronoVal, setPronoVal] = useState(umbralProno?.valor_m?.toString() ?? "2.10");
   const [traslado, setTraslado] = useState(trasladoMin.toString());
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState("");
@@ -252,6 +254,13 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
     });
     if (!bajEvacRes.ok) errors.push("bajante evacuación");
 
+    const pronoRes = await fetch("/api/umbrales", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre: "pronostico_crecida", valor_m: parseFloat(pronoVal) }),
+    });
+    if (!pronoRes.ok) errors.push("pronóstico crecida");
+
     const trasladoRes = await fetch("/api/configuracion", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -336,6 +345,20 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
                 onChange={(e) => setTraslado(e.target.value)}
                 className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
               />
+            </div>
+            <div className="pt-2 border-t border-[#D4C9B8]/40 dark:border-gray-700">
+              <p className="text-xs font-serif font-medium text-[#12312B] dark:text-gray-300 mb-2">Pronóstico INA</p>
+            </div>
+            <div>
+              <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Aviso de crecida pronosticada (m)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={pronoVal}
+                onChange={(e) => setPronoVal(e.target.value)}
+                className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+              />
+              <p className="text-[10px] text-[#5B6E68]/60 dark:text-gray-500 mt-0.5">Alertar cuando el pronóstico INA de 4 días supere este nivel (p. ej. 2.10 m)</p>
             </div>
             <button
               onClick={handleSave}
