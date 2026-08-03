@@ -77,7 +77,6 @@ export function calcularVentana(
     const ahora = new Date();
     const diff = u.noRetorno - nivelActual;
     const horasEstimadas = Math.max(0.5, diff / 0.05);
-    const ventanaFin = new Date(ahora.getTime() + horasEstimadas * 60 * 60 * 1000);
 
     const horasSalida = Math.max(0, horasEstimadas - trasladoMin / 60);
     const horaSalida = new Date(ahora.getTime() + horasSalida * 60 * 60 * 1000);

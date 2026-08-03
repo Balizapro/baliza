@@ -1,4 +1,7 @@
+"use client";
+
 import type { Lectura } from "@/lib/types";
+import { useAhora } from "@/lib/useAhora";
 
 const PROPAGACION_HS = 2.5;
 
@@ -12,6 +15,7 @@ function formatearHora(iso: string): string {
 }
 
 export default function PropagacionLP({ lecturasLP, nivelSF }: Props) {
+  const ahora = useAhora();
   if (lecturasLP.length < 2) {
     return (
       <div>
@@ -30,7 +34,6 @@ export default function PropagacionLP({ lecturasLP, nivelSF }: Props) {
   const bajando = diff < -0.01;
 
   const llegadaEstimada = new Date(new Date(ultimo.timestamp).getTime() + PROPAGACION_HS * 3600000);
-  const ahora = Date.now();
   const msRestantes = llegadaEstimada.getTime() - ahora;
   const horasRestantes = Math.floor(Math.max(msRestantes, 0) / 3600000);
   const minsRestantes = Math.floor((Math.max(msRestantes, 0) % 3600000) / 60000);

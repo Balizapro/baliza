@@ -21,14 +21,16 @@ export default function PushNotifications() {
   const [apoyo, setApoyo] = useState(true);
 
   useEffect(() => {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setApoyo(false);
-      return;
-    }
-    navigator.serviceWorker.ready.then(async (reg) => {
+    async function verificar() {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        setApoyo(false);
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       setActivo(!!sub);
-    }).catch(() => {});
+    }
+    verificar().catch(() => {});
   }, []);
 
   async function activar() {

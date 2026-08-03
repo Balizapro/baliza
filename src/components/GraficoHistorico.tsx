@@ -1,6 +1,7 @@
 "use client";
 
 import type { Lectura, Pronostico, NivelAlerta } from "@/lib/types";
+import { useAhora } from "@/lib/useAhora";
 
 interface Props {
   observaciones: Lectura[];
@@ -14,17 +15,13 @@ function fmtDia(iso: string): string {
   return new Date(iso).toLocaleString("es-AR", { weekday: "short", day: "numeric" });
 }
 
-function fmtHora(iso: string): string {
-  return new Date(iso).toLocaleString("es-AR", { hour: "2-digit", minute: "2-digit" });
-}
-
 function fmtPico(iso: string): string {
   return new Date(iso).toLocaleString("es-AR", { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 export default function GraficoHistorico({ observaciones, pronosticos, umbralEval, umbralNR, alertas }: Props) {
   const obs = [...observaciones].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  const ahora = Date.now();
+  const ahora = useAhora();
   const desde = ahora - 7 * 24 * 60 * 60 * 1000;
   const obs7d = obs.filter((o) => new Date(o.timestamp).getTime() >= desde);
 

@@ -1,6 +1,7 @@
 "use client";
 
 import type { Lectura, Pronostico } from "@/lib/types";
+import { useAhora } from "@/lib/useAhora";
 
 const PROPAGACION_HS = 2.5;
 
@@ -16,7 +17,7 @@ function fmt(iso: string): string {
 
 export default function ComparacionModelo({ pronostico, lecturasLP, nivelSF }: Props) {
   // Pico del modelo INA (main) en el horizonte
-  const ahora = Date.now();
+  const ahora = useAhora();
   const main = pronostico
     .filter((p) => p.qualifier === "main")
     .filter((p) => new Date(p.timestamp).getTime() >= ahora)

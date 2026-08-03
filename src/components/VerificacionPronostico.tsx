@@ -1,6 +1,7 @@
 "use client";
 
 import type { Lectura, Pronostico } from "@/lib/types";
+import { useAhora } from "@/lib/useAhora";
 
 interface Props {
   observaciones: Lectura[];
@@ -25,7 +26,7 @@ function labelError(errorCm: number | null): { texto: string; color: string } {
 
 export default function VerificacionPronostico({ observaciones, pronosticos }: Props) {
   const obs = [...observaciones].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  const ahora = Date.now();
+  const ahora = useAhora();
 
   const main = pronosticos
     .filter((p) => p.qualifier === "main")

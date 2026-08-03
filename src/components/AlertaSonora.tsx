@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-
 type Nivel = "verde" | "azul" | "amarilla" | "roja" | "evacuacion";
 
 const GRAVEDAD: Record<Nivel, number> = { verde: 0, azul: 1, amarilla: 2, roja: 3, evacuacion: 4 };
@@ -42,9 +41,13 @@ function tocarSirena(gravedad: number) {
 
 export default function AlertaSonora({ nivel, habilitado = false, onToggle }: Props) {
   const [activo, setActivo] = useState(habilitado);
+  const [prevHabilitado, setPrevHabilitado] = useState(habilitado);
   const prevNivel = useRef<string | null>(null);
 
-  useEffect(() => setActivo(habilitado), [habilitado]);
+  if (habilitado !== prevHabilitado) {
+    setPrevHabilitado(habilitado);
+    setActivo(habilitado);
+  }
 
   useEffect(() => {
     if (prevNivel.current === null) {

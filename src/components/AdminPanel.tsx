@@ -74,14 +74,17 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
     { clave: "recomendacion_bajante_evacuacion", label: "Bajante (evacuación)" },
   ];
 
-  useEffect(() => {
-    if (!abiertoRecomendaciones || Object.keys(recVals).length > 0) return;
-    const vals: Record<string, string> = {};
-    for (const { clave } of recomendacionesKeys) {
-      vals[clave] = config?.find((c) => c.clave === clave)?.valor ?? "";
+  function abrirRecomendaciones() {
+    const siguiente = !abiertoRecomendaciones;
+    setAbiertoRecomendaciones(siguiente);
+    if (siguiente && Object.keys(recVals).length === 0) {
+      const vals: Record<string, string> = {};
+      for (const { clave } of recomendacionesKeys) {
+        vals[clave] = config?.find((c) => c.clave === clave)?.valor ?? "";
+      }
+      setRecVals(vals);
     }
-    setRecVals(vals);
-  }, [abiertoRecomendaciones, config]);
+  }
 
   async function guardarRecomendaciones() {
     setGuardandoRec(true);
@@ -463,7 +466,7 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
 
       <div>
         <button
-          onClick={() => setAbiertoRecomendaciones(!abiertoRecomendaciones)}
+          onClick={abrirRecomendaciones}
           className="w-full text-left flex items-center justify-between group"
         >
           <p className="seccion-titulo">

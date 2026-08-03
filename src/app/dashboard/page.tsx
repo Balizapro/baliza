@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn, AvisoCrecida, NivelAlerta } from "@/lib/types";
-import VistaSemanal from "@/components/VistaSemanal";
 import Bitacora from "@/components/Bitacora";
 import { useAuth } from "@/components/AuthProvider";
 import AdminPanel from "@/components/AdminPanel";
@@ -21,16 +21,12 @@ import VerificacionPronostico from "@/components/VerificacionPronostico";
 import CompartirWhatsApp from "@/components/CompartirWhatsApp";
 import AvisoCrecidaCard from "@/components/AvisoCrecidaCard";
 import { analizarCiclo } from "@/lib/ciclo";
+import { useAhora } from "@/lib/useAhora";
 import { ADMINS } from "@/lib/constants";
 
 function direccionCardinal(grados: number): string {
   const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
   return dirs[Math.round(grados / 22.5) % 16];
-}
-
-function formatearHora(iso: string | null): string {
-  if (!iso) return "--";
-  return new Date(iso).toLocaleString("es-AR", { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatearFechaHora(iso: string | null): string {
@@ -83,40 +79,10 @@ function calcularTendencia(lecturas: Lectura[] | undefined | null): Tendencia | 
   return { direccion, velocidad_cm_h: velocidadCmH, duracion_hs: duracionHs, desde };
 }
 
-function formatoTendencia(t: Tendencia | null): string {
-  if (!t) return "sin datos suficientes";
-  const base = t.direccion;
-  if (t.direccion === "estable") return "estable";
-  const vel = Math.abs(t.velocidad_cm_h).toFixed(1);
-  if (t.duracion_hs >= 1) {
-    const hs = Math.round(t.duracion_hs);
-    return `${base} hace ~${hs}h a ~${vel}cm/h`;
-  }
-  return `${base} a ~${vel}cm/h`;
-}
-
-const colorAlerta = {
-  verde: "bg-[#4C7A5E]",
-  amarilla: "bg-[#E8823A]",
-  roja: "bg-red-600",
-  azul: "bg-blue-600",
-  evacuacion: "bg-[#8B1E1E]",
-};
-
-const colorAlertaBg = {
-  verde: "bg-green-50 border-[#4C7A5E]",
-  amarilla: "bg-orange-50 border-[#E8823A]",
-  roja: "bg-red-50 border-red-600",
-  azul: "bg-blue-50 border-blue-600",
-  evacuacion: "bg-[#FBF1F0] border-[#8B1E1E]",
-};
-
 export default function Dashboard() {
-  const { user, cargando: authCargando } = useAuth();
+  const { user } = useAuth();
   const [datos, setDatos] = useState<DatosAgregados | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [cuentaRegresiva, setCuentaRegresiva] = useState<string | null>(null);
-  const [cuentaPico, setCuentaPico] = useState<string | null>(null);
   const [historial, setHistorial] = useState<Lectura[]>([]);
   const [alertasList, setAlertasList] = useState<{ timestamp: string; nivel: NivelAlerta }[]>([]);
   const [lecturasLP, setLecturasLP] = useState<Lectura[]>([]);
@@ -272,67 +238,10 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    const ventanaFin = datos?.alerta?.ventana_fin;
-    if (!ventanaFin) {
-      setCuentaRegresiva(null);
-      return;
-    }
-
-    function tick() {
-      const diff = new Date(ventanaFin!).getTime() - Date.now();
-      if (diff <= 0) {
-        setCuentaRegresiva("AHORA");
-        return;
-      }
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      setCuentaRegresiva(`${h}h ${m}m`);
-    }
-
-    tick();
-    const interval = setInterval(tick, 10000);
-    return () => clearInterval(interval);
-  }, [datos?.alerta?.ventana_fin]);
-
   const alerta = datos?.alerta;
   const sfObs = datos?.sanFernando.observado;
   const sfProno = datos?.sanFernando.pronostico;
-  const lpObs = datos?.exteriores.laPlata;
-  const baObs = datos?.exteriores.buenosAires;
-  const pnObs = datos?.exteriores.piloteNorden;
   const viento = datos?.viento;
-
-  useEffect(() => {
-    const futuros = (sfProno ?? [])
-      .filter((p) => p.qualifier === "main")
-      .filter((p) => new Date(p.timestamp).getTime() >= Date.now())
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-    const pico = futuros.length > 0
-      ? futuros.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futuros[0])
-      : null;
-    if (!pico) {
-      setCuentaPico(null);
-      return;
-    }
-    const picoTs = pico.timestamp;
-
-    function tick() {
-      const diff = new Date(picoTs).getTime() - Date.now();
-      if (diff <= 0) {
-        setCuentaPico("PICO AHORA");
-        return;
-      }
-      const d = Math.floor(diff / 86400000);
-      const h = Math.floor((diff % 86400000) / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      setCuentaPico(d > 0 ? `${d}d ${h}h ${m}m` : h > 0 ? `${h}h ${m}m` : `${m}m`);
-    }
-
-    tick();
-    const interval = setInterval(tick, 10000);
-    return () => clearInterval(interval);
-  }, [sfProno]);
 
   const umbralEval = datos?.umbrales.find((u) => u.nombre === "evaluacion");
   const umbralNR = datos?.umbrales.find((u) => u.nombre === "no_retorno");
@@ -348,11 +257,36 @@ export default function Dashboard() {
   // Análisis del ciclo de marea: usa el historial de SF y la señal adelantada de La Plata
   // (propagación ~2.5hs) para estimar cuánto resta de la subida/bajada actual.
   // `ahora` fuerza recálculo periódico para que las horas se actualicen solas.
-  const [ahora, setAhora] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setAhora(Date.now()), 60000);
-    return () => clearInterval(id);
-  }, []);
+  const ahora = useAhora();
+
+  // Conteos derivados de `ahora` (sin setState en effects): cuenta regresiva hasta
+  // el punto de no retorno y hasta el pico pronosticado.
+  const cuentaRegresiva = useMemo(() => {
+    const ventanaFin = datos?.alerta?.ventana_fin;
+    if (!ventanaFin) return null;
+    const diff = new Date(ventanaFin).getTime() - ahora;
+    if (diff <= 0) return "AHORA";
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    return `${h}h ${m}m`;
+  }, [datos?.alerta?.ventana_fin, ahora]);
+
+  const cuentaPico = useMemo(() => {
+    const futuros = (sfProno ?? [])
+      .filter((p) => p.qualifier === "main")
+      .filter((p) => new Date(p.timestamp).getTime() >= ahora)
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    const pico = futuros.length > 0
+      ? futuros.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futuros[0])
+      : null;
+    if (!pico) return null;
+    const diff = new Date(pico.timestamp).getTime() - ahora;
+    if (diff <= 0) return "PICO AHORA";
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor((diff % 86400000) / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    return d > 0 ? `${d}d ${h}h ${m}m` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+  }, [sfProno, ahora]);
 
   const ciclo = useMemo(
     () => analizarCiclo(historial, lecturasLP.slice(0, 24), 2.5, ahora),
@@ -370,10 +304,10 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-[#F2E9DC] dark:bg-[#0f172a]">
       <header className="bg-[#0E4749] dark:bg-[#0a2a2b] text-white px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center gap-x-3 gap-y-2 relative shadow-sm">
-        <a href="/" className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3">
           <img src="/baliza-boya.svg" alt="Baliza" className="w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0" />
           <span className="logo-wordmark">baliza</span>
-        </a>
+        </Link>
         <p className="text-[11px] text-[#F2E9DC]/70 dark:text-white/50 italic font-serif hidden sm:block border-l border-[#F2E9DC]/20 pl-3 leading-tight">
           la señal antes de la crecida
         </p>
@@ -435,7 +369,7 @@ export default function Dashboard() {
               {(() => {
                 const futuros = (sfProno ?? [])
                   .filter((p) => p.qualifier === "main")
-                  .filter((p) => new Date(p.timestamp).getTime() >= Date.now())
+                  .filter((p) => new Date(p.timestamp).getTime() >= ahora)
                   .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
                 if (futuros.length === 0) return null;
                 const pico = futuros.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futuros[0]);
@@ -492,7 +426,7 @@ export default function Dashboard() {
               {(() => {
                 const futuros = (sfProno ?? [])
                   .filter((p) => p.qualifier === "main")
-                  .filter((p) => new Date(p.timestamp).getTime() >= Date.now())
+                  .filter((p) => new Date(p.timestamp).getTime() >= ahora)
                   .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
                 const pico = futuros.length > 0
                   ? futuros.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futuros[0])
@@ -526,14 +460,14 @@ export default function Dashboard() {
         {(() => {
           const mainPronos = (sfProno ?? [])
             .filter((p) => p.qualifier === "main")
-            .filter((p) => new Date(p.timestamp).getTime() >= Date.now())
+            .filter((p) => new Date(p.timestamp).getTime() >= ahora)
             .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
           const pico = mainPronos.length
             ? mainPronos.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), mainPronos[0])
             : null;
           const umbralPro = umbralProno?.valor_m ?? 2.1;
           if (!pico || pico.valor_m <= umbralPro) return null;
-          const picoFuturo = new Date(pico.timestamp).getTime() >= Date.now();
+          const picoFuturo = new Date(pico.timestamp).getTime() >= ahora;
           return (
             <section className={`dashboard-section ${pico.valor_m >= (umbralNR?.valor_m ?? 2.2) ? "shn-alerta" : ""}`}>
               <div className="flex items-start justify-between gap-2 mb-2">
@@ -668,7 +602,6 @@ export default function Dashboard() {
             bandas.set(p.timestamp, b);
           }
 
-          const ahora = Date.now();
           const proximos = main
             .filter((p) => new Date(p.timestamp).getTime() >= ahora)
             .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
@@ -707,8 +640,6 @@ export default function Dashboard() {
 
           const xPos = (t: number): number => padL + ((t - t0) / Math.max(t1 - t0, 1)) * (W - padL - padR);
           const yPos = (v: number): number => padT + (1 - (v - yMin) / (yMax - yMin)) * (H - padT - padB);
-
-          const rangoY = yMax - yMin;
 
           const yLabels: number[] = [];
           for (let v = Math.ceil(yMin * 2) / 2; v <= Math.floor(yMax * 2) / 2 + 0.001; v += 0.5) {

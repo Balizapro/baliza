@@ -12,12 +12,6 @@ interface ObservacionRaw {
   valor: number;
 }
 
-interface SerieInfo {
-  id: number;
-  estacion: { id: number; nombre: string; tabla: string };
-  tipo: string;
-}
-
 // Mapeo de estaciones INA → nombres en nuestra BD
 const INA_STATIONS: Record<string, { series_id: number }> = {
   "San Fernando (Brazo Luján)": { series_id: 52 },

@@ -18,10 +18,6 @@ function formatearFecha(iso: string) {
   });
 }
 
-function formatearFechaCorta(iso: string) {
-  return new Date(iso).toLocaleString("es-AR", { day: "numeric", month: "short" });
-}
-
 export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial, alertas, umbralEval, umbralNR }:
   { nivelActual: number; onRegistro: () => void; loggedIn?: boolean; historial?: Lectura[]; alertas?: AlertaItem[]; umbralEval?: number; umbralNR?: number }) {
   const [abierto, setAbierto] = useState(false);

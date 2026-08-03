@@ -1,6 +1,7 @@
 "use client";
 
 import type { Lectura, Pronostico, Viento, AvisoShn, AlertaSmn } from "@/lib/types";
+import { useAhora } from "@/lib/useAhora";
 
 interface Props {
   observadoSF: Lectura | null | undefined;
@@ -28,7 +29,7 @@ function estadoFuente(
 }
 
 export default function EstadoFuentes({ observadoSF, pronosticos, viento, avisosShn, alertasSmn }: Props) {
-  const hoy = Date.now();
+  const hoy = useAhora();
 
   const obsTs = observadoSF ? new Date(observadoSF.timestamp).getTime() : null;
   // El pronóstico se emite por ciclos: la frescura se mide con la última fecha de emisión (forecast_date)

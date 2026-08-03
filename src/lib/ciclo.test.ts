@@ -14,23 +14,6 @@ function serieSubida(n: number, pasoHs = 1, base = 0.5, nivel0 = 0.5): Punto[] {
   return pts;
 }
 
-// Serie que sube 5hs y luego baja 4hs (ciclo completo, para duración típica).
-function serieCicloCompleto(): Punto[] {
-  const pts: Punto[] = [];
-  const sube = 5, baja = 4;
-  let nivel = 0.5;
-  const t = T0;
-  for (let i = 0; i < sube; i++) {
-    pts.push({ timestamp: new Date(t + i * H).toISOString(), nivel_m: nivel });
-    nivel += 0.1;
-  }
-  for (let i = 0; i < baja; i++) {
-    pts.push({ timestamp: new Date(t + (sube + i) * H).toISOString(), nivel_m: nivel });
-    nivel -= 0.1;
-  }
-  return pts;
-}
-
 test("subiendo hace 3h con historico corto => direccion subiendo, restante null sin tipica", () => {
   const sf = serieSubida(4); // sube 3h entre 4 puntos
   const c = analizarCiclo(sf, [], 2.5);
@@ -86,7 +69,6 @@ test("restante = tipica - horas actuales", () => {
 test("señal externa adelantada acota el restante: LP ya bajando hace 1h", () => {
   // SF sube hace 2h; LP subió y ya bajando hace 1h (cambio de fase hace 1h)
   const sf = serieSubida(3); // sube 2h entre 3 puntos
-  const lp = serieSubida(4, 1, 0.1, 0.6).reverse(); // 3h subiendo
   // Construir LP: sube 2h y luego baja 1h
   const lpPts: Punto[] = [];
   let nivel = 0.5;

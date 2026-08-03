@@ -1,5 +1,8 @@
+"use client";
+
 import type { AvisoShn } from "@/lib/types";
 import CompartirWhatsApp from "@/components/CompartirWhatsApp";
+import { useAhora } from "@/lib/useAhora";
 
 const TENDENCIA_UI = {
   ascendente: { label: "ascendente", arrow: "↑", color: "text-[#C0442B]" },
@@ -52,6 +55,7 @@ function alturasSanFernando(texto: string): { estado: string; fecha: string; hor
 }
 
 export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[]; umbralNR?: number | null }) {
+  const ahora = useAhora();
   const mareologico = [...avisos]
     .filter((a) => a.tipo === "pronostico_mareologico")
     .sort((a, b) => {
@@ -70,7 +74,7 @@ export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[];
   const nivelMax = mareologico.nivel_max_m ?? (alturas.length > 0 ? Math.max(...alturas.map((a) => a.altura)) : null);
   const umbral = umbralNR ?? 2.2;
   const finVig = vigenciaFin(mareologico.texto);
-  const vencido = finVig != null && finVig < Date.now();
+  const vencido = finVig != null && finVig < ahora;
   const superaNR = !vencido && nivelMax != null && nivelMax > umbral;
 
   return (

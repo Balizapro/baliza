@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Archivo ajeno a este proyecto (de otro chat, sin commitear)
+    "DesdeElPantanoAlMundo.jsx",
   ]),
 ]);
 
