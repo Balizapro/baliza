@@ -12,6 +12,8 @@ const MAREOGRAFO_A_BD: Record<string, string> = {
   "La Plata": "La Plata",
   "Buenos Aires": "Puerto de Buenos Aires",
   "Pilote Norden": "Pilote Norden",
+  "Atalaya": "Atalaya",
+  "Oyarvide": "Oyarvide",
 };
 
 interface Columna {
