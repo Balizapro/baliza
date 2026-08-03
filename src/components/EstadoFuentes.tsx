@@ -59,25 +59,28 @@ export default function EstadoFuentes({ observadoSF, pronosticos, viento, avisos
   return (
     <section className="dashboard-section">
       <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-        <p className="seccion-titulo">Salud de fuentes</p>
-        <span className={`text-xs px-2 py-0.5 rounded-full border ${fallos.length === 0 ? "text-[#4C7A5E] border-[#4C7A5E]/50 bg-[#4C7A5E]/10" : "text-[#C0442B] border-[#C0442B]/50 bg-[#C0442B]/10"}`}>
+        <h2 className="seccion-titulo">Salud de fuentes</h2>
+        <span className={`text-xs px-2 py-0.5 rounded-full border ${fallos.length === 0 ? "text-ok border-ok/50 bg-ok/10" : "text-rojo-alerta border-rojo-alerta/50 bg-rojo-alerta/10"}`}>
           {fallos.length === 0 ? "Todas activas" : `${fallos.length} con problema`}
         </span>
       </div>
 
       {fallos.length > 0 && (
-        <div className="mb-2 rounded-lg border border-[#C0442B]/40 bg-[#C0442B]/5 px-3 py-2 text-sm text-[#8B1E1E] dark:text-red-300">
-          ⚠ Estas fuentes no se actualizan hace tiempo. Los datos pueden estar desactualizados o la ingesta falló:
-          {fallos.map((f) => f.nombre).join(", ")}.
+        <div className="mb-2 rounded-lg border border-rojo-alerta/40 bg-rojo-alerta/5 px-3 py-2 text-sm text-rojo-oscuro dark:text-red-300 flex items-start gap-2">
+          <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 flex-shrink-0 mt-0.5" aria-hidden="true"><path d="M12 2 1 21h22L12 2zm1 14h-2v2h2v-2zm0-7h-2v5h2V9z"/></svg>
+          <span>
+            Estas fuentes no se actualizan hace tiempo. Los datos pueden estar desactualizados o la ingesta falló:
+            {fallos.map((f) => f.nombre).join(", ")}.
+          </span>
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
         {fuentes.map((f) => (
           <div key={f.nombre} className="flex items-center justify-between text-sm">
-            <span className="text-[#5B6E68] dark:text-gray-400">{f.nombre}</span>
-            <span className={`flex items-center gap-1.5 ${f.ok ? "text-[#4C7A5E]" : "text-[#C0442B] font-medium"}`}>
-              <span className={`inline-block w-2 h-2 rounded-full ${f.ok ? "bg-[#4C7A5E]" : "bg-[#C0442B]"}`} />
+            <span className="text-texto-sec dark:text-gray-400">{f.nombre}</span>
+            <span className={`flex items-center gap-1.5 ${f.ok ? "text-ok" : "text-rojo-alerta font-medium"}`}>
+              <span className={`inline-block w-2 h-2 rounded-full ${f.ok ? "bg-ok" : "bg-rojo-alerta"}`} />
               {f.detalle}
             </span>
           </div>

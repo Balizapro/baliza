@@ -287,91 +287,91 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
           onClick={() => setAbiertoUmbrales(!abiertoUmbrales)}
           className="w-full text-left flex items-center justify-between group"
         >
-          <p className="seccion-titulo">
+          <h2 className="seccion-titulo">
             Umbrales
-          </p>
-          <span className="text-[#5B6E68]/50 group-hover:text-[#5B6E68] dark:text-gray-500 transition-colors">{abiertoUmbrales ? "▲" : "▼"}</span>
+          </h2>
+          <span className="text-texto-sec group-hover:text-texto-sec dark:text-gray-400 transition-colors">{abiertoUmbrales ? "▲" : "▼"}</span>
         </button>
 
         {abiertoUmbrales && (
           <div className="mt-3 space-y-3">
             <div>
-              <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Evaluación (m)</label>
+              <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Evaluación (m)</label>
               <input
                 type="number"
                 step="0.01"
                 value={evalVal}
                 onChange={(e) => setEvalVal(e.target.value)}
-                className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
               />
             </div>
             <div>
-              <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">No retorno (m)</label>
+              <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">No retorno (m)</label>
               <input
                 type="number"
                 step="0.01"
                 value={nrVal}
                 onChange={(e) => setNrVal(e.target.value)}
-                className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
               />
             </div>
-            <div className="pt-2 border-t border-[#D4C9B8]/40 dark:border-gray-700">
-              <p className="text-xs font-serif font-medium text-[#12312B] dark:text-gray-300 mb-2">Bajante</p>
+            <div className="pt-2 border-t border-borde/40 dark:border-gray-700">
+              <p className="text-xs font-serif font-medium text-texto dark:text-gray-300 mb-2">Bajante</p>
             </div>
             <div>
-              <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Bajante alarma (m)</label>
+              <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Bajante alarma (m)</label>
               <input
                 type="number"
                 step="0.01"
                 value={bajAlarmaVal}
                 onChange={(e) => setBajAlarmaVal(e.target.value)}
-                className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
               />
-              <p className="text-[10px] text-[#5B6E68]/60 dark:text-gray-500 mt-0.5">Alerta azul cuando el río llega a este nivel (p. ej. 0.00 m)</p>
+              <p className="text-xs text-texto-sec dark:text-gray-400 mt-0.5">Alerta azul cuando el río llega a este nivel (p. ej. 0.00 m)</p>
             </div>
             <div>
-              <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Bajante evacuación (m)</label>
+              <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Bajante evacuación (m)</label>
               <input
                 type="number"
                 step="0.01"
                 value={bajEvacVal}
                 onChange={(e) => setBajEvacVal(e.target.value)}
-                className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
               />
-              <p className="text-[10px] text-[#5B6E68]/60 dark:text-gray-500 mt-0.5">Evacuación cuando cae por debajo de este nivel (negativo)</p>
+              <p className="text-xs text-texto-sec dark:text-gray-400 mt-0.5">Evacuación cuando cae por debajo de este nivel (negativo)</p>
             </div>
             <div>
-              <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Tiempo de traslado (min)</label>
+              <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Tiempo de traslado (min)</label>
               <input
                 type="number"
                 value={traslado}
                 onChange={(e) => setTraslado(e.target.value)}
-                className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
               />
             </div>
-            <div className="pt-2 border-t border-[#D4C9B8]/40 dark:border-gray-700">
-              <p className="text-xs font-serif font-medium text-[#12312B] dark:text-gray-300 mb-2">Pronóstico INA</p>
+            <div className="pt-2 border-t border-borde/40 dark:border-gray-700">
+              <p className="text-xs font-serif font-medium text-texto dark:text-gray-300 mb-2">Pronóstico INA</p>
             </div>
             <div>
-              <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Aviso de crecida pronosticada (m)</label>
+              <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Aviso de crecida pronosticada (m)</label>
               <input
                 type="number"
                 step="0.01"
                 value={pronoVal}
                 onChange={(e) => setPronoVal(e.target.value)}
-                className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
               />
-              <p className="text-[10px] text-[#5B6E68]/60 dark:text-gray-500 mt-0.5">Alertar cuando el pronóstico INA de 4 días supere este nivel (p. ej. 2.10 m)</p>
+              <p className="text-xs text-texto-sec dark:text-gray-400 mt-0.5">Alertar cuando el pronóstico INA de 4 días supere este nivel (p. ej. 2.10 m)</p>
             </div>
             <button
               onClick={handleSave}
               disabled={guardando}
-              className="bg-[#0E4749] text-white px-5 py-2.5 sm:px-4 sm:py-2 rounded-lg text-sm font-medium hover:bg-[#0E4749]/90 disabled:opacity-50 transition-colors"
+              className="bg-baliza text-white px-5 py-2.5 sm:px-4 sm:py-2 rounded-lg text-sm font-medium hover:bg-baliza/90 disabled:opacity-50 transition-colors"
             >
               {guardando ? "Guardando..." : "Guardar cambios"}
             </button>
             {mensaje && (
-              <p className={`text-sm ${mensaje === "Guardado" ? "text-[#4C7A5E] dark:text-green-400" : "text-[#C0442B] dark:text-red-400"}`}>{mensaje}</p>
+              <p className={`text-sm ${mensaje === "Guardado" ? "text-ok dark:text-green-400" : "text-rojo-alerta dark:text-red-400"}`}>{mensaje}</p>
             )}
           </div>
         )}
@@ -382,60 +382,60 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
           onClick={() => setAbiertoEscalones(!abiertoEscalones)}
           className="w-full text-left flex items-center justify-between group"
         >
-          <p className="seccion-titulo">
+          <h2 className="seccion-titulo">
             Escalones del muelle
-          </p>
-          <span className="text-[#5B6E68]/50 group-hover:text-[#5B6E68] dark:text-gray-500 transition-colors">{abiertoEscalones ? "▲" : "▼"}</span>
+          </h2>
+          <span className="text-texto-sec group-hover:text-texto-sec dark:text-gray-400 transition-colors">{abiertoEscalones ? "▲" : "▼"}</span>
         </button>
 
         {abiertoEscalones && (
           <div className="mt-3 space-y-3">
-            {cargandoEsc && <p className="text-xs italic text-[#5B6E68]/60 dark:text-gray-500">Cargando...</p>}
+            {cargandoEsc && <p className="text-xs italic text-texto-sec dark:text-gray-400">Cargando...</p>}
 
             {!cargandoEsc && escalones.length === 0 && (
-              <p className="text-xs italic text-[#5B6E68]/60 dark:text-gray-500">No hay escalones cargados.</p>
+              <p className="text-xs italic text-texto-sec dark:text-gray-400">No hay escalones cargados.</p>
             )}
 
             {escalones.map((e) => (
-              <div key={e.id} className="border border-[#D4C9B8]/50 dark:border-gray-700 rounded-lg p-3 space-y-2">
+              <div key={e.id} className="border border-borde/50 dark:border-gray-700 rounded-lg p-3 space-y-2">
                 {editingId === e.id ? (
                   <>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Escalón</label>
+                        <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Escalón</label>
                         <input type="number" value={editEscalon} onChange={(x) => setEditEscalon(x.target.value)}
-                          className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded px-2 py-1 text-sm font-mono" />
+                          className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded px-2 py-1 text-sm font-mono" />
                       </div>
                       <div>
-                        <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Min (m)</label>
+                        <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Min (m)</label>
                         <input type="number" step="0.01" value={editMin} onChange={(x) => setEditMin(x.target.value)}
-                          className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded px-2 py-1 text-sm font-mono" />
+                          className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded px-2 py-1 text-sm font-mono" />
                       </div>
                       <div>
-                        <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Max (m)</label>
+                        <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Max (m)</label>
                         <input type="number" step="0.01" value={editMax} onChange={(x) => setEditMax(x.target.value)}
-                          className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded px-2 py-1 text-sm font-mono" />
+                          className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded px-2 py-1 text-sm font-mono" />
                       </div>
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => guardarEdicion(e.id)}
-                        className="bg-[#0E4749] text-white text-xs px-3 py-1.5 rounded hover:bg-[#0E4749]/90 transition-colors">Guardar</button>
+                        className="bg-baliza text-white text-xs px-3 py-1.5 rounded hover:bg-baliza/90 transition-colors">Guardar</button>
                       <button onClick={() => setEditingId(null)}
-                        className="text-xs px-3 py-1.5 text-[#5B6E68] dark:text-gray-400 hover:text-[#12312B] dark:hover:text-gray-200">Cancelar</button>
+                        className="text-xs px-3 py-1.5 text-texto-sec dark:text-gray-400 hover:text-texto dark:hover:text-gray-200">Cancelar</button>
                     </div>
                   </>
                 ) : (
                   <>
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-serif font-medium text-[#12312B] dark:text-gray-200">Escalón {e.escalon}</p>
+                      <p className="text-sm font-serif font-medium text-texto dark:text-gray-200">Escalón {e.escalon}</p>
                       <div className="flex gap-2">
                         <button onClick={() => iniciarEdicion(e)}
-                          className="text-xs text-[#0E4749] dark:text-[#4fc3c5] hover:underline">Editar</button>
+                          className="text-xs text-baliza dark:text-marea-dark hover:underline">Editar</button>
                         <button onClick={() => eliminarEscalon(e.id)}
-                          className="text-xs text-[#C0442B] dark:text-red-400 hover:underline">Eliminar</button>
+                          className="text-xs text-rojo-alerta dark:text-red-400 hover:underline">Eliminar</button>
                       </div>
                     </div>
-                    <p className="text-xs font-mono text-[#5B6E68] dark:text-gray-400">
+                    <p className="text-xs font-mono text-texto-sec dark:text-gray-400">
                       {e.nivel_min_m.toFixed(2)} m — {e.nivel_max_m.toFixed(2)} m
                     </p>
                   </>
@@ -444,21 +444,21 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
             ))}
 
             <div className="pt-3 space-y-2">
-              <p className="text-xs font-sans text-[#5B6E68] dark:text-gray-400 uppercase tracking-[0.15em]">Agregar escalón</p>
+              <p className="text-xs font-sans text-texto-sec dark:text-gray-400 uppercase tracking-[0.15em]">Agregar escalón</p>
               <div className="grid grid-cols-3 gap-2">
                 <input type="number" placeholder="N°" value={nuevoEscalon} onChange={(x) => setNuevoEscalon(x.target.value)}
-                  className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded px-2 py-1.5 text-sm font-mono" />
+                  className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded px-2 py-1.5 text-sm font-mono" />
                 <input type="number" step="0.01" placeholder="Min (m)" value={nuevoMin} onChange={(x) => setNuevoMin(x.target.value)}
-                  className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded px-2 py-1.5 text-sm font-mono" />
+                  className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded px-2 py-1.5 text-sm font-mono" />
                 <input type="number" step="0.01" placeholder="Max (m)" value={nuevoMax} onChange={(x) => setNuevoMax(x.target.value)}
-                  className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded px-2 py-1.5 text-sm font-mono" />
+                  className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded px-2 py-1.5 text-sm font-mono" />
               </div>
               <button onClick={agregarEscalon}
-                className="bg-[#0E4749] text-white text-xs px-4 py-1.5 rounded hover:bg-[#0E4749]/90 transition-colors">Agregar</button>
+                className="bg-baliza text-white text-xs px-4 py-1.5 rounded hover:bg-baliza/90 transition-colors">Agregar</button>
             </div>
 
             {msgEsc && (
-              <p className={`text-xs ${msgEsc === "Error al crear" || msgEsc === "Error al guardar" || msgEsc === "Error al eliminar" || msgEsc === "Valores inválidos" ? "text-[#C0442B] dark:text-red-400" : "text-[#4C7A5E] dark:text-green-400"}`}>{msgEsc}</p>
+              <p className={`text-xs ${msgEsc === "Error al crear" || msgEsc === "Error al guardar" || msgEsc === "Error al eliminar" || msgEsc === "Valores inválidos" ? "text-rojo-alerta dark:text-red-400" : "text-ok dark:text-green-400"}`}>{msgEsc}</p>
             )}
           </div>
         )}
@@ -469,10 +469,10 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
           onClick={abrirRecomendaciones}
           className="w-full text-left flex items-center justify-between group"
         >
-          <p className="seccion-titulo">
+          <h2 className="seccion-titulo">
             Recomendaciones
-          </p>
-          <span className="text-[#5B6E68]/50 group-hover:text-[#5B6E68] dark:text-gray-500 transition-colors">{abiertoRecomendaciones ? "▲" : "▼"}</span>
+          </h2>
+          <span className="text-texto-sec group-hover:text-texto-sec dark:text-gray-400 transition-colors">{abiertoRecomendaciones ? "▲" : "▼"}</span>
         </button>
 
         {abiertoRecomendaciones && (
@@ -481,11 +481,11 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
               const val = recVals[clave] ?? "";
               return (
                 <div key={clave}>
-                  <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">{label}</label>
+                  <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">{label}</label>
                   <textarea
                     value={val}
                     onChange={(e) => setRecVals((prev) => ({ ...prev, [clave]: e.target.value }))}
-                    className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm"
+                    className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm"
                     rows={2}
                   />
                 </div>
@@ -494,12 +494,12 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
             <button
               onClick={guardarRecomendaciones}
               disabled={guardandoRec}
-              className="bg-[#0E4749] text-white text-xs px-4 py-1.5 rounded hover:bg-[#0E4749]/90 disabled:opacity-50 transition-colors"
+              className="bg-baliza text-white text-xs px-4 py-1.5 rounded hover:bg-baliza/90 disabled:opacity-50 transition-colors"
             >
               {guardandoRec ? "Guardando..." : "Guardar recomendaciones"}
             </button>
             {msgRec && (
-              <p className={`text-xs ${msgRec === "Guardado" ? "text-[#4C7A5E] dark:text-green-400" : "text-[#C0442B] dark:text-red-400"}`}>{msgRec}</p>
+              <p className={`text-xs ${msgRec === "Guardado" ? "text-ok dark:text-green-400" : "text-rojo-alerta dark:text-red-400"}`}>{msgRec}</p>
             )}
           </div>
         )}
@@ -511,34 +511,34 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
             onClick={() => setAbiertoUsuarios(!abiertoUsuarios)}
             className="w-full text-left flex items-center justify-between group"
           >
-            <p className="seccion-titulo">
+            <h2 className="seccion-titulo">
               Usuarios
-            </p>
-            <span className="text-[#5B6E68]/50 group-hover:text-[#5B6E68] dark:text-gray-500 transition-colors">{abiertoUsuarios ? "▲" : "▼"}</span>
+            </h2>
+            <span className="text-texto-sec group-hover:text-texto-sec dark:text-gray-400 transition-colors">{abiertoUsuarios ? "▲" : "▼"}</span>
           </button>
 
           {abiertoUsuarios && (
             <div className="mt-3 space-y-3">
               {cargandoUsuarios ? (
-                <p className="text-xs italic text-[#5B6E68]/60 dark:text-gray-500">Cargando...</p>
+                <p className="text-xs italic text-texto-sec dark:text-gray-400">Cargando...</p>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-xs font-serif font-medium text-[#12312B] dark:text-gray-300">Cuentas existentes</p>
+                  <p className="text-xs font-serif font-medium text-texto dark:text-gray-300">Cuentas existentes</p>
                   {usuarios.length === 0 ? (
-                    <p className="text-xs italic text-[#5B6E68]/60 dark:text-gray-500">Sin usuarios</p>
+                    <p className="text-xs italic text-texto-sec dark:text-gray-400">Sin usuarios</p>
                   ) : (
                     <div className="space-y-1 max-h-40 overflow-y-auto">
                       {usuarios.map((u) => (
-                        <div key={u.id} className="text-xs flex items-center justify-between border-b border-[#D4C9B8]/50 dark:border-gray-700 pb-1 last:border-0">
+                        <div key={u.id} className="text-xs flex items-center justify-between border-b border-borde/50 dark:border-gray-700 pb-1 last:border-0">
                           <span className="min-w-0">
-                            <span className="font-medium text-[#12312B] dark:text-gray-200 block truncate">
+                            <span className="font-medium text-texto dark:text-gray-200 block truncate">
                               {u.nombre ?? u.email}
                             </span>
-                            <span className="font-mono text-[#5B6E68]/60 dark:text-gray-500 block truncate">{u.email}</span>
+                            <span className="font-mono text-texto-sec dark:text-gray-400 block truncate">{u.email}</span>
                           </span>
                           <span className="flex-shrink-0 ml-2 flex flex-col items-end gap-0.5">
-                            <span className="text-[#5B6E68] dark:text-gray-400">{u.rol ?? "—"}</span>
-                            <span className={`${u.confirmed ? "text-[#4C7A5E] dark:text-green-400" : "text-[#C99A3D]"}`}>
+                            <span className="text-texto-sec dark:text-gray-400">{u.rol ?? "—"}</span>
+                            <span className={`${u.confirmed ? "text-ok dark:text-green-400" : "text-atencion"}`}>
                               {u.confirmed ? "activo" : "pendiente"}
                             </span>
                           </span>
@@ -550,34 +550,34 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
               )}
 
               <div className="space-y-2">
-                <p className="text-xs font-serif font-medium text-[#12312B] dark:text-gray-300">Crear cuenta</p>
+                <p className="text-xs font-serif font-medium text-texto dark:text-gray-300">Crear cuenta</p>
                 <input
                   type="text"
                   value={nuevoNombre}
                   onChange={(e) => setNuevoNombre(e.target.value)}
                   placeholder="Nombre y apellido"
-                  className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm"
                 />
                 <input
                   type="email"
                   value={nuevoEmail}
                   onChange={(e) => setNuevoEmail(e.target.value)}
                   placeholder="email@laconcepciondelta.edu.ar"
-                  className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                  className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
                 />
                 <input
                   type="password"
                   value={nuevoPass}
                   onChange={(e) => setNuevoPass(e.target.value)}
                   placeholder="Contraseña (mín 6 caracteres)"
-                  className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                  className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
                 />
                 <div>
-                  <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Rol</label>
+                  <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Rol</label>
                   <select
                     value={nuevoRol}
                     onChange={(e) => setNuevoRol(e.target.value)}
-                    className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm"
+                    className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm"
                   >
                     <option value="docente">Docente</option>
                     <option value="directivo">Directivo</option>
@@ -587,14 +587,14 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
                 <button
                   onClick={crearUsuario}
                   disabled={creandoUsuario}
-                  className="bg-[#0E4749] text-white text-xs px-4 py-1.5 rounded hover:bg-[#0E4749]/90 disabled:opacity-50 transition-colors"
+                  className="bg-baliza text-white text-xs px-4 py-1.5 rounded hover:bg-baliza/90 disabled:opacity-50 transition-colors"
                 >
                   {creandoUsuario ? "Creando..." : "Crear usuario"}
                 </button>
               </div>
 
               {msgUsu && (
-                <p className={`text-xs ${msgUsu === "Usuario creado" ? "text-[#4C7A5E] dark:text-green-400" : "text-[#C0442B] dark:text-red-400"}`}>{msgUsu}</p>
+                <p className={`text-xs ${msgUsu === "Usuario creado" ? "text-ok dark:text-green-400" : "text-rojo-alerta dark:text-red-400"}`}>{msgUsu}</p>
               )}
             </div>
           )}

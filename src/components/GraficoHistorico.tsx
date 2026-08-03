@@ -28,8 +28,8 @@ export default function GraficoHistorico({ observaciones, pronosticos, umbralEva
   if (obs7d.length < 2) {
     return (
       <div>
-        <p className="seccion-titulo mb-2">Histórico San Fernando</p>
-        <p className="text-sm italic text-[#5B6E68]/60 dark:text-gray-500">Esperando datos...</p>
+        <h2 className="seccion-titulo mb-2">Histórico San Fernando</h2>
+        <p className="text-sm italic text-texto-sec dark:text-gray-400">Esperando datos...</p>
       </div>
     );
   }
@@ -147,9 +147,9 @@ export default function GraficoHistorico({ observaciones, pronosticos, umbralEva
 
   return (
     <div>
-      <p className="seccion-titulo mb-2">
+      <h2 className="seccion-titulo mb-2">
         Histórico — San Fernando (últimos 7 días)
-      </p>
+      </h2>
 
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" style={{ maxHeight: "300px" }}>
         <defs>
@@ -159,59 +159,59 @@ export default function GraficoHistorico({ observaciones, pronosticos, umbralEva
         {/* Grid horizontal + etiquetas Y */}
         {yLabels.map((v) => (
           <g key={v}>
-            <line x1={padL} y1={yPos(v)} x2={W - padR} y2={yPos(v)} stroke="#e5e7eb" strokeWidth="1" />
-            <text x={padL - 6} y={yPos(v) + 3} fontSize="9" fill="#9ca3af" textAnchor="end">{v.toFixed(1)}</text>
+            <line x1={padL} y1={yPos(v)} x2={W - padR} y2={yPos(v)} stroke="var(--chart-grid)" strokeWidth="1" />
+            <text x={padL - 6} y={yPos(v) + 3} fontSize="9" fill="var(--chart-axis)" textAnchor="end">{v.toFixed(1)}</text>
           </g>
         ))}
 
         {/* Labels de fecha */}
         {xLabels.map((xl) => (
-          <text key={xl.label + xl.x} x={xl.x} y={H - 8} fontSize="9" fill="#9ca3af" textAnchor="middle">{xl.label}</text>
+          <text key={xl.label + xl.x} x={xl.x} y={H - 8} fontSize="9" fill="var(--chart-axis)" textAnchor="middle">{xl.label}</text>
         ))}
 
         {/* Línea AHORA */}
-        <line x1={xAhora} y1={padT} x2={xAhora} y2={H - padB} stroke="#6b7280" strokeWidth="1" strokeDasharray="3,3" />
-        <text x={xAhora + 3} y={padT + 9} fontSize="8" fill="#6b7280" fontWeight="600">AHORA</text>
+        <line x1={xAhora} y1={padT} x2={xAhora} y2={H - padB} stroke="var(--chart-ahora)" strokeWidth="1" strokeDasharray="3,3" />
+        <text x={xAhora + 3} y={padT + 9} fontSize="8" fill="var(--chart-ahora)" fontWeight="600">AHORA</text>
 
         {/* Umbrales */}
-        <line x1={padL} y1={yPos(umbralEval)} x2={W - padR} y2={yPos(umbralEval)} stroke="#C99A3D" strokeWidth="1.5" strokeDasharray="6,4" />
-        <rect x={padL} y={yPos(umbralEval) - 1} width={W - padL - padR} height={2} fill="#C99A3D" fillOpacity="0.12" />
-        <text x={padL + 3} y={yPos(umbralEval) - 4} fontSize="8" fill="#C99A3D" fontStyle="italic" fontWeight="600">eval {umbralEval.toFixed(1)}</text>
+        <line x1={padL} y1={yPos(umbralEval)} x2={W - padR} y2={yPos(umbralEval)} stroke="var(--color-atencion)" strokeWidth="1.5" strokeDasharray="6,4" />
+        <rect x={padL} y={yPos(umbralEval) - 1} width={W - padL - padR} height={2} fill="var(--color-atencion)" fillOpacity="0.12" />
+        <text x={padL + 3} y={yPos(umbralEval) - 4} fontSize="8" fill="var(--color-atencion)" fontStyle="italic" fontWeight="600">eval {umbralEval.toFixed(1)}</text>
 
-        <line x1={padL} y1={yPos(umbralNR)} x2={W - padR} y2={yPos(umbralNR)} stroke="#C0442B" strokeWidth="1.5" strokeDasharray="6,4" />
-        <rect x={padL} y={yPos(umbralNR) - 1} width={W - padL - padR} height={2} fill="#C0442B" fillOpacity="0.08" />
-        <text x={padL + 3} y={yPos(umbralNR) - 4} fontSize="8" fill="#C0442B" fontStyle="italic" fontWeight="600">NR {umbralNR.toFixed(1)}</text>
+        <line x1={padL} y1={yPos(umbralNR)} x2={W - padR} y2={yPos(umbralNR)} stroke="var(--color-rojo-alerta)" strokeWidth="1.5" strokeDasharray="6,4" />
+        <rect x={padL} y={yPos(umbralNR) - 1} width={W - padL - padR} height={2} fill="var(--color-rojo-alerta)" fillOpacity="0.08" />
+        <text x={padL + 3} y={yPos(umbralNR) - 4} fontSize="8" fill="var(--color-rojo-alerta)" fontStyle="italic" fontWeight="600">NR {umbralNR.toFixed(1)}</text>
 
         {/* Marcas de alertas (puntos en la base) */}
         {alertas
           .filter((a) => new Date(a.timestamp).getTime() >= desde && new Date(a.timestamp).getTime() <= ahora)
           .map((a, i) => {
             const x = xPos(new Date(a.timestamp).getTime());
-            const color = a.nivel === "roja" || a.nivel === "evacuacion" ? "#C0442B" : a.nivel === "amarilla" ? "#C99A3D" : a.nivel === "azul" ? "#2563EB" : "#4C7A5E";
+            const color = a.nivel === "roja" || a.nivel === "evacuacion" ? "var(--color-rojo-alerta)" : a.nivel === "amarilla" ? "var(--color-atencion)" : a.nivel === "azul" ? "var(--color-bajante)" : "var(--color-ok)";
             return <circle key={i} cx={x} cy={H - padB + 8} r="4" fill={color} />;
           })}
 
         {/* Banda de incertidumbre */}
-        {bandaP25P75 && <polygon points={bandaP25P75} fill="#0E4749" fillOpacity="0.18" clipPath="url(#gch-clip)" />}
-        {bandaP05P95 && <polygon points={bandaP05P95} fill="#0E4749" fillOpacity="0.10" clipPath="url(#gch-clip)" />}
+        {bandaP25P75 && <polygon points={bandaP25P75} fill="var(--chart-obs)" fillOpacity="0.18" clipPath="url(#gch-clip)" />}
+        {bandaP05P95 && <polygon points={bandaP05P95} fill="var(--chart-obs)" fillOpacity="0.10" clipPath="url(#gch-clip)" />}
 
         {/* Línea observada */}
-        <polyline fill="none" stroke="#0E4749" strokeWidth="2" points={puntosObs} clipPath="url(#gch-clip)" />
+        <polyline fill="none" stroke="var(--chart-obs)" strokeWidth="2" points={puntosObs} clipPath="url(#gch-clip)" />
 
         {/* Línea pronóstico */}
         {futuros.length > 0 && (
-          <polyline fill="none" stroke="#E8823A" strokeWidth="1.8" strokeDasharray="5,3" points={puntosProno} clipPath="url(#gch-clip)" />
+          <polyline fill="none" stroke="var(--chart-main)" strokeWidth="1.8" strokeDasharray="5,3" points={puntosProno} clipPath="url(#gch-clip)" />
         )}
 
         {/* Pico pronosticado */}
         {pico && (
           <g>
-            <circle cx={xPos(new Date(pico.timestamp).getTime())} cy={yPos(pico.valor_m)} r="4" fill="#E8823A" stroke="#fff" strokeWidth="1.5" />
+            <circle cx={xPos(new Date(pico.timestamp).getTime())} cy={yPos(pico.valor_m)} r="4" fill="var(--chart-main)" stroke="#fff" strokeWidth="1.5" />
             <text
               x={xPos(new Date(pico.timestamp).getTime())}
               y={yPos(pico.valor_m) - 8}
               fontSize="9"
-              fill="#E8823A"
+              fill="var(--chart-main)"
               fontWeight="700"
               textAnchor="middle"
             >
@@ -221,7 +221,7 @@ export default function GraficoHistorico({ observaciones, pronosticos, umbralEva
               x={xPos(new Date(pico.timestamp).getTime())}
               y={yPos(pico.valor_m) + 16}
               fontSize="8"
-              fill="#E8823A"
+              fill="var(--chart-main)"
               textAnchor="middle"
             >
               {fmtPico(pico.timestamp)}
@@ -230,13 +230,13 @@ export default function GraficoHistorico({ observaciones, pronosticos, umbralEva
         )}
       </svg>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-[#5B6E68] dark:text-gray-400">
-        <span className="flex items-center gap-1"><span className="w-3 h-[2px] bg-[#0E4749] inline-block" /> Observado</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-[1.5px] border-dashed border-[#E8823A]" /> Pronóstico</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-[6px] bg-[#0E4749]/15 inline-block" /> p05–p95</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-[6px] bg-[#0E4749]/30 inline-block" /> p25–p75</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-[1.5px] border-dashed border-[#C99A3D]" /> Eval {umbralEval.toFixed(1)}m</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-[1.5px] border-dashed border-[#C0442B]" /> NR {umbralNR.toFixed(1)}m</span>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-texto-sec dark:text-gray-400">
+        <span className="flex items-center gap-1"><span className="w-3 h-[2px] bg-baliza inline-block" /> Observado</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-[1.5px] border-dashed border-alerta" /> Pronóstico</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-[6px] bg-baliza/15 inline-block" /> p05–p95</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-[6px] bg-baliza/30 inline-block" /> p25–p75</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-[1.5px] border-dashed border-atencion" /> Eval {umbralEval.toFixed(1)}m</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-[1.5px] border-dashed border-rojo-alerta" /> NR {umbralNR.toFixed(1)}m</span>
       </div>
     </div>
   );

@@ -41,8 +41,8 @@ export default function ComparacionModelo({ pronostico, lecturasLP, nivelSF }: P
   if (!picoINA) {
     return (
       <div>
-        <p className="seccion-titulo mb-2">Modelo INA vs propagación LP</p>
-        <p className="text-sm italic text-[#5B6E68]/60 dark:text-gray-500">Sin pronóstico INA disponible.</p>
+        <h2 className="seccion-titulo mb-2">Modelo INA vs propagación LP</h2>
+        <p className="text-sm italic text-texto-sec dark:text-gray-400">Sin pronóstico INA disponible.</p>
       </div>
     );
   }
@@ -51,41 +51,47 @@ export default function ComparacionModelo({ pronostico, lecturasLP, nivelSF }: P
 
   return (
     <div>
-      <p className="seccion-titulo mb-2">Modelo INA vs propagación LP</p>
-      <p className="text-xs text-[#5B6E68]/70 dark:text-gray-500 mb-3">
+      <h2 className="seccion-titulo mb-2">Modelo INA vs propagación LP</h2>
+      <p className="text-xs text-texto-sec dark:text-gray-400 mb-3">
         Cruza el pronóstico del INA con la señal real de La Plata para anticipar discrepancias.
       </p>
 
       <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2 bg-[#F2E9DC]/60 dark:bg-white/5 rounded-lg px-3 py-2">
+        <div className="flex items-center justify-between gap-2 bg-fondo/60 dark:bg-white/5 rounded-lg px-3 py-2">
           <div>
-            <p className="text-xs text-[#5B6E68]/70 dark:text-gray-400">Modelo INA (San Fernando)</p>
-            <p className="text-xs text-[#5B6E68]/50 dark:text-gray-500">{picoINA ? fmt(picoINA.timestamp) : "—"}</p>
+            <p className="text-xs text-texto-sec dark:text-gray-400">Modelo INA (San Fernando)</p>
+            <p className="text-xs text-texto-sec dark:text-gray-400">{picoINA ? fmt(picoINA.timestamp) : "—"}</p>
           </div>
-          <p className="font-mono text-lg font-bold text-[#E8823A]">
+          <p className="font-mono text-lg font-bold text-alerta">
             {picoINA.valor_m.toFixed(2)}m
           </p>
         </div>
 
-        <div className="flex items-center justify-between gap-2 bg-[#F2E9DC]/60 dark:bg-white/5 rounded-lg px-3 py-2">
+        <div className="flex items-center justify-between gap-2 bg-fondo/60 dark:bg-white/5 rounded-lg px-3 py-2">
           <div>
-            <p className="text-xs text-[#5B6E68]/70 dark:text-gray-400">Propagación LP → SF</p>
-            <p className="text-xs text-[#5B6E68]/50 dark:text-gray-500">
+            <p className="text-xs text-texto-sec dark:text-gray-400">Propagación LP → SF</p>
+            <p className="text-xs text-texto-sec dark:text-gray-400">
               {picoPropagacion ? `${fmt(picoPropagacion.fecha)} (viaje ~${PROPAGACION_HS}hs)` : "sin señal ascendente"}
             </p>
           </div>
-          <p className="font-mono text-lg font-bold text-[#0E4749] dark:text-[#4fc3c5]">
+          <p className="font-mono text-lg font-bold text-baliza dark:text-marea-dark">
             {picoPropagacion ? `${picoPropagacion.valor.toFixed(2)}m` : "—"}
           </p>
         </div>
 
         {picoPropagacion && nivelSF != null && (
-          <div className={`rounded-lg px-3 py-2 text-xs font-medium border ${diff === null ? "" : Math.abs(diff) > 0.15 ? "bg-orange-50 border-[#E8823A]/40 text-[#8B4E0A] dark:bg-orange-900/20 dark:text-orange-300" : "bg-green-50 border-[#4C7A5E]/40 text-[#2F5233] dark:bg-green-900/20 dark:text-green-300"}`}>
-            {diff === null
-              ? null
-              : Math.abs(diff) > 0.15
-                ? `⚠ Discrepancia: el INA estima ${diff > 0 ? "más" : "menos"} que la señal LP (${Math.abs(diff).toFixed(2)}m). Validar cuál está reflejando el río real (ahora ${nivelSF.toFixed(2)}m).`
-                : `✓ Coincidencia razonable entre el INA (${picoINA.valor_m.toFixed(2)}m) y la propagación LP (${picoPropagacion.valor.toFixed(2)}m).`}
+          <div className={`rounded-lg px-3 py-2 text-xs font-medium border flex items-start gap-2 ${diff === null ? "" : Math.abs(diff) > 0.15 ? "bg-orange-50 border-alerta/40 text-alerta-oscuro dark:bg-orange-900/20 dark:text-orange-300" : "bg-green-50 border-ok/40 text-ok-oscuro dark:bg-green-900/20 dark:text-green-300"}`}>
+            {diff === null ? null : Math.abs(diff) > 0.15 ? (
+              <>
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true"><path d="M12 2 1 21h22L12 2zm1 14h-2v2h2v-2zm0-7h-2v5h2V9z"/></svg>
+                <span>Discrepancia: el INA estima {diff > 0 ? "más" : "menos"} que la señal LP ({Math.abs(diff).toFixed(2)}m). Validar cuál está reflejando el río real (ahora {nivelSF.toFixed(2)}m).</span>
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+                <span>Coincidencia razonable entre el INA ({picoINA.valor_m.toFixed(2)}m) y la propagación LP ({picoPropagacion.valor.toFixed(2)}m).</span>
+              </>
+            )}
           </div>
         )}
       </div>

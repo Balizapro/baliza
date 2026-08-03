@@ -48,22 +48,22 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
   }
 
   const nivelColor =
-    alertaNivel === "roja" ? "#C0442B"
-    : alertaNivel === "evacuacion" ? "#8B1E1E"
-    : alertaNivel === "amarilla" ? "#E8823A"
-    : alertaNivel === "azul" ? "#2563EB"
-    : "#0E4749";
+    alertaNivel === "roja" ? "var(--color-rojo-alerta)"
+    : alertaNivel === "evacuacion" ? "var(--color-rojo-oscuro)"
+    : alertaNivel === "amarilla" ? "var(--color-alerta)"
+    : alertaNivel === "azul" ? "var(--color-bajante)"
+    : "var(--chart-obs)";
   const alertaBg =
-    alertaNivel === "roja" || alertaNivel === "evacuacion" ? "bg-[#C0442B]/10"
-    : alertaNivel === "amarilla" ? "bg-[#E8823A]/10"
-    : alertaNivel === "azul" ? "bg-[#2563EB]/10"
+    alertaNivel === "roja" || alertaNivel === "evacuacion" ? "bg-rojo-alerta/10"
+    : alertaNivel === "amarilla" ? "bg-alerta/10"
+    : alertaNivel === "azul" ? "bg-bajante/10"
     : "bg-transparent";
 
   return (
     <section className={`relative ${alertaBg} rounded-xl p-4 sm:p-5`}>
       <div className="flex items-center gap-2 mb-4">
-        <span className={`w-2.5 h-2.5 rounded-full ${alertaNivel === "roja" || alertaNivel === "evacuacion" ? "bg-[#C0442B]" : alertaNivel === "amarilla" ? "bg-[#E8823A]" : alertaNivel === "azul" ? "bg-[#2563EB]" : "bg-[#4C7A5E]"}`} />
-        <p className="font-serif text-sm uppercase tracking-widest text-[#5B6E68] dark:text-gray-400">
+        <span className={`w-2.5 h-2.5 rounded-full ${alertaNivel === "roja" || alertaNivel === "evacuacion" ? "bg-rojo-alerta" : alertaNivel === "amarilla" ? "bg-alerta" : alertaNivel === "azul" ? "bg-bajante" : "bg-ok"}`} />
+        <p className="font-serif text-sm uppercase tracking-widest text-texto-sec dark:text-gray-400">
           San Fernando — brazo Luján
         </p>
       </div>
@@ -73,7 +73,7 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
         <div className="relative flex-shrink-0" style={{ width: gaugeW, height: H }}>
           <svg width={gaugeW} height={H} className="overflow-visible">
             {/* Barra de fondo */}
-            <rect x={barraX} y={10} width={barraW} height={H - 20} rx={4} className="fill-[#E8DFD0] dark:fill-[#334155]" />
+            <rect x={barraX} y={10} width={barraW} height={H - 20} rx={4} className="fill-gauge-bg dark:fill-border-dark" />
 
             {/* Zonas de color por escalón */}
             {escalones.map((e) => (
@@ -90,50 +90,50 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
             ))}
 
             {/* Borde de la barra */}
-            <rect x={barraX} y={10} width={barraW} height={H - 20} rx={4} fill="none" stroke="#0E4749" strokeWidth={1} strokeOpacity={0.2} />
+            <rect x={barraX} y={10} width={barraW} height={H - 20} rx={4} fill="none" stroke="var(--chart-obs)" strokeWidth={1} strokeOpacity={0.2} />
 
             {/* Línea umbral evaluación */}
             {umbralEval && (
               <g>
-                <line x1={barraX - 4} y1={yPos(umbralEval.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralEval.valor_m)} stroke="#C99A3D" strokeWidth={1.5} strokeDasharray="4,3" />
-                <text x={labelX + 60} y={yPos(umbralEval.valor_m) + 3} fontSize="9" fill="#C99A3D" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralEval.valor_m.toFixed(2)}m</text>
-                <text x={labelX + 62} y={yPos(umbralEval.valor_m) + 3} fontSize="8" fill="#C99A3D" textAnchor="start">eval</text>
+                <line x1={barraX - 4} y1={yPos(umbralEval.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralEval.valor_m)} stroke="var(--color-atencion)" strokeWidth={1.5} strokeDasharray="4,3" />
+                <text x={labelX + 60} y={yPos(umbralEval.valor_m) + 3} fontSize="9" fill="var(--color-atencion)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralEval.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralEval.valor_m) + 3} fontSize="8" fill="var(--color-atencion)" textAnchor="start">eval</text>
               </g>
             )}
 
             {/* Línea umbral no retorno */}
             {umbralNR && (
               <g>
-                <line x1={barraX - 4} y1={yPos(umbralNR.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralNR.valor_m)} stroke="#C0442B" strokeWidth={1.5} strokeDasharray="4,3" />
-                <text x={labelX + 60} y={yPos(umbralNR.valor_m) + 3} fontSize="9" fill="#C0442B" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralNR.valor_m.toFixed(2)}m</text>
-                <text x={labelX + 62} y={yPos(umbralNR.valor_m) + 3} fontSize="8" fill="#C0442B" textAnchor="start">NR</text>
+                <line x1={barraX - 4} y1={yPos(umbralNR.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralNR.valor_m)} stroke="var(--color-rojo-alerta)" strokeWidth={1.5} strokeDasharray="4,3" />
+                <text x={labelX + 60} y={yPos(umbralNR.valor_m) + 3} fontSize="9" fill="var(--color-rojo-alerta)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralNR.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralNR.valor_m) + 3} fontSize="8" fill="var(--color-rojo-alerta)" textAnchor="start">NR</text>
               </g>
             )}
 
             {/* Línea umbral bajante alarma */}
             {umbralBajAlarma && (
               <g>
-                <line x1={barraX - 4} y1={yPos(umbralBajAlarma.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralBajAlarma.valor_m)} stroke="#2563EB" strokeWidth={1.5} strokeDasharray="4,3" />
-                <text x={labelX + 60} y={yPos(umbralBajAlarma.valor_m) + 3} fontSize="9" fill="#2563EB" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralBajAlarma.valor_m.toFixed(2)}m</text>
-                <text x={labelX + 62} y={yPos(umbralBajAlarma.valor_m) + 3} fontSize="8" fill="#2563EB" textAnchor="start">baj.</text>
+                <line x1={barraX - 4} y1={yPos(umbralBajAlarma.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralBajAlarma.valor_m)} stroke="var(--color-bajante)" strokeWidth={1.5} strokeDasharray="4,3" />
+                <text x={labelX + 60} y={yPos(umbralBajAlarma.valor_m) + 3} fontSize="9" fill="var(--color-bajante)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralBajAlarma.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralBajAlarma.valor_m) + 3} fontSize="8" fill="var(--color-bajante)" textAnchor="start">baj.</text>
               </g>
             )}
 
             {/* Línea umbral bajante evacuación */}
             {umbralBajEvac && (
               <g>
-                <line x1={barraX - 4} y1={yPos(umbralBajEvac.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralBajEvac.valor_m)} stroke="#8B1E1E" strokeWidth={1.5} strokeDasharray="4,3" />
-                <text x={labelX + 60} y={yPos(umbralBajEvac.valor_m) + 3} fontSize="9" fill="#8B1E1E" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralBajEvac.valor_m.toFixed(2)}m</text>
-                <text x={labelX + 62} y={yPos(umbralBajEvac.valor_m) + 3} fontSize="8" fill="#8B1E1E" textAnchor="start">evac</text>
+                <line x1={barraX - 4} y1={yPos(umbralBajEvac.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralBajEvac.valor_m)} stroke="var(--color-rojo-oscuro)" strokeWidth={1.5} strokeDasharray="4,3" />
+                <text x={labelX + 60} y={yPos(umbralBajEvac.valor_m) + 3} fontSize="9" fill="var(--color-rojo-oscuro)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralBajEvac.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralBajEvac.valor_m) + 3} fontSize="8" fill="var(--color-rojo-oscuro)" textAnchor="start">evac</text>
               </g>
             )}
 
             {/* Marcas de escalón (en el lado izquierdo de la barra) */}
             {escalones.map((e) => (
               <g key={e.escalon}>
-                <text x={scalasX} y={yPos((e.nivel_min_m + e.nivel_max_m) / 2) + 3} fontSize="9" fill="#5B6E68" textAnchor="end" fontFamily="ui-monospace, monospace">e{e.escalon}</text>
-                <line x1={barraX - 2} y1={yPos(e.nivel_min_m)} x2={barraX} y2={yPos(e.nivel_min_m)} stroke="#5B6E68" strokeWidth={0.5} />
-                <line x1={barraX - 2} y1={yPos(e.nivel_max_m)} x2={barraX} y2={yPos(e.nivel_max_m)} stroke="#5B6E68" strokeWidth={0.5} />
+                <text x={scalasX} y={yPos((e.nivel_min_m + e.nivel_max_m) / 2) + 3} fontSize="9" fill="var(--color-texto-sec)" textAnchor="end" fontFamily="ui-monospace, monospace">e{e.escalon}</text>
+                <line x1={barraX - 2} y1={yPos(e.nivel_min_m)} x2={barraX} y2={yPos(e.nivel_min_m)} stroke="var(--color-texto-sec)" strokeWidth={0.5} />
+                <line x1={barraX - 2} y1={yPos(e.nivel_max_m)} x2={barraX} y2={yPos(e.nivel_max_m)} stroke="var(--color-texto-sec)" strokeWidth={0.5} />
               </g>
             ))}
 
@@ -158,72 +158,72 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
         <div className="flex-1 min-w-0 pt-1">
           <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
             <div>
-              <p className="text-xs text-[#5B6E68] dark:text-gray-400 uppercase tracking-wide">Nivel actual</p>
-              <p className="font-mono text-3xl sm:text-4xl font-bold text-[#0E4749] dark:text-[#4fc3c5] leading-tight">
+              <p className="text-xs text-texto-sec dark:text-gray-400 uppercase tracking-wide">Nivel actual</p>
+              <p className="font-mono text-3xl sm:text-4xl font-bold text-baliza dark:text-marea-dark leading-tight">
                 {nivelActual != null ? `${nivelActual.toFixed(2)}m` : "--"}
-                <span className="text-base sm:text-lg ml-2 font-sans text-[#5B6E68] dark:text-gray-400">{tendencia}</span>
+                <span className="text-base sm:text-lg ml-2 font-sans text-texto-sec dark:text-gray-400">{tendencia}</span>
               </p>
             </div>
 
-            <div className="text-xs text-[#5B6E68] dark:text-gray-400 font-mono">
+            <div className="text-xs text-texto-sec dark:text-gray-400 font-mono">
               {timestamp ? formatearFecha(timestamp) : "--"}
             </div>
 
             <div className="text-sm">
               {escalones.filter((e) => nivelActual >= e.nivel_min_m && nivelActual < e.nivel_max_m).map((e) => (
                 <p key={e.escalon}>
-                  <span className="font-bold text-[#0E4749] dark:text-[#4fc3c5]">Escalón e{e.escalon}</span>
-                  <span className="text-[#5B6E68] dark:text-gray-400 ml-1">({e.nivel_min_m.toFixed(1)}–{e.nivel_max_m.toFixed(1)}m)</span>
+                  <span className="font-bold text-baliza dark:text-marea-dark">Escalón e{e.escalon}</span>
+                  <span className="text-texto-sec dark:text-gray-400 ml-1">({e.nivel_min_m.toFixed(1)}–{e.nivel_max_m.toFixed(1)}m)</span>
                 </p>
               ))}
               {!escalones.some((e) => nivelActual >= e.nivel_min_m && nivelActual < e.nivel_max_m) && (
-                <p className="text-[#5B6E68] dark:text-gray-400">
+                <p className="text-texto-sec dark:text-gray-400">
                   {nivelActual < escalones[0]?.nivel_min_m ? "Debajo del escalón mínimo" : `Sobre escalón ${escalones[escalones.length - 1]?.escalon}`}
                 </p>
               )}
             </div>
           </div>
 
-          <div className="mt-3 border-t border-[#D4C9B8] dark:border-gray-700 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+          <div className="mt-3 border-t border-borde dark:border-gray-700 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
             {umbralEval && (
               <p className="flex items-center gap-2">
-                <span className="w-3 h-[2px] bg-[#C99A3D] inline-block" />
-                <span className="text-[#5B6E68] dark:text-gray-400">Evaluación: <strong className="font-mono text-[#C99A3D]">{umbralEval.valor_m.toFixed(2)}m</strong></span>
+                <span className="w-3 h-[2px] bg-atencion inline-block" />
+                <span className="text-texto-sec dark:text-gray-400">Evaluación: <strong className="font-mono text-atencion">{umbralEval.valor_m.toFixed(2)}m</strong></span>
               </p>
             )}
             {umbralNR && (
               <p className="flex items-center gap-2">
-                <span className="w-3 h-[2px] bg-[#C0442B] inline-block" />
-                <span className="text-[#5B6E68] dark:text-gray-400">No retorno: <strong className="font-mono text-[#C0442B]">{umbralNR.valor_m.toFixed(2)}m</strong></span>
+                <span className="w-3 h-[2px] bg-rojo-alerta inline-block" />
+                <span className="text-texto-sec dark:text-gray-400">No retorno: <strong className="font-mono text-rojo-alerta">{umbralNR.valor_m.toFixed(2)}m</strong></span>
               </p>
             )}
             {umbralBajAlarma && (
               <p className="flex items-center gap-2">
-                <span className="w-3 h-[2px] bg-[#2563EB] inline-block" />
-                <span className="text-[#5B6E68] dark:text-gray-400">Bajante alarma: <strong className="font-mono text-[#2563EB]">{umbralBajAlarma.valor_m.toFixed(2)}m</strong></span>
+                <span className="w-3 h-[2px] bg-bajante inline-block" />
+                <span className="text-texto-sec dark:text-gray-400">Bajante alarma: <strong className="font-mono text-bajante">{umbralBajAlarma.valor_m.toFixed(2)}m</strong></span>
               </p>
             )}
             {umbralBajEvac && (
               <p className="flex items-center gap-2">
-                <span className="w-3 h-[2px] bg-[#8B1E1E] inline-block" />
-                <span className="text-[#5B6E68] dark:text-gray-400">Bajante evacuación: <strong className="font-mono text-[#8B1E1E]">{umbralBajEvac.valor_m.toFixed(2)}m</strong></span>
+                <span className="w-3 h-[2px] bg-rojo-oscuro inline-block" />
+                <span className="text-texto-sec dark:text-gray-400">Bajante evacuación: <strong className="font-mono text-rojo-oscuro">{umbralBajEvac.valor_m.toFixed(2)}m</strong></span>
               </p>
             )}
           </div>
 
           {ciclo && ciclo.direccion !== "estable" && (
-            <div className="mt-3 rounded-lg bg-[#F2E9DC]/50 dark:bg-white/5 px-3 py-2">
-              <p className="text-[11px] uppercase tracking-wide text-[#5B6E68]/70 dark:text-gray-500 mb-1">
+            <div className="mt-3 rounded-lg bg-fondo/50 dark:bg-white/5 px-3 py-2">
+              <p className="text-xs uppercase tracking-wide text-texto-sec dark:text-gray-400 mb-1">
                 Ciclo — {ciclo.direccion === "subiendo" ? "subida" : "bajada"}
               </p>
-              <p className="text-xs text-[#5B6E68] dark:text-gray-400 leading-relaxed">
+              <p className="text-xs text-texto-sec dark:text-gray-400 leading-relaxed">
                 Viene {ciclo.direccion === "subiendo" ? "subiendo" : "bajando"} hace{" "}
-                <strong className="text-[#0E4749] dark:text-[#4fc3c5]">{formatoHoras(ciclo.horasActuales)}</strong>
+                <strong className="text-baliza dark:text-marea-dark">{formatoHoras(ciclo.horasActuales)}</strong>
                 {ciclo.duracionTipica != null && (
                   <> · suele durar <strong>{formatoHoras(ciclo.duracionTipica)}</strong></>
                 )}
                 {ciclo.restante != null && (
-                  <span className={ciclo.restante <= 2 ? " text-[#C0442B]" : ""}>
+                  <span className={ciclo.restante <= 2 ? " text-rojo-alerta" : ""}>
                     {" "}· restan ≈ <strong>{formatoHoras(ciclo.restante)}</strong>
                   </span>
                 )}

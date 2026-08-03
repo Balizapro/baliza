@@ -19,10 +19,10 @@ export default function PropagacionLP({ lecturasLP, nivelSF }: Props) {
   if (lecturasLP.length < 2) {
     return (
       <div>
-        <p className="seccion-titulo mb-2">
+        <h2 className="seccion-titulo mb-2">
           Propagación La Plata → San Fernando
-        </p>
-        <p className="text-sm italic text-[#5B6E68]/60 dark:text-gray-500">Esperando datos de La Plata...</p>
+        </h2>
+        <p className="text-sm italic text-texto-sec dark:text-gray-400">Esperando datos de La Plata...</p>
       </div>
     );
   }
@@ -46,28 +46,28 @@ export default function PropagacionLP({ lecturasLP, nivelSF }: Props) {
 
   return (
     <div>
-      <p className="seccion-titulo mb-2">
+      <h2 className="seccion-titulo mb-2">
         Propagación La Plata → San Fernando
-      </p>
+      </h2>
 
       <div className="flex items-center justify-between mb-2 gap-4">
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-[#5B6E68]/60 dark:text-gray-500 mb-0.5">La Plata actual</p>
-          <p className="font-mono text-xl font-bold text-[#0E4749] dark:text-[#4fc3c5]">
+          <p className="text-xs text-texto-sec dark:text-gray-400 mb-0.5">La Plata actual</p>
+          <p className="font-mono text-xl font-bold text-baliza dark:text-marea-dark">
             {ultimo.nivel_m.toFixed(2)}m
-            <span className={`text-xs ml-1.5 font-sans ${subiendo ? "text-[#E8823A]" : bajando ? "text-[#0E4749]" : "text-[#5B6E68]"}`}>
+            <span className={`text-xs ml-1.5 font-sans ${subiendo ? "text-alerta" : bajando ? "text-baliza dark:text-marea-dark" : "text-texto-sec dark:text-gray-400"}`}>
               {subiendo ? "↑" : bajando ? "↓" : "→"} {Math.abs(diff).toFixed(3)}m/h
             </span>
           </p>
-          <p className="text-xs font-mono text-[#5B6E68]/60 dark:text-gray-500">{formatearHora(ultimo.timestamp)}</p>
+          <p className="text-xs font-mono text-texto-sec dark:text-gray-400">{formatearHora(ultimo.timestamp)}</p>
         </div>
 
         <div className="text-right flex-shrink-0">
-          <p className="text-xs text-[#5B6E68]/60 dark:text-gray-500 mb-0.5">Llega a SF ≈</p>
-          <p className="font-mono text-lg font-bold text-[#C99A3D]">
+          <p className="text-xs text-texto-sec dark:text-gray-400 mb-0.5">Llega a SF ≈</p>
+          <p className="font-mono text-lg font-bold text-atencion">
             {horasRestantes > 0 ? `${horasRestantes}h ${minsRestantes}m` : "ahora"}
           </p>
-          <p className="text-xs font-mono text-[#5B6E68]/60 dark:text-gray-500">{formatearHora(llegadaEstimada.toISOString())}</p>
+          <p className="text-xs font-mono text-texto-sec dark:text-gray-400">{formatearHora(llegadaEstimada.toISOString())}</p>
         </div>
       </div>
 
@@ -75,7 +75,7 @@ export default function PropagacionLP({ lecturasLP, nivelSF }: Props) {
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
         <polyline
           fill="none"
-          stroke="#0E4749"
+          stroke="var(--chart-obs)"
           strokeWidth="1.5"
           points={lecturasLP.slice(0, 24).reverse().map((l, i) => {
             const x = (i / Math.max(24, 1)) * W;
@@ -83,10 +83,10 @@ export default function PropagacionLP({ lecturasLP, nivelSF }: Props) {
             return `${x},${y}`;
           }).join(" ")}
         />
-        <line x1={0} y1={H - 5 - ((nivelSF ?? 0 - minLecturas) / rango) * (H - 10)} x2={W} y2={H - 5 - ((nivelSF ?? 0 - minLecturas) / rango) * (H - 10)} stroke="#C99A3D" strokeWidth="1" strokeDasharray="3,2" />
+        <line x1={0} y1={H - 5 - ((nivelSF ?? 0 - minLecturas) / rango) * (H - 10)} x2={W} y2={H - 5 - ((nivelSF ?? 0 - minLecturas) / rango) * (H - 10)} stroke="var(--color-atencion)" strokeWidth="1" strokeDasharray="3,2" />
       </svg>
 
-      <p className="text-xs text-[#5B6E68]/60 dark:text-gray-500 mt-1 leading-relaxed">
+      <p className="text-xs text-texto-sec dark:text-gray-400 mt-1 leading-relaxed">
         {subiendo
           ? `La Plata viene subiendo — si la tendencia se mantiene, el pico llegaría a San Fernando alrededor de las ${formatearHora(llegadaEstimada.toISOString())}.`
           : bajando

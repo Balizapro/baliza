@@ -64,6 +64,8 @@ export default function AlertaSonora({ nivel, habilitado = false, onToggle }: Pr
     prevNivel.current = nivel;
   }, [nivel, activo]);
 
+  const activado = activo;
+
   return (
     <div className="flex items-center gap-2">
       <button
@@ -73,13 +75,32 @@ export default function AlertaSonora({ nivel, habilitado = false, onToggle }: Pr
           onToggle?.(nuevo);
         }}
         title={activo ? "Sirena activada — sonará al subir el nivel" : "Sirena desactivada"}
-        className={`text-xs border rounded px-2.5 py-1.5 transition-colors ${
+        aria-pressed={activo}
+        className={`min-h-11 inline-flex items-center gap-1.5 text-xs border rounded-md px-3 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
           activo
-            ? "text-white bg-[#C0442B]/40 border-[#C0442B]/60 hover:bg-[#C0442B]/60"
-            : "text-white/70 hover:text-white border-white/20 hover:bg-white/10"
+            ? "text-white bg-rojo-alerta/40 border-rojo-alerta/60 hover:bg-rojo-alerta/60"
+            : "text-white/80 hover:text-white border-white/20 hover:bg-white/10"
         }`}
       >
-        {activo ? "🚨 Sirena ON" : "🔇 Sirena OFF"}
+        {activado ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
+            <path d="M14.752 11.168l-3.197-2.132A1 1 0 0 0 10 9.87v4.263a1 1 0 0 0 1.555.832l3.197-2.132a1 1 0 0 0 0-1.664Z" />
+            <path d="M18 8a6 6 0 0 1 0 8" />
+            <path d="M6 8a6 6 0 0 0 0 8" />
+            <path d="M3 6a10 10 0 0 0 0 12" />
+            <path d="M21 6a10 10 0 0 1 0 12" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
+            <path d="M14.752 11.168l-3.197-2.132A1 1 0 0 0 10 9.87v4.263a1 1 0 0 0 1.555.832l3.197-2.132a1 1 0 0 0 0-1.664Z" />
+            <path d="M18 8a6 6 0 0 1 0 8" />
+            <path d="M6 8a6 6 0 0 0 0 8" />
+            <path d="M3 6a10 10 0 0 0 0 12" />
+            <path d="M21 6a10 10 0 0 1 0 12" />
+            <path d="m22 2-20 20" />
+          </svg>
+        )}
+        {activo ? "Sirena ON" : "Sirena OFF"}
       </button>
     </div>
   );

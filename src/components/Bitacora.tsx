@@ -9,7 +9,7 @@ interface AlertaItem {
   nivel: "verde" | "amarilla" | "roja" | "azul" | "evacuacion";
 }
 
-const colorAlertaChart = { verde: "#4C7A5E", amarilla: "#C99A3D", roja: "#C0442B", azul: "#2563EB", evacuacion: "#8B1E1E" } as const;
+const colorAlertaChart = { verde: "var(--color-ok)", amarilla: "var(--color-atencion)", roja: "var(--color-rojo-alerta)", azul: "var(--color-bajante)", evacuacion: "var(--color-rojo-oscuro)" } as const;
 
 function formatearFecha(iso: string) {
   return new Date(iso).toLocaleString("es-AR", {
@@ -70,25 +70,25 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
       <svg viewBox={`0 0 ${ancho} ${alto}`} className="w-full h-auto" preserveAspectRatio="none">
         <defs>
           <linearGradient id="tlFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#0E4749" stopOpacity="0.25"/>
-            <stop offset="100%" stopColor="#0E4749" stopOpacity="0.02"/>
+            <stop offset="0%" stopColor="var(--chart-obs)" stopOpacity="0.25"/>
+            <stop offset="100%" stopColor="var(--chart-obs)" stopOpacity="0.02"/>
           </linearGradient>
         </defs>
         {/* Área bajo la curva */}
         <polygon points={areaPuntos} fill="url(#tlFill)"/>
         {/* Línea del nivel */}
-        <polyline points={puntos} fill="none" stroke="#0E4749" strokeWidth="1.5" strokeLinejoin="round"/>
+        <polyline points={puntos} fill="none" stroke="var(--chart-obs)" strokeWidth="1.5" strokeLinejoin="round"/>
         {/* Umbrales */}
         {umbralEval && (
           <>
-            <line x1="0" y1={yScale(umbralEval)} x2={ancho} y2={yScale(umbralEval)} stroke="#C99A3D" strokeWidth="0.5" strokeDasharray="3,2"/>
-            <text x={ancho - 1} y={yScale(umbralEval) - 1} fontSize="5" fill="#C99A3D" textAnchor="end">eval</text>
+            <line x1="0" y1={yScale(umbralEval)} x2={ancho} y2={yScale(umbralEval)} stroke="var(--color-atencion)" strokeWidth="0.5" strokeDasharray="3,2"/>
+            <text x={ancho - 1} y={yScale(umbralEval) - 1} fontSize="5" fill="var(--color-atencion)" textAnchor="end">eval</text>
           </>
         )}
         {umbralNR && (
           <>
-            <line x1="0" y1={yScale(umbralNR)} x2={ancho} y2={yScale(umbralNR)} stroke="#C0442B" strokeWidth="0.5" strokeDasharray="3,2"/>
-            <text x={ancho - 1} y={yScale(umbralNR) - 1} fontSize="5" fill="#C0442B" textAnchor="end">NR</text>
+            <line x1="0" y1={yScale(umbralNR)} x2={ancho} y2={yScale(umbralNR)} stroke="var(--color-rojo-alerta)" strokeWidth="0.5" strokeDasharray="3,2"/>
+            <text x={ancho - 1} y={yScale(umbralNR) - 1} fontSize="5" fill="var(--color-rojo-alerta)" textAnchor="end">NR</text>
           </>
         )}
         {/* Alertas */}
@@ -108,7 +108,7 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
           );
         })}
         {/* Nivel actual */}
-        <circle cx={ancho - 1} cy={yScale(nivelActual)} r="3" fill="#0E4749" stroke="#fff" strokeWidth="0.5"/>
+        <circle cx={ancho - 1} cy={yScale(nivelActual)} r="3" fill="var(--chart-obs)" stroke="#fff" strokeWidth="0.5"/>
       </svg>
     );
   }, [historial, alertas, umbralEval, umbralNR, nivelActual]);
@@ -168,33 +168,33 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
         onClick={toggle}
         className="w-full text-left flex items-center justify-between group"
       >
-        <p className="seccion-titulo">
+        <h2 className="seccion-titulo">
           Bitácora de eventos
-        </p>
-        <span className="text-[#5B6E68]/50 group-hover:text-[#5B6E68] dark:text-gray-500 transition-colors">{abierto ? "▲" : "▼"}</span>
+        </h2>
+        <span className="text-texto-sec group-hover:text-texto-sec dark:text-gray-400 transition-colors">{abierto ? "▲" : "▼"}</span>
       </button>
 
       {abierto && (
         <div className="mt-3 space-y-4">
           {timelineSvg && (
             <div>
-              <p className="text-xs font-sans text-[#5B6E68] dark:text-gray-400 mb-2">Nivel — últimos 7 días</p>
-              <div className="bg-[#E8DFD0]/50 dark:bg-[#1e293b] rounded-lg p-2">
+              <p className="text-xs font-sans text-texto-sec dark:text-gray-400 mb-2">Nivel — últimos 7 días</p>
+              <div className="bg-gauge-bg/50 dark:bg-panel-dark rounded-lg p-2">
                 {timelineSvg}
               </div>
             </div>
           )}
           <form onSubmit={handleSubmit} className="space-y-3">
-            <p className="font-serif text-sm font-medium text-[#12312B] dark:text-gray-300">Nuevo registro</p>
-            <p className="text-xs font-mono text-[#5B6E68]/60 dark:text-gray-500">Nivel actual: {nivelActual.toFixed(2)}m</p>
+            <p className="font-serif text-sm font-medium text-texto dark:text-gray-300">Nuevo registro</p>
+            <p className="text-xs font-mono text-texto-sec dark:text-gray-400">Nivel actual: {nivelActual.toFixed(2)}m</p>
 
             <div>
-              <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Escalones restantes (opcional)</label>
+              <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Escalones restantes (opcional)</label>
               <input
                 type="number"
                 value={escalones}
                 onChange={(e) => setEscalones(e.target.value)}
-                className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
                 placeholder="Ej: 2"
               />
             </div>
@@ -205,27 +205,27 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
                 id="evacuo"
                 checked={evacuo}
                 onChange={(e) => setEvacuo(e.target.checked)}
-                className="rounded border-[#D4C9B8] dark:border-gray-600 dark:bg-[#0f172a]"
+                className="rounded border-borde dark:border-gray-600 dark:bg-surface-dark"
               />
-              <label htmlFor="evacuo" className="text-sm text-[#5B6E68] dark:text-gray-400">Se evacuó</label>
+              <label htmlFor="evacuo" className="text-sm text-texto-sec dark:text-gray-400">Se evacuó</label>
             </div>
 
             <div>
-              <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Hora de salida</label>
+              <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Hora de salida</label>
               <input
                 type="time"
                 value={horaSalida}
                 onChange={(e) => setHoraSalida(e.target.value)}
-                className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
               />
             </div>
 
             <div>
-              <label className="text-xs text-[#5B6E68] dark:text-gray-400 block mb-1">Notas</label>
+              <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Notas</label>
               <textarea
                 value={notas}
                 onChange={(e) => setNotas(e.target.value)}
-                className="w-full border border-[#D4C9B8] dark:border-gray-600 bg-white dark:bg-[#0f172a] text-[#12312B] dark:text-gray-200 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm"
                 rows={2}
                 placeholder="Observaciones..."
               />
@@ -234,32 +234,32 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
             <button
               type="submit"
               disabled={enviando}
-              className="bg-[#0E4749] text-white px-5 py-2.5 sm:px-4 sm:py-2 rounded-lg text-sm font-medium hover:bg-[#0E4749]/90 disabled:opacity-50 transition-colors"
+              className="bg-baliza text-white px-5 py-2.5 sm:px-4 sm:py-2 rounded-lg text-sm font-medium hover:bg-baliza/90 disabled:opacity-50 transition-colors"
             >
               {enviando ? "Guardando..." : "Guardar registro"}
             </button>
             {mensaje && (
-              <p className={`text-sm ${mensaje === "Registrado" ? "text-[#4C7A5E] dark:text-green-400" : "text-[#C0442B] dark:text-red-400"}`}>{mensaje}</p>
+              <p className={`text-sm ${mensaje === "Registrado" ? "text-ok dark:text-green-400" : "text-rojo-alerta dark:text-red-400"}`}>{mensaje}</p>
             )}
           </form>
 
           <div>
-            <p className="font-serif text-sm font-medium text-[#12312B] dark:text-gray-300 mb-2">Historial</p>
+            <p className="font-serif text-sm font-medium text-texto dark:text-gray-300 mb-2">Historial</p>
             {cargandoHistorial ? (
-              <p className="text-xs italic text-[#5B6E68]/60 dark:text-gray-500">Cargando...</p>
+              <p className="text-xs italic text-texto-sec dark:text-gray-400">Cargando...</p>
             ) : entradas.length === 0 ? (
-              <p className="text-xs italic text-[#5B6E68]/60 dark:text-gray-500">Sin registros</p>
+              <p className="text-xs italic text-texto-sec dark:text-gray-400">Sin registros</p>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {entradas.map((e) => (
-                  <div key={e.id} className="text-xs border-b border-[#D4C9B8]/50 dark:border-gray-700 pb-2 last:border-0">
-                    <p className="text-[#5B6E68]/60 dark:text-gray-500 font-mono">{formatearFecha(e.timestamp)}</p>
-                    <p className="text-[#12312B] dark:text-gray-300">
+                  <div key={e.id} className="text-xs border-b border-borde/50 dark:border-gray-700 pb-2 last:border-0">
+                    <p className="text-texto-sec dark:text-gray-400 font-mono">{formatearFecha(e.timestamp)}</p>
+                    <p className="text-texto dark:text-gray-300">
                       Nivel: <span className="font-mono">{e.nivel_registrado_m.toFixed(2)}m</span>
                       {e.escalones_restantes !== null && <span> · {e.escalones_restantes} escalones</span>}
                       {e.se_evacuo && <span> · Evacuó</span>}
                     </p>
-                    {e.notas && <p className="text-[#5B6E68]/60 dark:text-gray-500 italic">{e.notas}</p>}
+                    {e.notas && <p className="text-texto-sec dark:text-gray-400 italic">{e.notas}</p>}
                   </div>
                 ))}
               </div>

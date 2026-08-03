@@ -5,8 +5,8 @@ import CompartirWhatsApp from "@/components/CompartirWhatsApp";
 import { useAhora } from "@/lib/useAhora";
 
 const TENDENCIA_UI = {
-  ascendente: { label: "ascendente", arrow: "↑", color: "text-[#C0442B]" },
-  descendente: { label: "descendente", arrow: "↓", color: "text-[#4C7A5E]" },
+  ascendente: { label: "ascendente", arrow: "↑", color: "text-rojo-alerta" },
+  descendente: { label: "descendente", arrow: "↓", color: "text-ok" },
 } as const;
 
 function formatearAlturaFecha(fecha: string): string {
@@ -80,11 +80,11 @@ export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[];
   return (
     <section className={`dashboard-section ${superaNR ? "shn-alerta" : ""}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="seccion-titulo">
+        <h2 className="seccion-titulo">
           Aviso del SHN — Río de la Plata
-        </p>
+        </h2>
         {vencido && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full border border-[#C99A3D]/40 text-[#C99A3D] dark:text-[#D4B45C] whitespace-nowrap shrink-0">
+          <span className="text-xs px-2 py-0.5 rounded-full border border-atencion/40 text-atencion dark:text-atencion-dark whitespace-nowrap shrink-0">
             pronóstico vencido
           </span>
         )}
@@ -93,11 +93,11 @@ export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[];
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-[#12312B] dark:text-gray-200">
+            <p className="text-sm font-medium text-texto dark:text-gray-200">
               Pronóstico mareológico — aviso {mareologico.numero}
             </p>
             {vig && (
-              <p className="text-xs text-[#5B6E68]/70 dark:text-gray-500">
+              <p className="text-xs text-texto-sec dark:text-gray-400">
                 {vig}
               </p>
             )}
@@ -110,7 +110,7 @@ export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[];
         </div>
 
         {superaNR && (
-          <div className="flex items-center gap-2 text-[#C0442B] dark:text-[#E5604A] font-bold text-sm">
+          <div className="flex items-center gap-2 text-rojo-alerta dark:text-rojo-dark font-bold text-sm">
             <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current flex-shrink-0"><path d="M12 2 1 21h22L12 2zm1 14h-2v2h2v-2zm0-7h-2v5h2V9z"/></svg>
             <span>
               SHN pronostica {nivelMax?.toFixed(2)}m en San Fernando — supera el nivel de no retorno ({umbral.toFixed(1)}m)
@@ -120,7 +120,7 @@ export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[];
 
         {alturas.length > 0 && (
           <div>
-            <p className="text-xs uppercase tracking-wide text-[#5B6E68] dark:text-gray-400 mb-1.5">
+            <p className="text-xs uppercase tracking-wide text-texto-sec dark:text-gray-400 mb-1.5">
               Alturas pronosticadas — San Fernando
             </p>
             <div className="space-y-1">
@@ -128,14 +128,14 @@ export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[];
                 const esMax = a.altura === nivelMax;
                 const esPleamar = a.estado === "PLEAMAR";
                 return (
-                  <div key={i} className={`flex items-center justify-between text-sm rounded-lg px-3 py-1.5 ${esMax ? "bg-[#0E4749]/10 dark:bg-white/10 font-bold" : ""}`}>
-                    <span className="text-[#12312B] dark:text-gray-200">
+                  <div key={i} className={`flex items-center justify-between text-sm rounded-lg px-3 py-1.5 ${esMax ? "bg-baliza/10 dark:bg-white/10 font-bold" : ""}`}>
+                    <span className="text-texto dark:text-gray-200">
                       {esPleamar ? "Pleamar" : "Bajamar"}
-                      <span className="text-xs text-[#5B6E68] dark:text-gray-400 ml-2">
+                      <span className="text-xs text-texto-sec dark:text-gray-400 ml-2">
                         {formatearAlturaFecha(a.fecha)} {a.hora}
                       </span>
                     </span>
-                    <span className={`font-mono ${esMax ? "text-[#0E4749] dark:text-[#4fc3c5]" : "text-[#5B6E68] dark:text-gray-400"}`}>
+                    <span className={`font-mono ${esMax ? "text-baliza dark:text-marea-dark" : "text-texto-sec dark:text-gray-400"}`}>
                       {a.altura.toFixed(2)}m {esMax ? "· máx" : ""}
                     </span>
                   </div>
@@ -146,7 +146,7 @@ export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[];
         )}
 
         {obs && (
-          <p className="text-sm text-[#5B6E68] dark:text-gray-400 whitespace-pre-line leading-snug">
+          <p className="text-sm text-texto-sec dark:text-gray-400 whitespace-pre-line leading-snug">
             {obs}
           </p>
         )}
@@ -166,7 +166,7 @@ export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[];
         />
       </div>
 
-      <p className="text-[10px] text-[#5B6E68]/40 dark:text-gray-600 mt-3">
+      <p className="text-xs text-texto-sec dark:text-gray-400 mt-3">
         Fuente: Servicio de Hidrografía Naval — radioavisos náuticos
       </p>
     </section>

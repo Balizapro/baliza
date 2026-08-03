@@ -2,19 +2,56 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-@theme inline {
+@theme {
   --color-baliza: #0E4749;
   --color-baliza-light: #1a6b6e;
-  --color-alerta: #E8823A;
-  --color-ok: #4C7A5E;
+  --color-marea-dark: #4fc3c5;
+  --color-alerta: #A84809;
+  --color-ok: #3F6B51;
   --color-fondo: #F2E9DC;
   --color-texto: #12312B;
   --color-texto-sec: #5B6E68;
-  --color-rojo-alerta: #C0442B;
-  --color-atencion: #C99A3D;
+  --color-rojo-alerta: #A9321D;
+  --color-atencion: #8B4E0A;
+  --color-rojo-oscuro: #8B1E1E;
+  --color-bajante: #1D4ED8;
+  --color-borde: #D4C9B8;
+  --color-rojo-dark: #E5604A;
+  --color-surface-dark: #0f172a;
+  --color-card-dark: #16202e;
+  --color-border-dark: #334155;
+  --color-panel-dark: #1e293b;
+  --color-atencion-dark: #D4B45C;
+  --color-alerta-oscuro: #8B4E0A;
+  --color-ok-oscuro: #2F5233;
+  --color-gauge-bg: #E8DFD0;
+  --color-header-dark: #0a2a2b;
+  --color-whatsapp: #25D366;
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-serif: Georgia, ui-serif, "Source Serif 4", "Lora", serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "JetBrains Mono", "SF Mono", monospace;
+}
+
+:root {
+  --chart-obs: #0E4749;
+  --chart-main: #E8823A;
+  --chart-grid: #e5e7eb;
+  --chart-axis: #9ca3af;
+  --chart-ahora: #6b7280;
+}
+
+.dark {
+  --chart-obs: #4fc3c5;
+  --chart-main: #f59e0b;
+  --chart-grid: #334155;
+  --chart-axis: #94a3b8;
+  --chart-ahora: #94a3b8;
+  --color-alerta: #E8823A;
+  --color-ok: #5CB87F;
+  --color-atencion: #D4B45C;
+  --color-rojo-alerta: #E5604A;
+  --color-rojo-oscuro: #F16A5A;
+  --color-bajante: #60A5FA;
 }
 
 body {
@@ -64,11 +101,11 @@ html {
 
 .seccion-titulo {
   font-family: system-ui, sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: #5B6E68;
+  color: #4A5F59;
 }
 
 .dark .seccion-titulo {
@@ -156,7 +193,7 @@ html {
 
 .recomendacion-banner .rb-etiqueta {
   font-family: system-ui, sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -203,7 +240,7 @@ html {
 
 .rb-seccion-titulo {
   font-family: system-ui, sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;

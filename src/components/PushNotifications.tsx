@@ -99,18 +99,36 @@ export default function PushNotifications() {
         onClick={activo ? desactivar : activar}
         disabled={cargando}
         title={activo ? "Desactivar alertas del río" : "Recibir alertas del río por notificación"}
-        className={`text-xs border rounded px-2.5 py-1.5 transition-colors disabled:opacity-50 ${
+        aria-pressed={!!activo}
+        className={`min-h-11 inline-flex items-center gap-1.5 text-xs border rounded-md px-3 transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
           activo
-            ? "text-white bg-[#4C7A5E]/30 border-[#4C7A5E]/60 hover:bg-[#4C7A5E]/50"
-            : "text-white/70 hover:text-white border-white/20 hover:bg-white/10"
+            ? "text-white bg-ok/30 border-ok/60 hover:bg-ok/50"
+            : "text-white/80 hover:text-white border-white/20 hover:bg-white/10"
         }`}
       >
-        {cargando ? "…" : activo ? "🔔 Activas" : "🔕 Activar alertas"}
+        {activo ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
+            <path d="M14.752 11.168l-3.197-2.132A1 1 0 0 0 10 9.87v4.263a1 1 0 0 0 1.555.832l3.197-2.132a1 1 0 0 0 0-1.664Z" />
+            <path d="M6 8a6 6 0 0 0 0 8" />
+            <path d="M3 6a10 10 0 0 0 0 12" />
+            <path d="M21 6a10 10 0 0 1 0 12" />
+            <path d="M18 8a6 6 0 0 1 0 8" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
+            <path d="M14.752 11.168l-3.197-2.132A1 1 0 0 0 10 9.87v4.263a1 1 0 0 0 1.555.832l3.197-2.132a1 1 0 0 0 0-1.664Z" />
+            <path d="M6 8a6 6 0 0 0 0 8" />
+            <path d="M3 6a10 10 0 0 0 0 12" />
+            <path d="M21 6a10 10 0 0 1 0 12" />
+            <path d="m22 2-20 20" />
+          </svg>
+        )}
+        {cargando ? "…" : activo ? "Activas" : "Activar alertas"}
       </button>
       {error && (
-        <div className="absolute right-0 top-full mt-2 z-50 w-64 bg-white dark:bg-[#1e293b] text-[#8B1E1E] dark:text-red-300 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
+        <div className="absolute right-0 top-full mt-2 z-50 w-64 bg-white dark:bg-panel-dark text-rojo-oscuro dark:text-red-300 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-border-dark px-3 py-2">
           {error}
-          <button onClick={() => setError(null)} className="block mt-1 text-[#5B6E68]/70 hover:text-[#0E4749]">Cerrar</button>
+          <button onClick={() => setError(null)} className="block mt-1 text-texto-sec hover:text-baliza">Cerrar</button>
         </div>
       )}
     </div>

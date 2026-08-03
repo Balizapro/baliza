@@ -295,20 +295,20 @@ export default function Dashboard() {
 
   if (cargando) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#F2E9DC]">
-        <p className="text-[#0E4749] text-lg">Cargando...</p>
+      <div className="flex items-center justify-center min-h-screen bg-fondo">
+        <p className="text-baliza text-lg">Cargando...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F2E9DC] dark:bg-[#0f172a]">
-      <header className="bg-[#0E4749] dark:bg-[#0a2a2b] text-white px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center gap-x-3 gap-y-2 relative shadow-sm">
+    <div className="min-h-screen bg-fondo dark:bg-surface-dark">
+      <header className="bg-baliza dark:bg-header-dark text-white px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center gap-x-3 gap-y-2 relative shadow-sm">
         <Link href="/" className="flex items-center gap-3">
           <img src="/baliza-boya.svg" alt="Baliza" className="w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0" />
           <span className="logo-wordmark">baliza</span>
         </Link>
-        <p className="text-[11px] text-[#F2E9DC]/70 dark:text-white/50 italic font-serif hidden sm:block border-l border-[#F2E9DC]/20 pl-3 leading-tight">
+        <p className="text-xs text-fondo/70 dark:text-white/50 italic font-serif hidden sm:block border-l border-fondo/20 pl-3 leading-tight">
           la señal antes de la crecida
         </p>
         <div className="ml-auto flex items-center gap-2">
@@ -324,7 +324,8 @@ export default function Dashboard() {
                   await supabase.auth.signOut();
                   router.refresh();
                 }}
-                className="text-xs text-white/70 hover:text-white border border-white/20 hover:bg-white/10 rounded px-2.5 py-1.5 transition-colors"
+                className="min-h-11 inline-flex items-center text-xs text-white/80 hover:text-white border border-white/20 hover:bg-white/10 rounded-md px-3 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                aria-label="Cerrar sesión"
               >
                 Salir
               </button>
@@ -332,16 +333,16 @@ export default function Dashboard() {
           ) : (
             <button
               onClick={() => router.push("/auth/login")}
-              className="text-xs text-white/70 hover:text-white border border-white/20 hover:bg-white/10 rounded px-2.5 py-1.5 transition-colors"
+              className="min-h-11 inline-flex items-center text-xs text-white/80 hover:text-white border border-white/20 hover:bg-white/10 rounded-md px-3 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
               Ingresar
             </button>
           )}
         </div>
-        <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#E8823A]/50 via-[#4C7A5E]/30 to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-alerta/50 via-ok/30 to-transparent" />
       </header>
 
-      <main className="max-w-3xl mx-auto px-3 sm:px-4 py-4 space-y-4 sm:space-y-5">
+      <main className="max-w-5xl mx-auto px-3 sm:px-6 py-4 space-y-4 sm:space-y-5">
         {/* Alerta / Recomendación */}
         <div className="recomendacion-banner-wrapper">
           <div className={`recomendacion-banner ${alertaNivel === "roja" ? "roja" : alertaNivel === "evacuacion" ? "evacuacion" : alertaNivel === "amarilla" ? "amarilla" : alertaNivel === "azul" ? "azul" : "verde"}`}>
@@ -358,9 +359,9 @@ export default function Dashboard() {
               <p className="rb-etiqueta">
                 {alertaNivel === "roja" ? "Alerta roja" : alertaNivel === "evacuacion" ? "Evacuación" : alertaNivel === "amarilla" ? "Atención" : alertaNivel === "azul" ? "Bajante" : "Normal"}
               </p>
-              <p className="recomendacion-titulo">
+              <h1 className="recomendacion-titulo">
                 {alerta?.mensaje?.split("| Preaviso:")[0]?.trim() ?? "Sin datos — esperando primera ingesta"}
-              </p>
+              </h1>
               <p className="recomendacion-subtexto">
                 {sfObs?.nivel_m != null
                   ? `Nivel actual: ${sfObs.nivel_m.toFixed(2)}m ${tendenciaSF?.direccion === "subiendo" ? "subiendo" : tendenciaSF?.direccion === "bajando" ? "bajando" : "estable"}`
@@ -379,8 +380,9 @@ export default function Dashboard() {
                   <p className="rb-pico">
                     Pico esperado en San Fernando: <strong>{pico.valor_m.toFixed(2)}m</strong> — {formatearFechaHora(pico.timestamp)}
                     {cuentaPico && (
-                      <span className="ml-2 inline-block text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#8B1E1E]/10 text-[#8B1E1E] dark:bg-red-400/10 dark:text-red-300 border border-[#8B1E1E]/20">
-                        ⏱ en {cuentaPico}
+                      <span className="ml-2 inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded-full bg-rojo-oscuro/10 text-rojo-oscuro dark:bg-red-400/10 dark:text-red-300 border border-rojo-oscuro/20">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3" aria-hidden="true"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="10"/></svg>
+                        en {cuentaPico}
                       </span>
                     )}
                   </p>
@@ -471,20 +473,20 @@ export default function Dashboard() {
           return (
             <section className={`dashboard-section ${pico.valor_m >= (umbralNR?.valor_m ?? 2.2) ? "shn-alerta" : ""}`}>
               <div className="flex items-start justify-between gap-2 mb-2">
-                <p className="seccion-titulo">
+                <h2 className="seccion-titulo">
                   Pronóstico INA — crecida pronosticada
-                </p>
+                </h2>
               </div>
-              <div className="flex items-center gap-2 text-[#C0442B] dark:text-[#E5604A] font-bold text-sm">
+              <div className="flex items-center gap-2 text-rojo-alerta dark:text-rojo-dark font-bold text-sm">
                 <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current flex-shrink-0"><path d="M12 2 1 21h22L12 2zm1 14h-2v2h2v-2zm0-7h-2v5h2V9z"/></svg>
                 <span>
                   INA pronostica un pico de {pico.valor_m.toFixed(2)}m{picoFuturo ? ` el ${formatearFechaHora(pico.timestamp)}` : ""} en San Fernando — supera el umbral de crecida ({umbralPro.toFixed(2)}m)
                 </span>
               </div>
-              <p className="text-xs text-[#5B6E68]/70 dark:text-gray-500 mt-1">
+              <p className="text-xs text-texto-sec dark:text-gray-400 mt-1">
                 Se avisará de nuevo solo si el pronóstico marca una altura aún mayor.
               </p>
-              <p className="text-[10px] text-[#5B6E68]/40 dark:text-gray-600 mt-3">
+              <p className="text-xs text-texto-sec dark:text-gray-400 mt-3">
                 Fuente: INA — pronóstico a 4 días (qualifier main)
               </p>
             </section>
@@ -520,22 +522,22 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
           <div className="space-y-4">
             <section className="dashboard-section">
-              <p className="seccion-titulo mb-1">
+              <h2 className="seccion-titulo mb-1">
                 Viento
-              </p>
+              </h2>
               {viento ? (
                 <>
-                  <p className="font-mono text-lg sm:text-xl font-bold text-[#0E4749] dark:text-[#4fc3c5]">
+                  <p className="font-mono text-lg sm:text-xl font-bold text-baliza dark:text-marea-dark">
                     {viento.velocidad_kmh}
-                    <span className="text-sm font-normal ml-1 font-sans text-[#5B6E68]">km/h</span>
+                    <span className="text-sm font-normal ml-1 font-sans text-texto-sec dark:text-gray-400">km/h</span>
                   </p>
-                  <p className="text-sm text-[#5B6E68] dark:text-gray-400 mt-0.5">
+                  <p className="text-sm text-texto-sec dark:text-gray-400 mt-0.5">
                     {direccionCardinal(viento.direccion_grados)} ({viento.direccion_grados}°)
                   </p>
-                  <p className="text-xs text-[#5B6E68]/60 dark:text-gray-500 mt-0.5 font-mono">{formatearFechaHora(viento.timestamp)}</p>
+                  <p className="text-xs text-texto-sec dark:text-gray-400 mt-0.5 font-mono">{formatearFechaHora(viento.timestamp)}</p>
                 </>
               ) : (
-                <p className="text-sm text-[#5B6E68]/60 dark:text-gray-500 italic">sin datos</p>
+                <p className="text-sm text-texto-sec dark:text-gray-400 italic">sin datos</p>
               )}
             </section>
             <section className="dashboard-section">
@@ -556,9 +558,9 @@ export default function Dashboard() {
 
         {/* Estaciones exteriores — oculto temporalmente (no relevante para la vista principal) */}
         {/* <section className="dashboard-section">
-          <p className="seccion-titulo mb-3">
+          <h2 className="seccion-titulo mb-3">
             Estaciones exteriores — preaviso temprano
-          </p>
+          </h2>
           <div className="space-y-3">
             {[
               { nombre: "La Plata", obs: lpObs, tend: datos?.tendencias.laPlata ?? null, delay: "~2-3hs antes que SF" },
@@ -567,17 +569,17 @@ export default function Dashboard() {
             ].map((est) => (
               <div key={est.nombre} className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-sm text-[#12312B] dark:text-gray-200">{est.nombre}</p>
-                  {est.delay && <p className="text-xs text-[#5B6E68]/60 dark:text-gray-500">{est.delay}</p>}
+                  <p className="font-medium text-sm text-texto dark:text-gray-200">{est.nombre}</p>
+                  {est.delay && <p className="text-xs text-texto-sec dark:text-gray-400">{est.delay}</p>}
                 </div>
                 <div className="text-right flex-shrink-0 ml-2">
-                  <p className="font-mono text-base sm:text-lg font-bold text-[#0E4749] dark:text-[#4fc3c5] whitespace-nowrap">
-                    {est.obs ? `${est.obs.nivel_m.toFixed(2)}m` : <span className="text-xs font-normal italic text-[#5B6E68]/60">sin datos disponibles</span>}
+                  <p className="font-mono text-base sm:text-lg font-bold text-baliza dark:text-marea-dark whitespace-nowrap">
+                    {est.obs ? `${est.obs.nivel_m.toFixed(2)}m` : <span className="text-xs font-normal italic text-texto-sec">sin datos disponibles</span>}
                   </p>
-                  <p className={`text-xs ${est.tend?.direccion === "subiendo" ? "text-[#C0442B]" : est.tend?.direccion === "bajando" ? "text-[#4C7A5E]" : "text-[#5B6E68]/60"} dark:text-gray-500`}>
+                  <p className={`text-xs ${est.tend?.direccion === "subiendo" ? "text-rojo-alerta" : est.tend?.direccion === "bajando" ? "text-ok" : "text-texto-sec"} dark:text-gray-400`}>
                     {est.obs ? formatoTendencia(est.tend) : ""}
                   </p>
-                  <p className="text-xs font-mono text-[#5B6E68]/60 dark:text-gray-500">
+                  <p className="text-xs font-mono text-texto-sec dark:text-gray-400">
                     {est.obs ? formatearHora(est.obs.timestamp) : ""}
                   </p>
                 </div>
@@ -712,21 +714,21 @@ export default function Dashboard() {
 
           return (
             <section className="dashboard-section">
-              <p className="seccion-titulo mb-2">
+              <h2 className="seccion-titulo mb-2">
                 Pronóstico San Fernando — INA (modelo regresión)
-              </p>
-              <p className="text-xs text-[#5B6E68]/70 dark:text-gray-500 mb-3">
+              </h2>
+              <p className="text-xs text-texto-sec dark:text-gray-400 mb-3">
                 Pico estimado: <strong className="font-mono">{pico.valor_m.toFixed(2)}m</strong>
-                <span className="text-[#5B6E68]/70 dark:text-gray-500"> — {formatearFechaHora(pico.timestamp)}</span>
+                <span className="text-texto-sec dark:text-gray-400"> — {formatearFechaHora(pico.timestamp)}</span>
                 {maxP95 > maxMain && (
-                  <span> · p95: <strong className="font-mono text-[#C99A3D]">{maxP95.toFixed(2)}m</strong></span>
+                  <span> · p95: <strong className="font-mono text-atencion">{maxP95.toFixed(2)}m</strong></span>
                 )}
                 {minP05 <= (umbralBajAlarma?.valor_m ?? 0) && (
-                  <span> · Mínimo: <strong className="font-mono text-[#2563EB]">{minP05.toFixed(2)}m</strong></span>
+                  <span> · Mínimo: <strong className="font-mono text-bajante">{minP05.toFixed(2)}m</strong></span>
                 )}
               </p>
               {proximos.length > 0 && (
-                <p className="text-[11px] text-[#5B6E68]/70 dark:text-gray-500 mb-3">
+                <p className="text-xs text-texto-sec dark:text-gray-400 mb-3">
                   Pronóstico válido hasta: <strong className="font-mono">{formatearFechaHora(proximos[proximos.length - 1].timestamp)}</strong>
                 </p>
               )}
@@ -738,78 +740,78 @@ export default function Dashboard() {
                 {/* Grid horizontal + Y */}
                 {yLabels.map((v) => (
                   <g key={v}>
-                    <line x1={padL} y1={yPos(v)} x2={W - padR} y2={yPos(v)} stroke="#e5e7eb" strokeWidth="1" />
-                    <text x={padL - 6} y={yPos(v) + 3} fontSize="9" fill="#9ca3af" textAnchor="end">{v.toFixed(1)}</text>
+                    <line x1={padL} y1={yPos(v)} x2={W - padR} y2={yPos(v)} stroke="var(--chart-grid)" strokeWidth="1" />
+                    <text x={padL - 6} y={yPos(v) + 3} fontSize="9" fill="var(--chart-axis)" textAnchor="end">{v.toFixed(1)}</text>
                   </g>
                 ))}
 
                 {/* Labels X */}
                 {xLabels.map((xl) => (
-                  <text key={xl.label + xl.x.toFixed(0)} x={xl.x} y={H - 8} fontSize={xl.esDia ? "9" : "8"} fontWeight={xl.esDia ? 600 : 400} fill="#9ca3af" textAnchor="middle">
+                  <text key={xl.label + xl.x.toFixed(0)} x={xl.x} y={H - 8} fontSize={xl.esDia ? "9" : "8"} fontWeight={xl.esDia ? 600 : 400} fill="var(--chart-axis)" textAnchor="middle">
                     {xl.label}
                   </text>
                 ))}
 
                 {/* Línea AHORA */}
-                <line x1={xPos(ahora)} y1={padT} x2={xPos(ahora)} y2={H - padB} stroke="#6b7280" strokeWidth="1" strokeDasharray="3,3" />
-                <text x={xPos(ahora) + 3} y={padT + 9} fontSize="8" fill="#6b7280" fontWeight="600">AHORA</text>
+                <line x1={xPos(ahora)} y1={padT} x2={xPos(ahora)} y2={H - padB} stroke="var(--chart-ahora)" strokeWidth="1" strokeDasharray="3,3" />
+                <text x={xPos(ahora) + 3} y={padT + 9} fontSize="8" fill="var(--chart-ahora)" fontWeight="600">AHORA</text>
 
                 {/* Umbrales */}
                 {umbralEval && (
                   <g>
-                    <line x1={padL} y1={yPos(umbralEval.valor_m)} x2={W - padR} y2={yPos(umbralEval.valor_m)} stroke="#C99A3D" strokeWidth="1.5" strokeDasharray="6,4" />
-                    <text x={padL + 3} y={yPos(umbralEval.valor_m) - 4} fontSize="8" fill="#C99A3D" fontStyle="italic" fontWeight="600">eval {umbralEval.valor_m.toFixed(1)}</text>
+                    <line x1={padL} y1={yPos(umbralEval.valor_m)} x2={W - padR} y2={yPos(umbralEval.valor_m)} stroke="var(--color-atencion)" strokeWidth="1.5" strokeDasharray="6,4" />
+                    <text x={padL + 3} y={yPos(umbralEval.valor_m) - 4} fontSize="8" fill="var(--color-atencion)" fontStyle="italic" fontWeight="600">eval {umbralEval.valor_m.toFixed(1)}</text>
                   </g>
                 )}
                 {umbralNR && (
                   <g>
-                    <line x1={padL} y1={yPos(umbralNR.valor_m)} x2={W - padR} y2={yPos(umbralNR.valor_m)} stroke="#C0442B" strokeWidth="1.5" strokeDasharray="6,4" />
-                    <text x={padL + 3} y={yPos(umbralNR.valor_m) - 4} fontSize="8" fill="#C0442B" fontStyle="italic" fontWeight="600">NR {umbralNR.valor_m.toFixed(1)}</text>
+                    <line x1={padL} y1={yPos(umbralNR.valor_m)} x2={W - padR} y2={yPos(umbralNR.valor_m)} stroke="var(--color-rojo-alerta)" strokeWidth="1.5" strokeDasharray="6,4" />
+                    <text x={padL + 3} y={yPos(umbralNR.valor_m) - 4} fontSize="8" fill="var(--color-rojo-alerta)" fontStyle="italic" fontWeight="600">NR {umbralNR.valor_m.toFixed(1)}</text>
                   </g>
                 )}
                 {umbralBajAlarma && (
                   <g>
-                    <line x1={padL} y1={yPos(umbralBajAlarma.valor_m)} x2={W - padR} y2={yPos(umbralBajAlarma.valor_m)} stroke="#2563EB" strokeWidth="1.5" strokeDasharray="6,4" />
-                    <text x={padL + 3} y={yPos(umbralBajAlarma.valor_m) + 11} fontSize="8" fill="#2563EB" fontStyle="italic" fontWeight="600">baj {umbralBajAlarma.valor_m.toFixed(1)}</text>
+                    <line x1={padL} y1={yPos(umbralBajAlarma.valor_m)} x2={W - padR} y2={yPos(umbralBajAlarma.valor_m)} stroke="var(--color-bajante)" strokeWidth="1.5" strokeDasharray="6,4" />
+                    <text x={padL + 3} y={yPos(umbralBajAlarma.valor_m) + 11} fontSize="8" fill="var(--color-bajante)" fontStyle="italic" fontWeight="600">baj {umbralBajAlarma.valor_m.toFixed(1)}</text>
                   </g>
                 )}
                 {umbralBajEvac && (
                   <g>
-                    <line x1={padL} y1={yPos(umbralBajEvac.valor_m)} x2={W - padR} y2={yPos(umbralBajEvac.valor_m)} stroke="#8B1E1E" strokeWidth="1.5" strokeDasharray="6,4" />
-                    <text x={padL + 3} y={yPos(umbralBajEvac.valor_m) + 11} fontSize="8" fill="#8B1E1E" fontStyle="italic" fontWeight="600">evac {umbralBajEvac.valor_m.toFixed(1)}</text>
+                    <line x1={padL} y1={yPos(umbralBajEvac.valor_m)} x2={W - padR} y2={yPos(umbralBajEvac.valor_m)} stroke="var(--color-rojo-oscuro)" strokeWidth="1.5" strokeDasharray="6,4" />
+                    <text x={padL + 3} y={yPos(umbralBajEvac.valor_m) + 11} fontSize="8" fill="var(--color-rojo-oscuro)" fontStyle="italic" fontWeight="600">evac {umbralBajEvac.valor_m.toFixed(1)}</text>
                   </g>
                 )}
 
                 {/* Bandas */}
-                <polygon points={bandaP25P75} fill="#0E4749" fillOpacity="0.16" clipPath="url(#prono-clip)" />
-                <polygon points={bandaP05P95} fill="#0E4749" fillOpacity="0.08" clipPath="url(#prono-clip)" />
+                <polygon points={bandaP25P75} fill="var(--chart-obs)" fillOpacity="0.16" clipPath="url(#prono-clip)" />
+                <polygon points={bandaP05P95} fill="var(--chart-obs)" fillOpacity="0.08" clipPath="url(#prono-clip)" />
 
                 {/* Observado */}
                 {obsRecientes.length >= 2 && (
-                  <polyline fill="none" stroke="#0E4749" strokeWidth="2" points={lineaObs} clipPath="url(#prono-clip)" />
+                  <polyline fill="none" stroke="var(--chart-obs)" strokeWidth="2" points={lineaObs} clipPath="url(#prono-clip)" />
                 )}
 
                 {/* Línea main */}
-                <polyline fill="none" stroke="#E8823A" strokeWidth="2" points={lineaMain} clipPath="url(#prono-clip)" />
+                <polyline fill="none" stroke="var(--chart-main)" strokeWidth="2" points={lineaMain} clipPath="url(#prono-clip)" />
 
                 {/* Pico */}
                 <g>
-                  <circle cx={picoX} cy={picoY} r="4" fill="#E8823A" stroke="#fff" strokeWidth="1.5" />
-                  <text x={picoX} y={picoY - 8} fontSize="10" fill="#E8823A" fontWeight="700" textAnchor="middle">
+                  <circle cx={picoX} cy={picoY} r="4" fill="var(--chart-main)" stroke="#fff" strokeWidth="1.5" />
+                  <text x={picoX} y={picoY - 8} fontSize="10" fill="var(--chart-main)" fontWeight="700" textAnchor="middle">
                     {pico.valor_m.toFixed(2)}m
                   </text>
-                  <text x={picoX} y={picoY + 18} fontSize="8" fill="#E8823A" textAnchor="middle">
+                  <text x={picoX} y={picoY + 18} fontSize="8" fill="var(--chart-main)" textAnchor="middle">
                     {formatearFechaHora(pico.timestamp)}
                   </text>
                 </g>
               </svg>
 
-              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-[#5B6E68] dark:text-gray-400">
-                <span className="flex items-center gap-1"><span className="w-3 h-[2px] bg-[#0E4749] inline-block" /> Observado</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-2 border-[#E8823A]" /> Pronóstico main</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-[6px] bg-[#0E4749]/10 inline-block" /> p05–p95</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-[6px] bg-[#0E4749]/20 inline-block" /> p25–p75</span>
-                {umbralNR && <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-[1.5px] border-dashed border-[#C0442B]" /> NR {umbralNR.valor_m.toFixed(1)}m</span>}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-texto-sec dark:text-gray-400">
+                <span className="flex items-center gap-1"><span className="w-3 h-[2px] bg-baliza inline-block" /> Observado</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-2 border-alerta" /> Pronóstico main</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-[6px] bg-baliza/10 inline-block" /> p05–p95</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-[6px] bg-baliza/20 inline-block" /> p25–p75</span>
+                {umbralNR && <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-[1.5px] border-dashed border-rojo-alerta" /> NR {umbralNR.valor_m.toFixed(1)}m</span>}
               </div>
             </section>
           );
@@ -856,12 +858,12 @@ export default function Dashboard() {
         )}
 
         {/* Footer */}
-        <footer className="py-6 text-center text-xs text-[#5B6E68]/50 dark:text-gray-500 space-y-1">
+        <footer className="py-6 text-center text-xs text-texto-sec dark:text-gray-400 space-y-1">
           <p>Los datos provienen de INA y SHN — herramienta de apoyo, no reemplaza el boletín oficial.</p>
           <p>
-            <a href="https://alerta.ina.gob.ar" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#0E4749] dark:hover:text-[#4fc3c5]">Fuente INA</a>
+            <a href="https://alerta.ina.gob.ar" target="_blank" rel="noopener noreferrer" className="underline hover:text-baliza dark:hover:text-marea-dark">Fuente INA</a>
             <span className="mx-1.5">·</span>
-            <a href="https://www.hidro.gov.ar" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#0E4749] dark:hover:text-[#4fc3c5]">Fuente SHN</a>
+            <a href="https://www.hidro.gov.ar" target="_blank" rel="noopener noreferrer" className="underline hover:text-baliza dark:hover:text-marea-dark">Fuente SHN</a>
           </p>
         </footer>
       </main>

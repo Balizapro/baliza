@@ -17,8 +17,8 @@ const NIVEL_SMN = {
   5: { label: "rojo", dot: "bg-red-600", text: "text-red-600 dark:text-red-400" },
   4: { label: "naranja", dot: "bg-orange-500", text: "text-orange-600 dark:text-orange-400" },
   3: { label: "amarillo", dot: "bg-yellow-400", text: "text-yellow-600 dark:text-yellow-400" },
-  2: { label: "verde", dot: "bg-green-500", text: "text-[#4C7A5E]" },
-  1: { label: "verde", dot: "bg-green-500", text: "text-[#4C7A5E]" },
+  2: { label: "verde", dot: "bg-green-500", text: "text-ok" },
+  1: { label: "verde", dot: "bg-green-500", text: "text-ok" },
 } as const;
 
 function nombreEvento(id: number): string {
@@ -51,12 +51,12 @@ export default function AlertaSmnCard({ alertas }: { alertas: AlertaSmn[] }) {
 
   return (
     <section className="dashboard-section">
-      <p className="seccion-titulo mb-2">
+      <h2 className="seccion-titulo mb-2">
         Alerta meteorológica — SMN
-      </p>
+      </h2>
 
       {!principal || principal.max_level < 3 ? (
-        <p className="text-sm text-[#5B6E68]/70 dark:text-gray-500">
+        <p className="text-sm text-texto-sec dark:text-gray-400">
           Sin alertas vigentes para la zona. Nivel {principal ? "verde" : "sin datos"}.
         </p>
       ) : (
@@ -66,30 +66,30 @@ export default function AlertaSmnCard({ alertas }: { alertas: AlertaSmn[] }) {
               <p className={`font-bold ${nivelColor(principal.max_level).text}`}>
                 Alerta {nivelColor(principal.max_level).label.toUpperCase()}
               </p>
-              <p className="text-xs text-[#5B6E68]/70 dark:text-gray-500">
+              <p className="text-xs text-texto-sec dark:text-gray-400">
                 {formatearFecha(principal.fecha)}
               </p>
             </div>
             <div className="text-right">
               {eventosRelevantes(principal).map((e) => (
-                <p key={e.id} className="text-sm text-[#12312B] dark:text-gray-200">
+                <p key={e.id} className="text-sm text-texto dark:text-gray-200">
                   {nombreEvento(e.id)}
                 </p>
               ))}
               {eventosRelevantes(principal).length === 0 && (
-                <p className="text-sm text-[#5B6E68]/60 italic">sin detalle</p>
+                <p className="text-sm text-texto-sec italic">sin detalle</p>
               )}
             </div>
           </div>
 
           {proximas.length > 0 && (
-            <div className="border-t border-[#F2E9DC] dark:border-gray-700 pt-2">
-              <p className="text-xs text-[#5B6E68]/60 dark:text-gray-500 mb-1">Próximos días</p>
+            <div className="border-t border-fondo dark:border-gray-700 pt-2">
+              <p className="text-xs text-texto-sec dark:text-gray-400 mb-1">Próximos días</p>
               {proximas.map((a) => (
                 <div key={a.fecha} className="flex items-center gap-2 text-xs">
                   <span className={`w-2 h-2 rounded-full ${nivelColor(a.max_level).dot}`} />
-                  <span className="text-[#5B6E68] dark:text-gray-400">{formatearFecha(a.fecha)}</span>
-                  <span className="text-[#5B6E68]/70 dark:text-gray-500 capitalize">
+                  <span className="text-texto-sec dark:text-gray-400">{formatearFecha(a.fecha)}</span>
+                  <span className="text-texto-sec dark:text-gray-400 capitalize">
                     {a.max_level >= 3 ? nivelColor(a.max_level).label : "sin alerta"}
                   </span>
                 </div>
@@ -112,7 +112,7 @@ export default function AlertaSmnCard({ alertas }: { alertas: AlertaSmn[] }) {
         </div>
       )}
 
-      <p className="text-[10px] text-[#5B6E68]/40 dark:text-gray-600 mt-3">
+      <p className="text-xs text-texto-sec dark:text-gray-400 mt-3">
         Fuente: Servicio Meteorológico Nacional (sistema de alerta temprana)
       </p>
     </section>
