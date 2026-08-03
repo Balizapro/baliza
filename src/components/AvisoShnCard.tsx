@@ -26,6 +26,16 @@ function vigencia(texto: string): string | null {
   return `${m[1].trim()} → ${m[2].trim()}`;
 }
 
+// Fin de vigencia (timestamp ms) para no alertar sobre un pronóstico vencido.
+function vigenciaFin(texto: string): number | null {
+  const m = texto.match(
+    /V[áa]lido desde el\s*([\d\/]+)\s+(\d{1,2}):(\d{2})\s*hs hasta el\s*([\d\/]+)\s+(\d{1,2}):(\d{2})\s*hs/i
+  );
+  if (!m) return null;
+  const [dd, mm, yyyy] = m[4].split("/").map(Number);
+  return new Date(yyyy, mm - 1, dd, Number(m[5]), Number(m[6])).getTime();
+}
+
 // Alturas pronosticadas para San Fernando: [{ estado, fecha, hora, altura }]
 function alturasSanFernando(texto: string): { estado: string; fecha: string; hora: string; altura: number }[] {
   const bloque = texto.match(/SAN\s+FERNANDO([\s\S]*?)(?:RIO DE LA PLATA EXTERIOR:|PUERTO\s+[A-Z]|$)/i);
@@ -55,7 +65,9 @@ export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[];
 
   const nivelMax = mareologico.nivel_max_m ?? (alturas.length > 0 ? Math.max(...alturas.map((a) => a.altura)) : null);
   const umbral = umbralNR ?? 2.2;
-  const superaNR = nivelMax != null && nivelMax > umbral;
+  const finVig = vigenciaFin(mareologico.texto);
+  const vencido = finVig != null && finVig < Date.now();
+  const superaNR = !vencido && nivelMax != null && nivelMax > umbral;
 
   return (
     <section className={`dashboard-section ${superaNR ? "shn-alerta" : ""}`}>

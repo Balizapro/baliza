@@ -26,6 +26,9 @@ type NivelAlerta = "verde" | "amarilla" | "roja" | "azul" | "evacuacion";
 const PROPAGACION_LP_A_SF = 2.5;
 const PROPAGACION_BA_A_SF = 1.0;
 
+// Subir por debajo de este margen respecto del umbral de evaluación no amerita "Atención".
+const MARGEN_AMARILLA_M = 1.0;
+
 function reemplazar(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
 }
@@ -158,7 +161,7 @@ function calcularVentana(
     };
   }
 
-  if (tendencia === "subiendo" && nivelActual < umbralEvaluacion) {
+  if (tendencia === "subiendo" && nivelActual < umbralEvaluacion && nivelActual >= umbralEvaluacion - MARGEN_AMARILLA_M) {
     const diff = umbralEvaluacion - nivelActual;
     const horasEstimadas = Math.max(1, diff / 0.05);
     const proximaRevision = new Date(new Date().getTime() + horasEstimadas * 60 * 60 * 1000);
