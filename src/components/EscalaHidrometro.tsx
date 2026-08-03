@@ -61,7 +61,7 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
         </p>
       </div>
 
-      <div className="flex gap-6 sm:gap-8 items-start">
+      <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 items-start">
         {/* Vertical gauge */}
         <div className="relative flex-shrink-0" style={{ width: gaugeW, height: H }}>
           <svg width={gaugeW} height={H} className="overflow-visible">

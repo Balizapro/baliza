@@ -71,9 +71,16 @@ export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[];
 
   return (
     <section className={`dashboard-section ${superaNR ? "shn-alerta" : ""}`}>
-      <p className="seccion-titulo mb-2">
-        Aviso del SHN — Río de la Plata
-      </p>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <p className="seccion-titulo">
+          Aviso del SHN — Río de la Plata
+        </p>
+        {vencido && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full border border-[#C99A3D]/40 text-[#C99A3D] dark:text-[#D4B45C] whitespace-nowrap shrink-0">
+            pronóstico vencido
+          </span>
+        )}
+      </div>
 
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-3">
