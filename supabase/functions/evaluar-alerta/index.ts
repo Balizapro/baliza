@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
+import { calcularVentana, ceseExpirado, reemplazar, type NivelAlerta } from "./logica.ts";
 
 interface UmbralRow {
   nombre: string;
@@ -21,17 +22,8 @@ interface PronosticoRow {
   valor_m: number;
 }
 
-type NivelAlerta = "verde" | "amarilla" | "roja" | "azul" | "evacuacion";
-
 const PROPAGACION_LP_A_SF = 2.5;
 const PROPAGACION_BA_A_SF = 1.0;
-
-// Subir por debajo de este margen respecto del umbral de evaluación no amerita "Atención".
-const MARGEN_AMARILLA_M = 1.0;
-
-function reemplazar(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
-}
 
 const TZ = "America/Argentina/Buenos_Aires";
 
@@ -76,114 +68,6 @@ function preavisosPronostico(
   }
 
   return { preavisos, severo };
-}
-
-function calcularVentana(
-  nivelActual: number,
-  tendencia: "subiendo" | "bajando" | "estable",
-  umbralEvaluacion: number,
-  umbralNoRetorno: number,
-  bajanteAlarma: number,
-  bajanteEvacuacion: number,
-  trasladoMin: number,
-  mensajes: Record<string, string>
-): {
-  alerta: NivelAlerta;
-  ventanaInicio: Date | null;
-  ventanaFin: Date | null;
-  mensaje: string;
-} {
-  // Bajante tiene prioridad: un nivel muy bajo no es compatible con crecida.
-  if (nivelActual <= bajanteEvacuacion) {
-    return {
-      alerta: "evacuacion",
-      ventanaInicio: new Date(),
-      ventanaFin: null,
-      mensaje: reemplazar(mensajes.recomendacion_bajante_evacuacion ?? "EVACUACIÓN por bajante — nivel {{nivel}}m", {
-        nivel: nivelActual.toFixed(2), bajante_evac: bajanteEvacuacion.toFixed(2),
-      }),
-    };
-  }
-
-  if (nivelActual <= bajanteAlarma) {
-    return {
-      alerta: "azul",
-      ventanaInicio: null,
-      ventanaFin: null,
-      mensaje: reemplazar(mensajes.recomendacion_bajante_alarma ?? "Bajante — nivel {{nivel}}m", {
-        nivel: nivelActual.toFixed(2), bajante_alarma: bajanteAlarma.toFixed(2),
-      }),
-    };
-  }
-
-  if (nivelActual >= umbralNoRetorno) {
-    return {
-      alerta: "roja",
-      ventanaInicio: new Date(),
-      ventanaFin: null,
-      mensaje: reemplazar(mensajes.recomendacion_roja_critico ?? "Salir ahora — nivel crítico {{nivel}}m", {
-        nivel: nivelActual.toFixed(2), umbral_nr: umbralNoRetorno.toFixed(1),
-      }),
-    };
-  }
-
-  if (tendencia !== "subiendo" && nivelActual < umbralEvaluacion) {
-    return {
-      alerta: "verde",
-      ventanaInicio: null,
-      ventanaFin: null,
-      mensaje: reemplazar(mensajes.recomendacion_verde ?? "Todo normal — {{nivel}}m", {
-        nivel: nivelActual.toFixed(2), umbral_eval: umbralEvaluacion.toFixed(1),
-      }),
-    };
-  }
-
-  if (tendencia === "subiendo" && nivelActual >= umbralEvaluacion) {
-    const ahora = new Date();
-    const diff = umbralNoRetorno - nivelActual;
-    const horasEstimadas = Math.max(0.5, diff / 0.05);
-    const ventanaFin = new Date(ahora.getTime() + horasEstimadas * 60 * 60 * 1000);
-
-    const horasSalida = Math.max(0, horasEstimadas - trasladoMin / 60);
-    const horaSalida = new Date(ahora.getTime() + horasSalida * 60 * 60 * 1000);
-
-    return {
-      alerta: "roja",
-      ventanaInicio: ahora,
-      ventanaFin: horaSalida,
-      mensaje: reemplazar(mensajes.recomendacion_roja_subiendo ?? "Preparar salida — nivel {{nivel}}m", {
-        nivel: nivelActual.toFixed(2),
-        umbral_eval: umbralEvaluacion.toFixed(1),
-        umbral_nr: umbralNoRetorno.toFixed(1),
-        horas: Math.round(horasEstimadas).toString(),
-        hora_salida: `${horaSalida.getHours()}:${String(horaSalida.getMinutes()).padStart(2, "0")}`,
-      }),
-    };
-  }
-
-  if (tendencia === "subiendo" && nivelActual < umbralEvaluacion && nivelActual >= umbralEvaluacion - MARGEN_AMARILLA_M) {
-    const diff = umbralEvaluacion - nivelActual;
-    const horasEstimadas = Math.max(1, diff / 0.05);
-    const proximaRevision = new Date(new Date().getTime() + horasEstimadas * 60 * 60 * 1000);
-
-    return {
-      alerta: "amarilla",
-      ventanaInicio: null,
-      ventanaFin: null,
-      mensaje: reemplazar(mensajes.recomendacion_amarilla ?? "Atención — {{nivel}}m subiendo", {
-        nivel: nivelActual.toFixed(2),
-        umbral_eval: umbralEvaluacion.toFixed(1),
-        hora_revision: `${proximaRevision.getHours()}:${String(proximaRevision.getMinutes()).padStart(2, "0")}`,
-      }),
-    };
-  }
-
-  return {
-    alerta: "verde",
-    ventanaInicio: null,
-    ventanaFin: null,
-    mensaje: mensajes.recomendacion_verde_default ?? "Todo normal",
-  };
 }
 
 serve(async (req) => {
@@ -350,7 +234,7 @@ serve(async (req) => {
     // Un CESE de aviso solo informa durante 2 horas; pasado ese tiempo se descarta
     const avisoCrecida = avisoCrecidaRaw &&
       avisoCrecidaRaw.tipo.startsWith("cese_") &&
-      new Date(avisoCrecidaRaw.emitido).getTime() + 2 * 60 * 60 * 1000 < Date.now()
+      ceseExpirado(avisoCrecidaRaw.emitido)
       ? null
       : avisoCrecidaRaw;
 
@@ -367,7 +251,9 @@ serve(async (req) => {
     }
 
     const { alerta, ventanaInicio, ventanaFin, mensaje } = calcularVentana(
-      nivelActual, tendencia, umbralEval, umbralNR, bajanteAlarma, bajanteEvacuacion, trasladoMin, mensajes
+      nivelActual, tendencia,
+      { evaluacion: umbralEval, noRetorno: umbralNR, bajanteAlarma, bajanteEvacuacion },
+      trasladoMin, mensajes
     );
 
     // Elevar verde→amarilla si el pronóstico anticipa un cruce severo (no retorno o evacuación por bajante)
