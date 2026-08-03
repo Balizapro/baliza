@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn, AvisoCrecida, NivelAlerta } from "@/lib/types";
@@ -20,6 +20,7 @@ import EstadoFuentes from "@/components/EstadoFuentes";
 import VerificacionPronostico from "@/components/VerificacionPronostico";
 import CompartirWhatsApp from "@/components/CompartirWhatsApp";
 import AvisoCrecidaCard from "@/components/AvisoCrecidaCard";
+import { analizarCiclo } from "@/lib/ciclo";
 import { ADMINS } from "@/lib/constants";
 
 function direccionCardinal(grados: number): string {
@@ -343,6 +344,13 @@ export default function Dashboard() {
   const esAdmin = !!user?.email && (ADMINS as readonly string[]).includes(user.email);
   const tendenciaSF = calcularTendencia(historial);
 
+  // Análisis del ciclo de marea: usa el historial de SF y la señal adelantada de La Plata
+  // (propagación ~2.5hs) para estimar cuánto resta de la subida/bajada actual.
+  const ciclo = useMemo(
+    () => analizarCiclo(historial, lecturasLP.slice(0, 24), 2.5),
+    [historial, lecturasLP]
+  );
+
   if (cargando) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#F2E9DC]">
@@ -518,6 +526,7 @@ export default function Dashboard() {
             umbralBajAlarma={umbralBajAlarma}
             umbralBajEvac={umbralBajEvac}
             alertaNivel={alertaNivel}
+            ciclo={ciclo}
           />
         </section>
 

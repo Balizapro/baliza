@@ -54,7 +54,11 @@ function alturasSanFernando(texto: string): { estado: string; fecha: string; hor
 export default function AvisoShnCard({ avisos, umbralNR }: { avisos: AvisoShn[]; umbralNR?: number | null }) {
   const mareologico = [...avisos]
     .filter((a) => a.tipo === "pronostico_mareologico")
-    .sort((a, b) => (b.publicado ?? "").localeCompare(a.publicado ?? ""))[0];
+    .sort((a, b) => {
+      const pc = (b.publicado ?? "").localeCompare(a.publicado ?? "");
+      if (pc !== 0) return pc;
+      return (parseInt(b.numero) || 0) - (parseInt(a.numero) || 0);
+    })[0];
 
   if (!mareologico) return null;
 

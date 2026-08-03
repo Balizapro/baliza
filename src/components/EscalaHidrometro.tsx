@@ -1,4 +1,5 @@
 import type { EquivalenciaEscalon, Umbral, NivelAlerta } from "@/lib/types";
+import type { AnalisisCiclo } from "@/lib/ciclo";
 
 interface Props {
   nivelActual: number;
@@ -10,13 +11,19 @@ interface Props {
   umbralBajAlarma: Umbral | null;
   umbralBajEvac: Umbral | null;
   alertaNivel: NivelAlerta;
+  ciclo: AnalisisCiclo | null;
 }
 
 function formatearFecha(iso: string): string {
   return new Date(iso).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, escalones, umbralEval, umbralNR, umbralBajAlarma, umbralBajEvac, alertaNivel }: Props) {
+function formatoHoras(hs: number): string {
+  if (hs >= 1) return `${Math.round(hs)}h`;
+  return `${Math.round(hs * 60)}min`;
+}
+
+export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, escalones, umbralEval, umbralNR, umbralBajAlarma, umbralBajEvac, alertaNivel, ciclo }: Props) {
   const umbralMax = Math.max(umbralNR?.valor_m ?? 2.2, umbralEval?.valor_m ?? 2.0);
   const maxEscalon = escalones.length > 0 ? escalones[escalones.length - 1].nivel_max_m : umbralMax + 0.5;
   const escalaTecho = Math.max(maxEscalon + 0.2, nivelActual + 0.3, umbralMax + 0.3);
@@ -203,6 +210,26 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
               </p>
             )}
           </div>
+
+          {ciclo && ciclo.direccion !== "estable" && (
+            <div className="mt-3 rounded-lg bg-[#F2E9DC]/50 dark:bg-white/5 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-[#5B6E68]/70 dark:text-gray-500 mb-1">
+                Ciclo — {ciclo.direccion === "subiendo" ? "subida" : "bajada"}
+              </p>
+              <p className="text-xs text-[#5B6E68] dark:text-gray-400 leading-relaxed">
+                Viene {ciclo.direccion === "subiendo" ? "subiendo" : "bajando"} hace{" "}
+                <strong className="text-[#0E4749] dark:text-[#4fc3c5]">{formatoHoras(ciclo.horasActuales)}</strong>
+                {ciclo.duracionTipica != null && (
+                  <> · suele durar <strong>{formatoHoras(ciclo.duracionTipica)}</strong></>
+                )}
+                {ciclo.restante != null && (
+                  <span className={ciclo.restante <= 2 ? " text-[#C0442B]" : ""}>
+                    {" "}· restan ≈ <strong>{formatoHoras(ciclo.restante)}</strong>
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </section>
