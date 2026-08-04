@@ -1,4 +1,11 @@
-import type { Punto } from "./ciclo";
+// Port de src/lib/modelo.ts para el entorno Deno (Supabase Edge Functions).
+// Modelo armónico M2/S2/K1 + regresión sudestada + proyección de curva.
+// Mantener en sincronía con la versión del cliente.
+
+export interface Punto {
+  timestamp: string;
+  nivel_m: number;
+}
 
 export interface PuntoViento {
   timestamp: number;
@@ -41,7 +48,6 @@ export interface Proyeccion {
   extremos: { timestamp: number; nivel_m: number; tipo: "pleamar" | "bajamar" }[];
 }
 
-// Períodos de los principales constituyentes armónicos del Río de la Plata (horas)
 const PERIODOS_H: Record<string, number> = {
   M2: 12.4206,
   S2: 12.0,
@@ -50,14 +56,11 @@ const PERIODOS_H: Record<string, number> = {
 
 const H = 3600000;
 
-// Proyección del viento sobre el eje SE-NO (sudestada). 0=desde el norte, 90=este,
-// 135=SE (empuja agua hacia la costa), 180=sur. Positivo cuando sopla desde el SE/S.
-function componenteSE(velocidadKmh: number, direccionGrados: number): number {
+export function componenteSE(velocidadKmh: number, direccionGrados: number): number {
   const rad = ((direccionGrados - 135) * Math.PI) / 180;
   return velocidadKmh * Math.cos(rad);
 }
 
-// Resuelve A x = b (eliminación gaussiana con pivoteo parcial).
 function resolverSistema(A: number[][], b: number[]): number[] {
   const n = b.length;
   const M = A.map((row, i) => [...row, b[i]]);
@@ -78,8 +81,6 @@ function resolverSistema(A: number[][], b: number[]): number[] {
   return M.map((row, i) => row[n] / row[i]);
 }
 
-// Ajusta h(t) = c0 + Σ_k (a_k cos ω_k t + b_k sin ω_k t) por mínimos cuadrados.
-// t se expresa en horas desde la primera lectura para evitar overflow numérico.
 export function ajustarArmonico(lecturas: Punto[]): AjusteArmonico | null {
   const n = lecturas.length;
   if (n < 12) return null;
@@ -89,7 +90,7 @@ export function ajustarArmonico(lecturas: Punto[]): AjusteArmonico | null {
   const y = lecturas.map((p) => p.nivel_m);
 
   const nombres = Object.keys(PERIODOS_H);
-  const m = 1 + 2 * nombres.length; // c0 + (cos,sin) por constituyente
+  const m = 1 + 2 * nombres.length;
   const A: number[][] = [];
   const b: number[] = new Array(m).fill(0);
 
@@ -104,8 +105,8 @@ export function ajustarArmonico(lecturas: Punto[]): AjusteArmonico | null {
       col += 2;
     }
     for (let r = 0; r < m; r++) {
+      A[r] = A[r] ?? new Array(m).fill(0);
       for (let c = 0; c < m; c++) {
-        A[r] = A[r] ?? new Array(m).fill(0);
         A[r][c] = (A[r][c] ?? 0) + row[r] * row[c];
       }
       b[r] += row[r] * y[i];
@@ -160,7 +161,6 @@ function valorArmonico(ajuste: AjusteArmonico, tsMs: number, t0Ms: number): numb
   return v;
 }
 
-// Interpola linealmente la serie de viento en un instante dado.
 function vientoEn(ventos: PuntoViento[], ts: number): { velocidad_kmh: number; direccion_grados: number } | null {
   if (ventos.length === 0) return null;
   if (ts <= ventos[0].timestamp) return ventos[0];
@@ -179,7 +179,6 @@ function vientoEn(ventos: PuntoViento[], ts: number): { velocidad_kmh: number; d
   return null;
 }
 
-// Regresión del residuo (observado - armónico) contra el viento SE con lag óptimo.
 export function regresarViento(
   lecturas: Punto[],
   ajuste: AjusteArmonico,
@@ -237,8 +236,6 @@ export function regresarViento(
   };
 }
 
-// Proyecta la curva de nivel a futuro combinando la marea armónica y el efecto del
-// viento (sudestada). Genera puntos cada `pasoMin` hasta `horizonteHs` desde `ahora`.
 export function proyectarCurva(
   lecturas: Punto[],
   ventos: PuntoViento[],
@@ -271,16 +268,14 @@ export function proyectarCurva(
     const nivel = arm != null ? arm + correccionViento : (compSE != null ? correccionViento : null);
     if (nivel == null) continue;
 
-    // La banda crece con el horizonte (incertidumbre del pronóstico de viento).
     const factor = 1 + (ts - ahora) / (horizonteHs * H) * 0.5;
     const spread = sigmaBase * factor;
-    const k = 1.28; // p90 / p10
+    const k = 1.28;
     puntos.push({ timestamp: ts, nivel_m: nivel });
     bandaSuperior.push({ timestamp: ts, nivel_m: nivel + k * spread });
     bandaInferior.push({ timestamp: ts, nivel_m: nivel - k * spread });
   }
 
-  // Extremos de la curva proyectada (máximos/mínimos locales)
   const extremos: Proyeccion["extremos"] = [];
   for (let i = 1; i < puntos.length - 1; i++) {
     const a = puntos[i - 1].nivel_m;

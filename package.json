@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test supabase/functions/evaluar-alerta/logica.test.ts src/lib/ciclo.test.ts"
+    "test": "node --experimental-strip-types --test supabase/functions/evaluar-alerta/logica.test.ts supabase/functions/preavisar-crecida/modelo.test.ts src/lib/ciclo.test.ts src/lib/modelo.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
