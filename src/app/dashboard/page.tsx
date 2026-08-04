@@ -22,6 +22,7 @@ import CompartirWhatsApp from "@/components/CompartirWhatsApp";
 import AvisoCrecidaCard from "@/components/AvisoCrecidaCard";
 import { analizarCiclo, predecirProximosExtremos } from "@/lib/ciclo";
 import { useAhora } from "@/lib/useAhora";
+import CurvaProyectada from "@/components/CurvaProyectada";
 import { ADMINS } from "@/lib/constants";
 
 function direccionCardinal(grados: number): string {
@@ -86,6 +87,8 @@ export default function Dashboard() {
   const [historial, setHistorial] = useState<Lectura[]>([]);
   const [alertasList, setAlertasList] = useState<{ timestamp: string; nivel: NivelAlerta }[]>([]);
   const [lecturasLP, setLecturasLP] = useState<Lectura[]>([]);
+  const [vientoHist, setVientoHist] = useState<{ timestamp: string; velocidad_kmh: number; direccion_grados: number }[]>([]);
+  const [vientoProno, setVientoProno] = useState<{ timestamp: string; velocidad_kmh: number; direccion_grados: number }[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -125,6 +128,19 @@ export default function Dashboard() {
         .order("timestamp", { ascending: false })
         .limit(1)
         .single();
+
+      // Historial de viento (7 días, asc) para la regresión sudestada→nivel
+      const sieteDiasAtrasV = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: vientoHistRaw } = await supabase
+        .from("viento")
+        .select("timestamp, velocidad_kmh, direccion_grados")
+        .gte("timestamp", sieteDiasAtrasV)
+        .order("timestamp", { ascending: true });
+
+      const { data: vientoPronoRaw } = await supabase
+        .from("viento_pronostico")
+        .select("timestamp, velocidad_kmh, direccion_grados")
+        .order("timestamp", { ascending: true });
 
       const { data: umbrales } = await supabase.from("umbrales").select("*");
 
@@ -185,6 +201,20 @@ export default function Dashboard() {
 
       setHistorial((historico as Lectura[]) ?? []);
       setAlertasList((alertasHist as { timestamp: string; nivel: NivelAlerta }[]) ?? []);
+      setVientoHist(
+        (vientoHistRaw ?? []).map((v: { timestamp: string; velocidad_kmh: number; direccion_grados: number }) => ({
+          timestamp: v.timestamp,
+          velocidad_kmh: Number(v.velocidad_kmh),
+          direccion_grados: Number(v.direccion_grados),
+        }))
+      );
+      setVientoProno(
+        (vientoPronoRaw ?? []).map((v: { timestamp: string; velocidad_kmh: number; direccion_grados: number }) => ({
+          timestamp: v.timestamp,
+          velocidad_kmh: Number(v.velocidad_kmh),
+          direccion_grados: Number(v.direccion_grados),
+        }))
+      );
 
       const filtrarPorEstacion = (id: string | undefined) =>
         (lecturas ?? []).filter((l) => l.estacion_id === id);
@@ -298,6 +328,16 @@ export default function Dashboard() {
   const prediccionExtremos = useMemo(
     () => predecirProximosExtremos(historial, ahora),
     [historial, ahora]
+  );
+
+  // Entrada del componente de curva: viento histórico y pronóstico como ms
+  const vientoHistoricoModelo = useMemo(
+    () => vientoHist.map((v) => ({ timestamp: new Date(v.timestamp).getTime(), velocidad_kmh: v.velocidad_kmh, direccion_grados: v.direccion_grados })),
+    [vientoHist]
+  );
+  const vientoPronosticoModelo = useMemo(
+    () => vientoProno.map((v) => ({ timestamp: new Date(v.timestamp).getTime(), velocidad_kmh: v.velocidad_kmh, direccion_grados: v.direccion_grados })),
+    [vientoProno]
   );
 
   if (cargando) {
@@ -516,6 +556,16 @@ export default function Dashboard() {
             prediccion={prediccionExtremos}
           />
         </section>
+
+        {/* Curva proyectada: marea armónica + forzante meteorológica (sudestada) */}
+        <CurvaProyectada
+          observaciones={historial}
+          vientoHistorico={vientoHistoricoModelo}
+          vientoPronostico={vientoPronosticoModelo}
+          ahora={ahora}
+          umbralEval={umbralEval ?? null}
+          umbralNR={umbralNR ?? null}
+        />
 
         {/* SHN + SMN en paralelo */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
