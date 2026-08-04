@@ -114,6 +114,21 @@ test("predicción: período observado ~12h y próximo extremo coincide", () => {
   assert.ok(Math.abs(p.bajamar.timestamp - (ultimaBajamar + 12 * H)) < 0.5 * H, `bajamar=${new Date(p.bajamar.timestamp).toISOString()}`);
 });
 
+test("predicción: serie larga semidiurna (>=48 pts) usa período espectral ~12h", () => {
+  // 10 ciclos de 12h → 121 puntos, período exacto 12h
+  const pts: Punto[] = [];
+  let t = T0;
+  let nivel = 0.5;
+  for (let c = 0; c < 10; c++) {
+    for (let i = 0; i < 6; i++) { pts.push({ timestamp: new Date(t).toISOString(), nivel_m: nivel }); nivel += 0.1; t += H; }
+    for (let i = 0; i < 6; i++) { pts.push({ timestamp: new Date(t).toISOString(), nivel_m: nivel }); nivel -= 0.1; t += H; }
+  }
+  const p = predecirProximosExtremos(pts, t);
+  assert.equal(p.metodo, "observado");
+  assert.ok(p.periodoHoras != null);
+  assert.ok(Math.abs(p.periodoHoras! - 12) < 0.3, `periodo=${p.periodoHoras}`);
+});
+
 test("predicción: con una sola pleamar (sin período) cae a astronómica y queda en el futuro", () => {
   const pts: Punto[] = [];
   const t = T0;

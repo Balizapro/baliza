@@ -151,6 +151,58 @@ function mediana(ns: number[]): number | null {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
+// Período dominante por análisis espectral (Lomb-Scargle) en la banda semidiurna.
+// La mediana de intervalos pleamar→pleamar se sesga con series largas por la
+// desigualdad diurna y el forzante meteorológico del estuario; el pico espectral
+// en 11.5–13.5h recupera el M2 (~12.42h) incluso con muestreo irregular (INA).
+function estimarPeriodoSpectral(l: Punto[], loH = 11.5, hiH = 13.5): number | null {
+  const n = l.length;
+  if (n < 48) return null;
+  const t = l.map((p) => new Date(p.timestamp).getTime() / 3600000);
+  const y = l.map((p) => p.nivel_m);
+  // Detrend lineal: una rampa residual (p.ej. tramo ascendente final) genera
+  // leakage de baja frecuencia que corre el pico espectral.
+  const mediaT = t.reduce((s, v) => s + v, 0) / n;
+  const mediaY = y.reduce((s, v) => s + v, 0) / n;
+  let ssT = 0, ssTY = 0;
+  for (let i = 0; i < n; i++) {
+    ssT += (t[i] - mediaT) * (t[i] - mediaT);
+    ssTY += (t[i] - mediaT) * (y[i] - mediaY);
+  }
+  const pend = ssT > 0 ? ssTY / ssT : 0;
+  const yc = y.map((v, i) => v - mediaY - pend * (t[i] - mediaT));
+  const varY = yc.reduce((s, v) => s + v * v, 0);
+  if (varY === 0) return null;
+  let mejor = null;
+  let mejorPow = -1;
+  const paso = 0.01;
+  for (let P = loH; P <= hiH; P += paso) {
+    const w = (2 * Math.PI) / P;
+    let sSin = 0, sCos = 0;
+    for (let i = 0; i < n; i++) {
+      sSin += Math.sin(2 * w * t[i]);
+      sCos += Math.cos(2 * w * t[i]);
+    }
+    const tau = (0.5 * Math.atan2(sSin, sCos)) / w;
+    let cs = 0, ss = 0, cc = 0, ss2 = 0;
+    for (let i = 0; i < n; i++) {
+      const x = t[i] - tau;
+      const cw = Math.cos(w * x);
+      const sw = Math.sin(w * x);
+      cc += cw * cw;
+      ss2 += sw * sw;
+      cs += yc[i] * cw;
+      ss += yc[i] * sw;
+    }
+    const pow = (0.5 * (cs * cs / cc + ss * ss / ss2)) / varY;
+    if (pow > mejorPow) {
+      mejorPow = pow;
+      mejor = P;
+    }
+  }
+  return mejor;
+}
+
 // Detecta pleamares/bajamares locales en la serie (asc), eliminando falsos extremos:
 // los extremos del mismo tipo demasiado cercanos (<5h) se fusionan conservando el mÃ¡s acentuado.
 function detectarExtremos(l: Punto[]): Extremo[] {
@@ -214,7 +266,9 @@ export function predecirProximosExtremos(
     if (g >= INTERVALO_SEMIDIURNO_MIN && g <= INTERVALO_SEMIDIURNO_MAX) ints.push(g);
   }
 
-  const periodoObs = mediana(ints);
+  const periodoEspectral = estimarPeriodoSpectral(lecturas);
+  const periodoMediana = mediana(ints);
+  const periodoObs = periodoEspectral ?? periodoMediana;
   const T = periodoObs != null ? periodoObs : PERIODO_ASTRONOMICO_H;
   const metodo: PrediccionExtremos["metodo"] = periodoObs != null ? "observado" : "astronomica";
 
