@@ -90,7 +90,23 @@ serve(async (req) => {
     const titulo = limpiarTexto(h2[1]).trim();
 
     const tipoMatch = titulo.match(/^(AVISO|ALERTA|CESE)\s+(?:DE\s+AVISO\s+)?POR\s+(CRECIDA|BAJANTE|VIENTO|ESTADO|NAVEGACI)/i);
-    const tipo = tipoMatch ? `${tipoMatch[1].toLowerCase()}_${tipoMatch[2].toLowerCase().replace(/[^a-z]/g, "")}` : "aviso_crecida";
+
+    // Sin aviso vigente: el sitio muestra "NO HAY NINGUN AVISO..." o el H2 no es un
+    // título de aviso real (p.ej. "Contacto" del menú). En ese caso NO se inserta
+    // nada: se desactivan los avisos vigentes previos y se sale limpio.
+    const sinAviso = /NO HAY NINGUN AVISO/i.test(html) || !tipoMatch;
+    if (sinAviso) {
+      await supabase
+        .from("avisos_crecida")
+        .update({ vigente: false, actualizado: new Date().toISOString() })
+        .eq("vigente", true);
+      return new Response(
+        JSON.stringify({ ok: true, aviso: null, motivo: "sin aviso vigente" }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const tipo = `${tipoMatch![1].toLowerCase()}_${tipoMatch![2].toLowerCase().replace(/[^a-z]/g, "")}`;
     const numMatch = titulo.match(/Nro\.?\s*(\d+)/i);
     const numero = numMatch ? `Nro. ${numMatch[1]}` : titulo.slice(0, 40);
 
