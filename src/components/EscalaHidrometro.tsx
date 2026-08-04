@@ -1,5 +1,5 @@
 import type { EquivalenciaEscalon, Umbral, NivelAlerta } from "@/lib/types";
-import type { AnalisisCiclo } from "@/lib/ciclo";
+import type { AnalisisCiclo, PrediccionExtremos } from "@/lib/ciclo";
 
 interface Props {
   nivelActual: number;
@@ -12,10 +12,15 @@ interface Props {
   umbralBajEvac: Umbral | null;
   alertaNivel: NivelAlerta;
   ciclo: AnalisisCiclo | null;
+  prediccion?: PrediccionExtremos | null;
 }
 
 function formatearFecha(iso: string): string {
   return new Date(iso).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatearHora(ms: number): string {
+  return new Date(ms).toLocaleString("es-AR", { weekday: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 function formatoHoras(hs: number): string {
@@ -23,7 +28,7 @@ function formatoHoras(hs: number): string {
   return `${Math.round(hs * 60)}min`;
 }
 
-export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, escalones, umbralEval, umbralNR, umbralBajAlarma, umbralBajEvac, alertaNivel, ciclo }: Props) {
+export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, escalones, umbralEval, umbralNR, umbralBajAlarma, umbralBajEvac, alertaNivel, ciclo, prediccion }: Props) {
   const umbralMax = Math.max(umbralNR?.valor_m ?? 2.2, umbralEval?.valor_m ?? 2.0);
   const maxEscalon = escalones.length > 0 ? escalones[escalones.length - 1].nivel_max_m : umbralMax + 0.5;
   const escalaTecho = Math.max(maxEscalon + 0.2, nivelActual + 0.3, umbralMax + 0.3);
@@ -226,6 +231,33 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
                   <span className={ciclo.restante <= 2 ? " text-rojo-alerta" : ""}>
                     {" "}· restan ≈ <strong>{formatoHoras(ciclo.restante)}</strong>
                   </span>
+                )}
+              </p>
+            </div>
+          )}
+
+          {prediccion && (prediccion.pleamar || prediccion.bajamar) && (
+            <div className="mt-3 rounded-lg bg-fondo/50 dark:bg-white/5 px-3 py-2">
+              <p className="text-xs uppercase tracking-wide text-texto-sec dark:text-gray-400 mb-1">
+                Próximos extremos
+                {prediccion.periodoHoras != null && (
+                  <span className="ml-1">— ciclo {prediccion.periodoHoras.toFixed(1)}h</span>
+                )}
+              </p>
+              <p className="text-xs text-texto-sec dark:text-gray-400 leading-relaxed">
+                {prediccion.pleamar && (
+                  <>
+                    Próxima pleamar ≈{" "}
+                    <strong className="text-baliza dark:text-marea-dark">{formatearHora(prediccion.pleamar.timestamp)}</strong>
+                    {prediccion.pleamar.nivel_m != null && <> ({prediccion.pleamar.nivel_m.toFixed(2)}m)</>}
+                  </>
+                )}
+                {prediccion.bajamar && (
+                  <>
+                    {" "}· próxima bajamar ≈{" "}
+                    <strong className="text-baliza dark:text-marea-dark">{formatearHora(prediccion.bajamar.timestamp)}</strong>
+                    {prediccion.bajamar.nivel_m != null && <> ({prediccion.bajamar.nivel_m.toFixed(2)}m)</>}
+                  </>
                 )}
               </p>
             </div>

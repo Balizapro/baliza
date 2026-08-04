@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analizarCiclo, type Punto } from "./ciclo.ts";
+import { analizarCiclo, predecirProximosExtremos, type Punto } from "./ciclo.ts";
 
 const H = 3600000;
 const T0 = new Date("2026-08-02T00:00:00Z").getTime();
@@ -83,4 +83,58 @@ test("estable => sin análisis", () => {
   const sf = serieSubida(3, 1, 0, 0.5); // nivel constante
   const c = analizarCiclo(sf, [], 2.5);
   assert.equal(c.direccion, "estable");
+});
+
+// Serie semidiurna regular: fases de 6h (subida/bajada) encadenadas → período 12h.
+// Cierra con 2 puntos ascendentes para que la última bajamar quede como punto interior.
+function serieSemidiurna(): { pts: Punto[]; ultimaBajamar: number } {
+  const pts: Punto[] = [];
+  let t = T0;
+  let nivel = 0.5;
+  for (let c = 0; c < 5; c++) {
+    for (let i = 0; i < 6; i++) { pts.push({ timestamp: new Date(t).toISOString(), nivel_m: nivel }); nivel += 0.1; t += H; }
+    for (let i = 0; i < 6; i++) { pts.push({ timestamp: new Date(t).toISOString(), nivel_m: nivel }); nivel -= 0.1; t += H; }
+  }
+  const ultimaBajamar = t; // baja en t (0.5m)
+  pts.push({ timestamp: new Date(t).toISOString(), nivel_m: nivel });
+  pts.push({ timestamp: new Date(t + H).toISOString(), nivel_m: nivel + 0.1 });
+  pts.push({ timestamp: new Date(t + 2 * H).toISOString(), nivel_m: nivel + 0.2 });
+  return { pts, ultimaBajamar };
+}
+
+test("predicción: período observado ~12h y próximo extremo coincide", () => {
+  const { pts, ultimaBajamar } = serieSemidiurna();
+  const p = predecirProximosExtremos(pts, ultimaBajamar);
+  assert.equal(p.metodo, "observado");
+  assert.ok(p.periodoHoras != null);
+  assert.ok(Math.abs(p.periodoHoras! - 12) < 0.3, `periodo=${p.periodoHoras}`);
+  assert.ok(p.pleamar != null);
+  assert.ok(Math.abs(p.pleamar.timestamp - (ultimaBajamar + 6 * H)) < 0.5 * H, `pleamar=${new Date(p.pleamar.timestamp).toISOString()}`);
+  assert.ok(p.bajamar != null);
+  assert.ok(Math.abs(p.bajamar.timestamp - (ultimaBajamar + 12 * H)) < 0.5 * H, `bajamar=${new Date(p.bajamar.timestamp).toISOString()}`);
+});
+
+test("predicción: con una sola pleamar (sin período) cae a astronómica y queda en el futuro", () => {
+  const pts: Punto[] = [];
+  const t = T0;
+  // subida 6h hasta el pico único (1.1m) en t+6h
+  for (let i = 0; i < 7; i++) pts.push({ timestamp: new Date(t + i * H).toISOString(), nivel_m: 0.5 + i * 0.1 });
+  // bajada 6h desde 1.0m (el pico no se repite): t+7h..t+13h
+  for (let i = 0; i < 7; i++) pts.push({ timestamp: new Date(t + (7 + i) * H).toISOString(), nivel_m: 1.0 - i * 0.1 });
+  const ahora = t + 14 * H;
+  const p = predecirProximosExtremos(pts, ahora);
+  assert.equal(p.metodo, "astronomica");
+  assert.equal(p.periodoHoras, null);
+  assert.ok(p.pleamar != null && p.bajamar != null);
+  assert.ok(p.pleamar.timestamp > ahora, "pleamar debe caer en el futuro");
+  assert.ok(p.bajamar.timestamp > ahora, "bajamar debe caer en el futuro");
+  // durSubida medida = 6h (bajada sin cerrar → durBajada null → T/2)
+  assert.ok(Math.abs(p.pleamar.timestamp - p.bajamar.timestamp - 6 * H) < 0.5 * H);
+});
+
+test("predicción: sin datos => sin extremos", () => {
+  const p = predecirProximosExtremos([]);
+  assert.equal(p.pleamar, null);
+  assert.equal(p.bajamar, null);
+  assert.equal(p.metodo, "astronomica");
 });

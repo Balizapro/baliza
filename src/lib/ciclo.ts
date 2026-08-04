@@ -1,4 +1,4 @@
-export type DireccionCiclo = "subiendo" | "bajando" | "estable";
+﻿export type DireccionCiclo = "subiendo" | "bajando" | "estable";
 
 export interface Punto {
   timestamp: string;
@@ -29,8 +29,8 @@ function direccionEntre(a: number, b: number): DireccionCiclo {
   return "estable";
 }
 
-// Fase actual: dirección y horas que lleva sosteniéndola (lecturas desc).
-// `ahora` (ms) permite sumar el tiempo desde la última lectura hasta el presente.
+// Fase actual: direcciÃ³n y horas que lleva sosteniÃ©ndola (lecturas desc).
+// `ahora` (ms) permite sumar el tiempo desde la Ãºltima lectura hasta el presente.
 function faseActual(l: Punto[], ahora?: number): { direccion: DireccionCiclo; horas: number } {
   if (!l || l.length < 2) return { direccion: "estable", horas: 0 };
   const ord = ordenarDesc(l);
@@ -52,7 +52,7 @@ function faseActual(l: Punto[], ahora?: number): { direccion: DireccionCiclo; ho
   return { direccion: dir, horas };
 }
 
-// Duración de fases completas de subida y bajada en el historial (lecturas asc).
+// DuraciÃ³n de fases completas de subida y bajada en el historial (lecturas asc).
 function duracionesTipicas(l: Punto[]): { subiendo: number[]; bajando: number[] } {
   const fases = { subiendo: [] as number[], bajando: [] as number[] };
   if (!l || l.length < 3) return fases;
@@ -81,10 +81,10 @@ function promedio(ns: number[]): number | null {
   return ns.reduce((s, n) => s + n, 0) / ns.length;
 }
 
-// Estima cuántas horas restan de la fase actual de SF, usando:
-//  1. duración típica histórica de la misma fase (SF) - horas ya transcurridas
-//  2. la señal adelantada de una estación externa (LP): si la externa ya cambió
-//     de fase, el mismo quiebre llega a SF ~propagacionHS después.
+// Estima cuÃ¡ntas horas restan de la fase actual de SF, usando:
+//  1. duraciÃ³n tÃ­pica histÃ³rica de la misma fase (SF) - horas ya transcurridas
+//  2. la seÃ±al adelantada de una estaciÃ³n externa (LP): si la externa ya cambiÃ³
+//     de fase, el mismo quiebre llega a SF ~propagacionHS despuÃ©s.
 export function analizarCiclo(
   lecturasSF: Punto[],
   lecturasExterna: Punto[],
@@ -108,7 +108,7 @@ export function analizarCiclo(
 
   let restante: number | null = tipica != null ? Math.max(0, tipica - sf.horas) : null;
 
-  // Refinar con señal externa: si la externa ya cambió de fase, SF lo hará en ~propagacionHS.
+  // Refinar con seÃ±al externa: si la externa ya cambiÃ³ de fase, SF lo harÃ¡ en ~propagacionHS.
   const ext = faseActual(lecturasExterna, ahora);
   if (ext.direccion !== "estable" && ext.direccion !== sf.direccion) {
     const restanteProp = Math.max(0, propagacionHS - ext.horas);
@@ -122,4 +122,136 @@ export function analizarCiclo(
 
   base.restante = restante;
   return base;
+}
+
+export type TipoExtremo = "pleamar" | "bajamar";
+
+export interface Extremo {
+  timestamp: number; // ms
+  nivel_m: number | null;
+  tipo: TipoExtremo;
+}
+
+export interface PrediccionExtremos {
+  pleamar: Extremo | null;
+  bajamar: Extremo | null;
+  periodoHoras: number | null;
+  metodo: "observado" | "astronomica";
+}
+
+// PerÃ­odo semidiurno astronÃ³mico (M2 lunar): pleamares cada ~12h25m.
+const PERIODO_ASTRONOMICO_H = 12.42;
+const INTERVALO_SEMIDIURNO_MIN = 11;
+const INTERVALO_SEMIDIURNO_MAX = 14;
+
+function mediana(ns: number[]): number | null {
+  if (ns.length === 0) return null;
+  const s = [...ns].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+// Detecta pleamares/bajamares locales en la serie (asc), eliminando falsos extremos:
+// los extremos del mismo tipo demasiado cercanos (<5h) se fusionan conservando el mÃ¡s acentuado.
+function detectarExtremos(l: Punto[]): Extremo[] {
+  const asc = ordenarAsc(l);
+  if (asc.length < 3) return [];
+  const raw: Extremo[] = [];
+  for (let i = 1; i < asc.length - 1; i++) {
+    const ant = asc[i - 1].nivel_m;
+    const act = asc[i].nivel_m;
+    const sig = asc[i + 1].nivel_m;
+    const timestamp = new Date(asc[i].timestamp).getTime();
+    if (act > ant && act >= sig) raw.push({ timestamp, nivel_m: act, tipo: "pleamar" });
+    else if (act < ant && act <= sig) raw.push({ timestamp, nivel_m: act, tipo: "bajamar" });
+  }
+  const out: Extremo[] = [];
+  for (const r of raw) {
+    if (out.length && out[out.length - 1].tipo === r.tipo) {
+      const gapHs = (r.timestamp - out[out.length - 1].timestamp) / 3600000;
+      if (gapHs < 5) {
+        if (
+          (r.tipo === "pleamar" && r.nivel_m! > out[out.length - 1].nivel_m!) ||
+          (r.tipo === "bajamar" && r.nivel_m! < out[out.length - 1].nivel_m!)
+        ) {
+          out[out.length - 1] = r;
+        }
+        continue;
+      }
+    }
+    out.push(r);
+  }
+  return out;
+}
+
+// Predice el prÃ³ximo pleamar y la prÃ³xima bajamar a partir de la regularidad del
+// ciclo observado en SF: la mediana de los intervalos pleamarâ†’pleamar y
+// bajamarâ†’bajamar (~12.4h semidiurno) mÃ¡s la duraciÃ³n tÃ­pica de cada fase.
+// Si no hay historia suficiente, cae al perÃ­odo astronÃ³mico (12.42h).
+export function predecirProximosExtremos(
+  lecturas: Punto[],
+  ahora?: number
+): PrediccionExtremos {
+  const vacio: PrediccionExtremos = {
+    pleamar: null,
+    bajamar: null,
+    periodoHoras: null,
+    metodo: "astronomica",
+  };
+  const extremos = detectarExtremos(lecturas);
+  if (extremos.length === 0) return vacio;
+
+  const highs = extremos.filter((e) => e.tipo === "pleamar");
+  const lows = extremos.filter((e) => e.tipo === "bajamar");
+
+  const ints: number[] = [];
+  for (let i = 1; i < highs.length; i++) {
+    const g = (highs[i].timestamp - highs[i - 1].timestamp) / 3600000;
+    if (g >= INTERVALO_SEMIDIURNO_MIN && g <= INTERVALO_SEMIDIURNO_MAX) ints.push(g);
+  }
+  for (let i = 1; i < lows.length; i++) {
+    const g = (lows[i].timestamp - lows[i - 1].timestamp) / 3600000;
+    if (g >= INTERVALO_SEMIDIURNO_MIN && g <= INTERVALO_SEMIDIURNO_MAX) ints.push(g);
+  }
+
+  const periodoObs = mediana(ints);
+  const T = periodoObs != null ? periodoObs : PERIODO_ASTRONOMICO_H;
+  const metodo: PrediccionExtremos["metodo"] = periodoObs != null ? "observado" : "astronomica";
+
+  const tipicas = duracionesTipicas(lecturas);
+  const durSubida = mediana(tipicas.subiendo.filter((h) => h >= 2 && h <= 9));
+  const durBajada = mediana(tipicas.bajando.filter((h) => h >= 2 && h <= 9));
+
+  const ahoraMs = ahora ?? Date.now();
+  let ultimo = extremos[extremos.length - 1];
+  const pasados = extremos.filter((e) => e.timestamp <= ahoraMs);
+  if (pasados.length > 0) ultimo = pasados[pasados.length - 1];
+
+  const estAltura = (arr: Extremo[]): number | null =>
+    mediana(arr.slice(-3).map((e) => e.nivel_m).filter((v): v is number => v != null));
+
+  const dSub = durSubida ?? T / 2;
+  const dBaj = durBajada ?? T / 2;
+  // Si el Ãºltimo extremo quedÃ³ viejo (sin lecturas recientes), avanzar el ancla por
+  // perÃ­odos completos hasta que el prÃ³ximo extremo caiga en el futuro.
+  let ultT = ultimo.timestamp;
+  while (ultT + Math.min(dSub, dBaj) * 3600000 <= ahoraMs) {
+    ultT += T * 3600000;
+  }
+  let tPle: number;
+  let tBaj: number;
+  if (ultimo.tipo === "pleamar") {
+    tBaj = ultT + dBaj * 3600000;
+    tPle = ultT + (dBaj + dSub) * 3600000;
+  } else {
+    tPle = ultT + dSub * 3600000;
+    tBaj = ultT + (dSub + dBaj) * 3600000;
+  }
+
+  return {
+    pleamar: { timestamp: tPle, nivel_m: estAltura(highs), tipo: "pleamar" },
+    bajamar: { timestamp: tBaj, nivel_m: estAltura(lows), tipo: "bajamar" },
+    periodoHoras: periodoObs,
+    metodo,
+  };
 }

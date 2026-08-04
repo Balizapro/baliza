@@ -20,7 +20,7 @@ import EstadoFuentes from "@/components/EstadoFuentes";
 import VerificacionPronostico from "@/components/VerificacionPronostico";
 import CompartirWhatsApp from "@/components/CompartirWhatsApp";
 import AvisoCrecidaCard from "@/components/AvisoCrecidaCard";
-import { analizarCiclo } from "@/lib/ciclo";
+import { analizarCiclo, predecirProximosExtremos } from "@/lib/ciclo";
 import { useAhora } from "@/lib/useAhora";
 import { ADMINS } from "@/lib/constants";
 
@@ -293,6 +293,13 @@ export default function Dashboard() {
     [historial, lecturasLP, ahora]
   );
 
+  // Predicción de próximos extremos (pleamar/bajamar) a partir de la regularidad
+  // del ciclo observado en SF (~12.4h semidiurno). Recálculo periódico con `ahora`.
+  const prediccionExtremos = useMemo(
+    () => predecirProximosExtremos(historial, ahora),
+    [historial, ahora]
+  );
+
   if (cargando) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-fondo">
@@ -506,6 +513,7 @@ export default function Dashboard() {
             umbralBajEvac={umbralBajEvac}
             alertaNivel={alertaNivel}
             ciclo={ciclo}
+            prediccion={prediccionExtremos}
           />
         </section>
 
