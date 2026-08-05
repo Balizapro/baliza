@@ -18,6 +18,7 @@ import AlertaSonora from "@/components/AlertaSonora";
 import ComparacionModelo from "@/components/ComparacionModelo";
 import EstadoFuentes from "@/components/EstadoFuentes";
 import VerificacionPronostico from "@/components/VerificacionPronostico";
+import ValidacionModelo from "@/components/ValidacionModelo";
 import CompartirWhatsApp from "@/components/CompartirWhatsApp";
 import AvisoCrecidaCard from "@/components/AvisoCrecidaCard";
 import { analizarCiclo, predecirProximosExtremos } from "@/lib/ciclo";
@@ -87,8 +88,9 @@ export default function Dashboard() {
   const [historial, setHistorial] = useState<Lectura[]>([]);
   const [alertasList, setAlertasList] = useState<{ timestamp: string; nivel: NivelAlerta }[]>([]);
   const [lecturasLP, setLecturasLP] = useState<Lectura[]>([]);
-  const [vientoHist, setVientoHist] = useState<{ timestamp: string; velocidad_kmh: number; direccion_grados: number }[]>([]);
-  const [vientoProno, setVientoProno] = useState<{ timestamp: string; velocidad_kmh: number; direccion_grados: number }[]>([]);
+  const [lecturasLPHist, setLecturasLPHist] = useState<Lectura[]>([]);
+  const [vientoHist, setVientoHist] = useState<{ timestamp: string; velocidad_kmh: number; direccion_grados: number; presion_hpa?: number | null }[]>([]);
+  const [vientoProno, setVientoProno] = useState<{ timestamp: string; velocidad_kmh: number; direccion_grados: number; presion_hpa?: number | null }[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -133,13 +135,13 @@ export default function Dashboard() {
       const sieteDiasAtrasV = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const { data: vientoHistRaw } = await supabase
         .from("viento")
-        .select("timestamp, velocidad_kmh, direccion_grados")
+        .select("timestamp, velocidad_kmh, direccion_grados, presion_hpa")
         .gte("timestamp", sieteDiasAtrasV)
         .order("timestamp", { ascending: true });
 
       const { data: vientoPronoRaw } = await supabase
         .from("viento_pronostico")
-        .select("timestamp, velocidad_kmh, direccion_grados")
+        .select("timestamp, velocidad_kmh, direccion_grados, presion_hpa")
         .order("timestamp", { ascending: true });
 
       const { data: umbrales } = await supabase.from("umbrales").select("*");
@@ -202,17 +204,19 @@ export default function Dashboard() {
       setHistorial((historico as Lectura[]) ?? []);
       setAlertasList((alertasHist as { timestamp: string; nivel: NivelAlerta }[]) ?? []);
       setVientoHist(
-        (vientoHistRaw ?? []).map((v: { timestamp: string; velocidad_kmh: number; direccion_grados: number }) => ({
+        (vientoHistRaw ?? []).map((v: { timestamp: string; velocidad_kmh: number; direccion_grados: number; presion_hpa?: number | null }) => ({
           timestamp: v.timestamp,
           velocidad_kmh: Number(v.velocidad_kmh),
           direccion_grados: Number(v.direccion_grados),
+          presion_hpa: v.presion_hpa != null ? Number(v.presion_hpa) : null,
         }))
       );
       setVientoProno(
-        (vientoPronoRaw ?? []).map((v: { timestamp: string; velocidad_kmh: number; direccion_grados: number }) => ({
+        (vientoPronoRaw ?? []).map((v: { timestamp: string; velocidad_kmh: number; direccion_grados: number; presion_hpa?: number | null }) => ({
           timestamp: v.timestamp,
           velocidad_kmh: Number(v.velocidad_kmh),
           direccion_grados: Number(v.direccion_grados),
+          presion_hpa: v.presion_hpa != null ? Number(v.presion_hpa) : null,
         }))
       );
 
@@ -226,6 +230,7 @@ export default function Dashboard() {
         (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
       setLecturasLP(todasLP.slice(0, 24));
+      setLecturasLPHist(todasLP);
 
       const d: DatosAgregados = {
         sanFernando: {
@@ -332,11 +337,11 @@ export default function Dashboard() {
 
   // Entrada del componente de curva: viento histórico y pronóstico como ms
   const vientoHistoricoModelo = useMemo(
-    () => vientoHist.map((v) => ({ timestamp: new Date(v.timestamp).getTime(), velocidad_kmh: v.velocidad_kmh, direccion_grados: v.direccion_grados })),
+    () => vientoHist.map((v) => ({ timestamp: new Date(v.timestamp).getTime(), velocidad_kmh: v.velocidad_kmh, direccion_grados: v.direccion_grados, presion_hpa: v.presion_hpa })),
     [vientoHist]
   );
   const vientoPronosticoModelo = useMemo(
-    () => vientoProno.map((v) => ({ timestamp: new Date(v.timestamp).getTime(), velocidad_kmh: v.velocidad_kmh, direccion_grados: v.direccion_grados })),
+    () => vientoProno.map((v) => ({ timestamp: new Date(v.timestamp).getTime(), velocidad_kmh: v.velocidad_kmh, direccion_grados: v.direccion_grados, presion_hpa: v.presion_hpa })),
     [vientoProno]
   );
 
@@ -599,7 +604,7 @@ export default function Dashboard() {
               )}
             </section>
             <section className="dashboard-section">
-              <PropagacionLP lecturasLP={lecturasLP} nivelSF={sfObs?.nivel_m} />
+              <PropagacionLP lecturasLP={lecturasLP} lecturasLPHist={lecturasLPHist} lecturasSF={historial} nivelSF={sfObs?.nivel_m} />
             </section>
           </div>
           <section className="dashboard-section">
@@ -613,6 +618,9 @@ export default function Dashboard() {
 
         {/* Verificación de pronóstico */}
         <VerificacionPronostico observaciones={historial} pronosticos={sfProno ?? []} />
+
+        {/* Validación del modelo propio */}
+        <ValidacionModelo observaciones={historial} vientoHistorico={vientoHistoricoModelo} />
 
         {/* Estaciones exteriores — oculto temporalmente (no relevante para la vista principal) */}
         {/* <section className="dashboard-section">
