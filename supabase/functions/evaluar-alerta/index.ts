@@ -282,12 +282,18 @@ serve(async (req) => {
     );
 
     // Elevar verde→amarilla si el pronóstico anticipa un cruce severo (no retorno o evacuación por bajante)
-    const alertaFinal: NivelAlerta =
-      alerta === "verde" && preavisosProno.severo ? "amarilla" : alerta;
+    const elevadoPorPronostico = alerta === "verde" && preavisosProno.severo;
+    const alertaFinal: NivelAlerta = elevadoPorPronostico ? "amarilla" : alerta;
+
+    // Si se elevó por el pronóstico, el mensaje principal no debe decir "Todo normal":
+    // el estado de atención es por la crecida pronosticada, no por el nivel actual.
+    const mensajeBase = elevadoPorPronostico
+      ? `Atención — crecida pronosticada en San Fernando (nivel actual ${nivelActual.toFixed(2)}m)`
+      : mensaje;
 
     const mensajeCompleto = preavisos.length
-      ? `${mensaje} | Preaviso: ${preavisos.join("; ")}`
-      : mensaje;
+      ? `${mensajeBase} | Preaviso: ${preavisos.join("; ")}`
+      : mensajeBase;
 
     const alertaRow = {
       nivel: alertaFinal,
