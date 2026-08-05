@@ -27,7 +27,7 @@ function serieViento(horas: number, velocidad = 0, direccion = 0): PuntoViento[]
   const out: PuntoViento[] = [];
   const T0 = Date.UTC(2026, 7, 1, 0, 0, 0);
   for (let h = 0; h <= horas; h += 3) {
-    out.push({ timestamp: T0 + h * H, velocidad_kmh: velocidad, direccion_grados: direccion });
+    out.push({ timestamp: T0 + h * H, velocidad_kmh: velocidad, direccion_grados: direccion, presion_hpa: 1013 + Math.sin(h / 3) * 5 });
   }
   return out;
 }
@@ -56,12 +56,35 @@ test("regresión de viento recupera pendiente del residuo meteorológico", () =>
   for (let h = 0; h <= 120; h += 1) {
     const ts = T0 + h * H;
     const v = 25 + (h % 7) * 2;
-    ventos.push({ timestamp: ts, velocidad_kmh: v, direccion_grados: 135 });
+    ventos.push({ timestamp: ts, velocidad_kmh: v, direccion_grados: 135, presion_hpa: 1013 + Math.sin(h / 3) * 5 });
     pts.push({ timestamp: new Date(ts).toISOString(), nivel_m: 0.5 + 0.8 * Math.sin(((2 * Math.PI) / M2) * (h - 3)) + pendiente * componenteSE(v, 135) });
   }
   const reg = regresarViento(pts, ajuste, ventos);
   assert.ok(reg, "regresión no nula");
   assert.ok(Math.abs(reg!.pendiente_m_por_kmh - pendiente) < 0.008, `pendiente ${reg!.pendiente_m_por_kmh}`);
+});
+
+test("regresión con presión recupera coeficiente de presión atmosférica", () => {
+  const T0 = Date.UTC(2026, 7, 1, 0, 0, 0);
+  const pts: Punto[] = [];
+  const ventos: PuntoViento[] = [];
+  const pendiente = 0.02;
+  const presionCoef = -0.008;
+  for (let h = 0; h <= 288; h += 1) {
+    const ts = T0 + h * H;
+    const v = 20 + (h % 7) * 2;
+    const presion = 1013 + Math.sin(h / 3) * 5;
+    ventos.push({ timestamp: ts, velocidad_kmh: v, direccion_grados: 135, presion_hpa: presion });
+    pts.push({
+      timestamp: new Date(ts).toISOString(),
+      nivel_m: 0.5 + 0.8 * Math.sin(((2 * Math.PI) / M2) * (h - 3)) + pendiente * componenteSE(v, 135) + presionCoef * (presion - 1013),
+    });
+  }
+  const ajuste = ajustarArmonico(pts)!;
+  const reg = regresarViento(pts, ajuste, ventos);
+  assert.ok(reg, "regresión con presión no nula");
+  assert.ok(reg!.presion_m_por_hpa != null);
+  assert.ok(Math.abs(reg!.presion_m_por_hpa! - presionCoef) < 0.005, `presion ${reg!.presion_m_por_hpa}`);
 });
 
 test("proyección: genera puntos futuros con banda y extremos", () => {
@@ -88,7 +111,7 @@ test("proyección con viento: sudestada eleva la curva respecto al armónico pur
     const ts = T0 + i * 3 * H;
     const velocidad = Math.max(5, 25 + Math.sin(i / 8) * 12);
     const direccion = 135 + Math.sin(i / 5) * 30;
-    ventos.push({ timestamp: ts, velocidad_kmh: velocidad, direccion_grados: direccion });
+    ventos.push({ timestamp: ts, velocidad_kmh: velocidad, direccion_grados: direccion, presion_hpa: 1013 + Math.sin(i / 3) * 5 });
   }
   const compSE = (ts: number): number => {
     const i = Math.round((ts - T0) / (3 * H));

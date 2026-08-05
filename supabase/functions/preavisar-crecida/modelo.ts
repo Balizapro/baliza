@@ -11,6 +11,7 @@ export interface PuntoViento {
   timestamp: number;
   velocidad_kmh: number;
   direccion_grados: number;
+  presion_hpa?: number | null;
 }
 
 export interface PuntoCurva {
@@ -37,6 +38,9 @@ export interface RegresionViento {
   r2: number;
   sigma_m: number;
   compSEActual: number;
+  presion_m_por_hpa?: number;
+  presionRefHpa?: number;
+  compPresionActual?: number;
 }
 
 export interface Proyeccion {
@@ -52,6 +56,9 @@ const PERIODOS_H: Record<string, number> = {
   M2: 12.4206,
   S2: 12.0,
   K1: 23.9345,
+  O1: 25.8193,
+  N2: 12.6583,
+  P1: 24.0659,
 };
 
 const H = 3600000;
@@ -161,10 +168,19 @@ function valorArmonico(ajuste: AjusteArmonico, tsMs: number, t0Ms: number): numb
   return v;
 }
 
-function vientoEn(ventos: PuntoViento[], ts: number): { velocidad_kmh: number; direccion_grados: number } | null {
+function vientoEn(ventos: PuntoViento[], ts: number): { velocidad_kmh: number; direccion_grados: number; presion_hpa: number | null } | null {
   if (ventos.length === 0) return null;
-  if (ts <= ventos[0].timestamp) return ventos[0];
-  if (ts >= ventos[ventos.length - 1].timestamp) return ventos[ventos.length - 1];
+  const mix = (a: number | null | undefined, b: number | null | undefined, f: number): number | null => {
+    if (a == null || b == null) return a ?? b ?? null;
+    return a + f * (b - a);
+  };
+  if (ts <= ventos[0].timestamp) {
+    return { ...ventos[0], presion_hpa: ventos[0].presion_hpa ?? null };
+  }
+  if (ts >= ventos[ventos.length - 1].timestamp) {
+    const ult = ventos[ventos.length - 1];
+    return { ...ult, presion_hpa: ult.presion_hpa ?? null };
+  }
   for (let i = 1; i < ventos.length; i++) {
     if (ts <= ventos[i].timestamp) {
       const a = ventos[i - 1];
@@ -173,10 +189,17 @@ function vientoEn(ventos: PuntoViento[], ts: number): { velocidad_kmh: number; d
       return {
         velocidad_kmh: a.velocidad_kmh + f * (b2.velocidad_kmh - a.velocidad_kmh),
         direccion_grados: a.direccion_grados + f * (b2.direccion_grados - a.direccion_grados),
+        presion_hpa: mix(a.presion_hpa, b2.presion_hpa, f),
       };
     }
   }
   return null;
+}
+
+function presionRefHpa(ventos: PuntoViento[]): number {
+  const ps = ventos.map((v) => v.presion_hpa).filter((p): p is number => p != null);
+  if (ps.length === 0) return 1013.25;
+  return ps.reduce((s, p) => s + p, 0) / ps.length;
 }
 
 export function regresarViento(
@@ -187,40 +210,68 @@ export function regresarViento(
 ): RegresionViento | null {
   if (ventos.length < 4 || ajuste == null) return null;
   const t0 = new Date(lecturas[0].timestamp).getTime();
+  const pref = presionRefHpa(ventos);
 
-  const pares = (lagH: number): { x: number; y: number }[] => {
-    const out: { x: number; y: number }[] = [];
+  const pares = (lagH: number): { x: number; p: number; y: number }[] => {
+    const out: { x: number; p: number; y: number }[] = [];
     for (const p of lecturas) {
       const ts = new Date(p.timestamp).getTime();
       const v = vientoEn(ventos, ts - lagH * H);
-      if (!v) continue;
-      out.push({ x: componenteSE(v.velocidad_kmh, v.direccion_grados), y: p.nivel_m - valorArmonico(ajuste, ts, t0) });
+      if (!v || v.presion_hpa == null) continue;
+      out.push({
+        x: componenteSE(v.velocidad_kmh, v.direccion_grados),
+        p: v.presion_hpa - pref,
+        y: p.nivel_m - valorArmonico(ajuste, ts, t0),
+      });
     }
     return out;
   };
 
-  let mejor: { lag_h: number; pendiente: number; intercepto: number; r2: number; sigma: number; n: number } | null = null;
+  const regresar = (pts: { x: number; p: number; y: number }[]): { b1: number; b2: number; b0: number; r2: number; sigma: number } | null => {
+    const n = pts.length;
+    if (n < 8) return null;
+    const sx = pts.reduce((s, q) => s + q.x, 0);
+    const sp = pts.reduce((s, q) => s + q.p, 0);
+    const sy = pts.reduce((s, q) => s + q.y, 0);
+    const sxx = pts.reduce((s, q) => s + q.x * q.x, 0);
+    const spp = pts.reduce((s, q) => s + q.p * q.p, 0);
+    const sxp = pts.reduce((s, q) => s + q.x * q.p, 0);
+    const sxy = pts.reduce((s, q) => s + q.x * q.y, 0);
+    const spy = pts.reduce((s, q) => s + q.p * q.y, 0);
+
+    const A: number[][] = [
+      [n, sx, sp],
+      [sx, sxx, sxp],
+      [sp, sxp, spp],
+    ];
+    const b = [sy, sxy, spy];
+    let coefs: number[];
+    try {
+      coefs = resolverSistema(A, b);
+    } catch {
+      return null;
+    }
+    const [b0, b1, b2] = coefs;
+    const my = sy / n;
+    let sse = 0, sst = 0;
+    for (const q of pts) {
+      const pred = b0 + b1 * q.x + b2 * q.p;
+      sse += (q.y - pred) ** 2;
+      sst += (q.y - my) ** 2;
+    }
+    const r2 = sst > 0 ? 1 - sse / sst : 0;
+    const sigma = Math.sqrt(sse / Math.max(n - 3, 1));
+    return { b1, b2, b0, r2, sigma };
+  };
+
+  let mejor: { lag_h: number; pendiente: number; presion: number; intercepto: number; r2: number; sigma: number; n: number } | null = null;
   for (const lagH of lagsH) {
     const pts = pares(lagH);
-    if (pts.length < 6) continue;
-    const n = pts.length;
-    const mx = pts.reduce((s, p) => s + p.x, 0) / n;
-    const my = pts.reduce((s, p) => s + p.y, 0) / n;
-    let sxx = 0, sxy = 0, syy = 0;
-    for (const p of pts) {
-      sxx += (p.x - mx) * (p.x - mx);
-      sxy += (p.x - mx) * (p.y - my);
-      syy += (p.y - my) * (p.y - my);
-    }
-    if (sxx < 1e-9) continue;
-    const pendiente = sxy / sxx;
-    const intercepto = my - pendiente * mx;
-    const r2 = syy > 0 ? (sxy * sxy) / (sxx * syy) : 0;
-    const sigma = Math.sqrt(
-      pts.reduce((s, p) => s + (p.y - intercepto - pendiente * p.x) ** 2, 0) / Math.max(n - 2, 1)
-    );
-    if (mejor == null || r2 > mejor.r2) {
-      mejor = { lag_h: lagH, pendiente, intercepto, r2, sigma, n };
+    if (pts.length < 8) continue;
+    const reg = regresar(pts);
+    if (reg == null) continue;
+    if (mejor == null || reg.r2 > mejor.r2) {
+      mejor = { lag_h: lagH, pendiente: reg.b1, presion: reg.b2, intercepto: reg.b0, r2: reg.r2, sigma: reg.sigma, n: pts.length };
     }
   }
   if (mejor == null) return null;
@@ -233,6 +284,9 @@ export function regresarViento(
     r2: mejor.r2,
     sigma_m: mejor.sigma,
     compSEActual: componenteSE(ultimo.velocidad_kmh, ultimo.direccion_grados),
+    presion_m_por_hpa: mejor.presion,
+    presionRefHpa: pref,
+    compPresionActual: (ultimo.presion_hpa ?? pref) - pref,
   };
 }
 
@@ -261,8 +315,13 @@ export function proyectarCurva(
     const arm = ajuste ? valorArmonico(ajuste, ts, t0) : null;
     const v = ventos.length ? vientoEn(ventos, ts) : null;
     const compSE = v ? componenteSE(v.velocidad_kmh, v.direccion_grados) : null;
-    const correccionViento = regresion && compSE != null
-      ? regresion.intercepto_m + regresion.pendiente_m_por_kmh * compSE
+    const anomPresion = v?.presion_hpa != null && regresion?.presionRefHpa != null
+      ? v.presion_hpa - regresion.presionRefHpa
+      : 0;
+    const correccionViento = regresion
+      ? regresion.intercepto_m +
+        (compSE != null ? regresion.pendiente_m_por_kmh * compSE : 0) +
+        (regresion.presion_m_por_hpa ?? 0) * anomPresion
       : 0;
 
     const nivel = arm != null ? arm + correccionViento : (compSE != null ? correccionViento : null);

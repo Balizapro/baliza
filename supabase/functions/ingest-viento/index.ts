@@ -15,7 +15,8 @@ serve(async (req) => {
 
   try {
     // Observación actual + pronóstico horario (48h) para el modelo de forzante meteorológica
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=wind_speed_10m,wind_direction_10m&hourly=wind_speed_10m,wind_direction_10m&forecast_days=3&wind_speed_unit=kmh`;
+    // (viento SE + presión atmosférica)
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=wind_speed_10m,wind_direction_10m,surface_pressure&hourly=wind_speed_10m,wind_direction_10m,surface_pressure&forecast_days=3&wind_speed_unit=kmh`;
     console.log(`[ingest-viento] Fetching: ${url}`);
     const res = await fetch(url);
     if (!res.ok) {
@@ -29,6 +30,7 @@ serve(async (req) => {
       timestamp: new Date(current.time).toISOString(),
       velocidad_kmh: current.wind_speed_10m,
       direccion_grados: current.wind_direction_10m,
+      presion_hpa: current.surface_pressure ?? null,
       lat,
       lon,
     });
@@ -43,6 +45,7 @@ serve(async (req) => {
           timestamp: new Date(t).toISOString(),
           velocidad_kmh: hourly.wind_speed_10m[i],
           direccion_grados: hourly.wind_direction_10m[i],
+          presion_hpa: hourly.surface_pressure[i] ?? null,
           lat,
           lon,
         }));
