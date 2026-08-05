@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+import { regresarPropagacion } from "@/lib/modelo";
 import type { Lectura } from "@/lib/types";
 import { useAhora } from "@/lib/useAhora";
 
@@ -7,6 +9,8 @@ const PROPAGACION_HS = 2.5;
 
 interface Props {
   lecturasLP: Lectura[];
+  lecturasLPHist?: Lectura[];
+  lecturasSF?: Lectura[];
   nivelSF: number | undefined;
 }
 
@@ -14,8 +18,16 @@ function formatearHora(iso: string): string {
   return new Date(iso).toLocaleString("es-AR", { hour: "2-digit", minute: "2-digit" });
 }
 
-export default function PropagacionLP({ lecturasLP, nivelSF }: Props) {
+export default function PropagacionLP({ lecturasLP, lecturasLPHist, lecturasSF, nivelSF }: Props) {
   const ahora = useAhora();
+
+  const modelo = useMemo(() => {
+    if (!lecturasLPHist || !lecturasSF || lecturasLPHist.length < 20 || lecturasSF.length < 20) return null;
+    const lp = lecturasLPHist.map((l) => ({ timestamp: l.timestamp, nivel_m: Number(l.nivel_m) }));
+    const sf = lecturasSF.map((l) => ({ timestamp: l.timestamp, nivel_m: Number(l.nivel_m) }));
+    return regresarPropagacion(sf, lp, ahora);
+  }, [lecturasLPHist, lecturasSF, ahora]);
+
   if (lecturasLP.length < 2) {
     return (
       <div>
@@ -33,7 +45,9 @@ export default function PropagacionLP({ lecturasLP, nivelSF }: Props) {
   const subiendo = diff > 0.01;
   const bajando = diff < -0.01;
 
-  const llegadaEstimada = new Date(new Date(ultimo.timestamp).getTime() + PROPAGACION_HS * 3600000);
+  // Con modelo: usa el lag y pendiente aprendidos de la relación LP→SF.
+  const lagModelo = modelo ? modelo.lag_h : PROPAGACION_HS;
+  const llegadaEstimada = new Date(new Date(ultimo.timestamp).getTime() + lagModelo * 3600000);
   const msRestantes = llegadaEstimada.getTime() - ahora;
   const horasRestantes = Math.floor(Math.max(msRestantes, 0) / 3600000);
   const minsRestantes = Math.floor((Math.max(msRestantes, 0) % 3600000) / 60000);
@@ -71,6 +85,16 @@ export default function PropagacionLP({ lecturasLP, nivelSF }: Props) {
         </div>
       </div>
 
+      {modelo && (
+        <div className="rounded-md bg-fondo/50 dark:bg-white/5 px-3 py-2 mb-2 text-xs">
+          <p className="text-texto-sec dark:text-gray-400">
+            Modelo LP→SF: <strong className="font-mono text-baliza dark:text-marea-dark">{modelo.nivelSFEsperado.toFixed(2)}m</strong> esperado en San Fernando
+            en ~<strong className="font-mono">{modelo.lag_h.toFixed(1)}h</strong>
+            <span className="text-texto-sec dark:text-gray-400"> (r² {modelo.r2.toFixed(2)}, pendiente {modelo.pendiente.toFixed(2)}, {modelo.n} puntos)</span>
+          </p>
+        </div>
+      )}
+
       {/* Mini sparkline */}
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
         <polyline
@@ -92,7 +116,7 @@ export default function PropagacionLP({ lecturasLP, nivelSF }: Props) {
           : bajando
             ? `La Plata está bajando — no se espera propagación significativa.`
             : `La Plata se mantiene estable.`}
-        {" "}La relación histórica LP→SF es de ~{PROPAGACION_HS}hs.
+        {" "}Relación LP→SF: {modelo ? `modelo estima ~${modelo.lag_h.toFixed(1)}hs` : `~${PROPAGACION_HS}hs (histórico)`}.
       </p>
     </div>
   );

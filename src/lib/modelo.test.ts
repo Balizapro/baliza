@@ -1,13 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ajustarArmonico, regresarViento, proyectarCurva, type PuntoViento } from "./modelo.ts";
+import { ajustarArmonico, regresarViento, proyectarCurva, validarModelo, regresarPropagacion, type PuntoViento } from "./modelo.ts";
 import type { Punto } from "./ciclo.ts";
 
 const H = 3600000;
 const T0 = new Date("2026-07-20T00:00:00Z").getTime();
 
-// Genera una serie sintética con M2 + S2 + residuo meteorológico (sudestada).
-function serieSintetica(dias: number, baseSE: number, pendiente: number): { pts: Punto[]; ventos: PuntoViento[] } {
+// Genera una serie sintética con M2 + S2 + residuo meteorológico (sudestada + presión).
+function serieSintetica(dias: number, baseSE: number, pendiente: number, presionCoef = 0): { pts: Punto[]; ventos: PuntoViento[] } {
   const pts: Punto[] = [];
   const ventos: PuntoViento[] = [];
   const pasos = dias * 48; // cada 30 min
@@ -21,7 +21,7 @@ function serieSintetica(dias: number, baseSE: number, pendiente: number): { pts:
     const ts = T0 + i * 3 * H;
     const velocidad = Math.max(5, baseSE + Math.sin(i / 8) * 12);
     const direccion = 135 + Math.sin(i / 5) * 30;
-    ventos.push({ timestamp: ts, velocidad_kmh: velocidad, direccion_grados: direccion });
+    ventos.push({ timestamp: ts, velocidad_kmh: velocidad, direccion_grados: direccion, presion_hpa: 1013 + Math.sin(i / 3) * 5 });
   }
   const compSE = (ts: number): number => {
     const i = Math.round((ts - T0) / (3 * H));
@@ -29,12 +29,17 @@ function serieSintetica(dias: number, baseSE: number, pendiente: number): { pts:
     const rad = ((v.direccion_grados - 135) * Math.PI) / 180;
     return v.velocidad_kmh * Math.cos(rad);
   };
+  const anomPresion = (ts: number): number => {
+    const i = Math.round((ts - T0) / (3 * H));
+    const v = ventos[Math.max(0, Math.min(i, ventos.length - 1))];
+    return (v.presion_hpa ?? 1013) - 1013;
+  };
 
   for (let i = 0; i < pasos; i++) {
     const ts = T0 + i * 30 * 60000;
     const th = ts / H;
     const arm = A_M2 * Math.sin(wM2 * th + 0.5) + A_S2 * Math.sin(wS2 * th + 1.0);
-    pts.push({ timestamp: new Date(ts).toISOString(), nivel_m: arm + pendiente * compSE(ts) });
+    pts.push({ timestamp: new Date(ts).toISOString(), nivel_m: arm + pendiente * compSE(ts) + presionCoef * anomPresion(ts) });
   }
   return { pts, ventos };
 }
@@ -100,10 +105,90 @@ test("proyección con viento: curva se desplaza con el residuo meteorológico", 
   assert.ok(mediaCurva > 0.4, `mediaCurva=${mediaCurva.toFixed(3)} (sudestada eleva el nivel)`);
 });
 
+test("regresión con presión: recupera coeficiente de presión atmosférica", () => {
+  const presionCoef = -0.008; // m por hPa (presión alta hunde el nivel)
+  const { pts, ventos } = serieSintetica(8, 25, 0.02, presionCoef);
+  const ajuste = ajustarArmonico(pts);
+  assert.ok(ajuste);
+  const reg = regresarViento(pts, ajuste!, ventos);
+  assert.ok(reg, "debería ajustar regresión con presión");
+  assert.ok(reg!.presion_m_por_hpa != null);
+  assert.ok(Math.abs(reg!.presion_m_por_hpa! - presionCoef) < 0.005, `presion=${reg!.presion_m_por_hpa}`);
+});
+
 test("sin datos suficientes => ajuste nulo y proyección vacía", () => {
   const pts: Punto[] = [];
   const proy = proyectarCurva(pts, [], Date.now(), 24);
   assert.equal(proy.ajuste, null);
   assert.equal(proy.puntos.length, 0);
   assert.equal(proy.extremos.length, 0);
+});
+
+test("validarModelo: el modelo con viento recupera niveles con MAE bajo y alto acierto", () => {
+  const { pts, ventos } = serieSintetica(14, 25, 0.04);
+  const ahora = T0 + 14 * 24 * H;
+  const val = validarModelo(pts, ventos, ahora, [6, 12, 24]);
+  assert.ok(val, "validación no nula");
+  assert.ok(val!.cortes >= 5, `cortes=${val!.cortes}`);
+  for (const h of [6, 12, 24]) {
+    const v = val!.horizontes.find((x) => x.horizonte_h === h);
+    assert.ok(v, `horizonte ${h}`);
+    assert.ok(v!.n >= 3, `h${h} n=${v!.n}`);
+    // tolerancia amplia: el residuo meteorológico degrada el ajuste en ventanas cortas
+    assert.ok(v!.mae_m < 0.7, `h${h} mae=${v!.mae_m}`);
+    assert.ok(v!.acierto_pct > 10, `h${h} acierto=${v!.acierto_pct}`);
+  }
+});
+
+test("validarModelo: más historia acumulada reduce el error de 24h", () => {
+  const { pts, ventos } = serieSintetica(14, 25, 0.04);
+  const ahora = T0 + 14 * 24 * H;
+  // Cortes solo en la última parte (>=10 días de historia acumulada) => MAE bajo
+  const val = validarModelo(pts, ventos, ahora, [24], 10 * 24);
+  assert.ok(val, "validación no nula");
+  const v24 = val!.horizontes.find((x) => x.horizonte_h === 24);
+  assert.ok(v24 && v24.n >= 3, `n=${v24?.n}`);
+  assert.ok(v24!.mae_m < 0.4, `h24 mae=${v24!.mae_m} (con historia larga)`);
+});
+
+test("validarModelo: sin historia suficiente devuelve null", () => {
+  const val = validarModelo([], [], Date.now(), [6]);
+  assert.equal(val, null);
+  const corto = serieSintetica(2, 25, 0.04);
+  const val2 = validarModelo(corto.pts, corto.ventos, T0 + 2 * 24 * H, [6]);
+  assert.equal(val2, null);
+});
+
+// Serie de La Plata que anticipa a SF: LP(t) = SF(t + 2h).
+function seriePropagacion(dias: number, lagH: number): { sf: Punto[]; lp: Punto[] } {
+  const sf: Punto[] = [];
+  const lp: Punto[] = [];
+  const pasos = dias * 48;
+  const M2 = 12.4206;
+  for (let i = 0; i < pasos; i++) {
+    const tsSF = T0 + i * 30 * 60000;
+    const th = tsSF / H;
+    const nivel = 0.5 + 0.4 * Math.sin((2 * Math.PI) / M2 * th + 0.5);
+    sf.push({ timestamp: new Date(tsSF).toISOString(), nivel_m: nivel });
+    const tsLP = tsSF - lagH * H;
+    lp.push({ timestamp: new Date(tsLP).toISOString(), nivel_m: nivel });
+  }
+  return { sf, lp };
+}
+
+test("regresarPropagacion: recupera el lag de La Plata a San Fernando", () => {
+  const lagReal = 2;
+  const { sf, lp } = seriePropagacion(6, lagReal);
+  const ahora = T0 + 6 * 24 * H;
+  const reg = regresarPropagacion(sf, lp, ahora, [1, 1.5, 2, 2.5, 3]);
+  assert.ok(reg, "regresión no nula");
+  assert.ok(Math.abs(reg!.lag_h - lagReal) < 0.6, `lag=${reg!.lag_h}`);
+  assert.ok(reg!.r2 > 0.8, `r2=${reg!.r2}`);
+  assert.ok(Math.abs(reg!.pendiente - 1) < 0.15, `pendiente=${reg!.pendiente}`);
+  assert.ok(Math.abs(reg!.intercepto_m) < 0.15, `intercepto=${reg!.intercepto_m}`);
+});
+
+test("regresarPropagacion: sin datos suficientes devuelve null", () => {
+  const reg = regresarPropagacion([], [], Date.now());
+  assert.equal(reg, null);
 });

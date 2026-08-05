@@ -101,6 +101,9 @@ export default function CurvaProyectada({ observaciones, vientoHistorico, viento
   const vientoActivo = proyeccion.regresion && Math.abs(proyeccion.regresion.pendiente_m_por_kmh) > 0.005;
   const compSE = proyeccion.regresion?.compSEActual ?? 0;
   const efectoVientoM = proyeccion.regresion ? proyeccion.regresion.pendiente_m_por_kmh * compSE : 0;
+  const efectoPresionM = proyeccion.regresion?.presion_m_por_hpa && proyeccion.regresion.compPresionActual != null
+    ? proyeccion.regresion.presion_m_por_hpa * proyeccion.regresion.compPresionActual
+    : 0;
   const amplitudDominante = proyeccion.ajuste?.componentes[0]?.amplitud_m ?? null;
 
   return (
@@ -111,8 +114,9 @@ export default function CurvaProyectada({ observaciones, vientoHistorico, viento
 
       {proyeccion.regresion && vientoActivo && (
         <p className="text-xs text-texto-sec dark:text-gray-400 mb-1">
-          Efecto sudestada detectado: <strong className="font-mono text-baliza dark:text-marea-dark">{efectoVientoM >= 0 ? "+" : ""}{efectoVientoM.toFixed(2)}m</strong>{" "}
-          (pendiente {proyeccion.regresion.pendiente_m_por_kmh.toFixed(3)} m por km/h SE, lag {proyeccion.regresion.lag_h}h, r² {proyeccion.regresion.r2.toFixed(2)})
+          Forzante meteorológica: viento SE <strong className="font-mono text-baliza dark:text-marea-dark">{efectoVientoM >= 0 ? "+" : ""}{efectoVientoM.toFixed(2)}m</strong>{" "}
+          {Math.abs(efectoPresionM) > 0.005 && <>· presión {efectoPresionM >= 0 ? "+" : ""}{efectoPresionM.toFixed(2)}m</>}
+          {" "}(lag {proyeccion.regresion.lag_h}h, r² {proyeccion.regresion.r2.toFixed(2)})
         </p>
       )}
       {!vientoActivo && proyeccion.ajuste && (
