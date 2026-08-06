@@ -101,8 +101,8 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
             {umbralEval && (
               <g>
                 <line x1={barraX - 4} y1={yPos(umbralEval.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralEval.valor_m)} stroke="var(--color-atencion)" strokeWidth={1.5} strokeDasharray="4,3" />
-                <text x={labelX + 60} y={yPos(umbralEval.valor_m) + 3} fontSize="9" fill="var(--color-atencion)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralEval.valor_m.toFixed(2)}m</text>
-                <text x={labelX + 62} y={yPos(umbralEval.valor_m) + 3} fontSize="8" fill="var(--color-atencion)" textAnchor="start">eval</text>
+                <text x={labelX + 60} y={yPos(umbralEval.valor_m) + 3} fontSize="11" fill="var(--color-atencion)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralEval.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralEval.valor_m) + 3} fontSize="10" fill="var(--color-atencion)" textAnchor="start">eval</text>
               </g>
             )}
 
@@ -110,8 +110,8 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
             {umbralNR && (
               <g>
                 <line x1={barraX - 4} y1={yPos(umbralNR.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralNR.valor_m)} stroke="var(--color-rojo-alerta)" strokeWidth={1.5} strokeDasharray="4,3" />
-                <text x={labelX + 60} y={yPos(umbralNR.valor_m) + 3} fontSize="9" fill="var(--color-rojo-alerta)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralNR.valor_m.toFixed(2)}m</text>
-                <text x={labelX + 62} y={yPos(umbralNR.valor_m) + 3} fontSize="8" fill="var(--color-rojo-alerta)" textAnchor="start">NR</text>
+                <text x={labelX + 60} y={yPos(umbralNR.valor_m) + 3} fontSize="11" fill="var(--color-rojo-alerta)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralNR.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralNR.valor_m) + 3} fontSize="10" fill="var(--color-rojo-alerta)" textAnchor="start">NR</text>
               </g>
             )}
 
@@ -119,8 +119,8 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
             {umbralBajAlarma && (
               <g>
                 <line x1={barraX - 4} y1={yPos(umbralBajAlarma.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralBajAlarma.valor_m)} stroke="var(--color-bajante)" strokeWidth={1.5} strokeDasharray="4,3" />
-                <text x={labelX + 60} y={yPos(umbralBajAlarma.valor_m) + 3} fontSize="9" fill="var(--color-bajante)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralBajAlarma.valor_m.toFixed(2)}m</text>
-                <text x={labelX + 62} y={yPos(umbralBajAlarma.valor_m) + 3} fontSize="8" fill="var(--color-bajante)" textAnchor="start">baj.</text>
+                <text x={labelX + 60} y={yPos(umbralBajAlarma.valor_m) + 3} fontSize="11" fill="var(--color-bajante)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralBajAlarma.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralBajAlarma.valor_m) + 3} fontSize="10" fill="var(--color-bajante)" textAnchor="start">baj.</text>
               </g>
             )}
 
@@ -128,15 +128,15 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
             {umbralBajEvac && (
               <g>
                 <line x1={barraX - 4} y1={yPos(umbralBajEvac.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralBajEvac.valor_m)} stroke="var(--color-rojo-oscuro)" strokeWidth={1.5} strokeDasharray="4,3" />
-                <text x={labelX + 60} y={yPos(umbralBajEvac.valor_m) + 3} fontSize="9" fill="var(--color-rojo-oscuro)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralBajEvac.valor_m.toFixed(2)}m</text>
-                <text x={labelX + 62} y={yPos(umbralBajEvac.valor_m) + 3} fontSize="8" fill="var(--color-rojo-oscuro)" textAnchor="start">evac</text>
+                <text x={labelX + 60} y={yPos(umbralBajEvac.valor_m) + 3} fontSize="11" fill="var(--color-rojo-oscuro)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralBajEvac.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralBajEvac.valor_m) + 3} fontSize="10" fill="var(--color-rojo-oscuro)" textAnchor="start">evac</text>
               </g>
             )}
 
             {/* Marcas de escalón (en el lado izquierdo de la barra) */}
             {escalones.map((e) => (
               <g key={e.escalon}>
-                <text x={scalasX} y={yPos((e.nivel_min_m + e.nivel_max_m) / 2) + 3} fontSize="9" fill="var(--color-texto-sec)" textAnchor="end" fontFamily="ui-monospace, monospace">e{e.escalon}</text>
+                <text x={scalasX} y={yPos((e.nivel_min_m + e.nivel_max_m) / 2) + 3} fontSize="10" fill="var(--color-texto-sec)" textAnchor="end" fontFamily="ui-monospace, monospace">e{e.escalon}</text>
                 <line x1={barraX - 2} y1={yPos(e.nivel_min_m)} x2={barraX} y2={yPos(e.nivel_min_m)} stroke="var(--color-texto-sec)" strokeWidth={0.5} />
                 <line x1={barraX - 2} y1={yPos(e.nivel_max_m)} x2={barraX} y2={yPos(e.nivel_max_m)} stroke="var(--color-texto-sec)" strokeWidth={0.5} />
               </g>
@@ -151,7 +151,7 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
                 />
                 <line x1={barraX} y1={yPos(nivelActual)} x2={barraX + barraW} y2={yPos(nivelActual)} stroke={nivelColor} strokeWidth={2.5} />
                 <circle cx={barraX + barraW / 2} cy={yPos(nivelActual)} r={5} fill={nivelColor} stroke="white" strokeWidth={2} />
-                <text x={labelX + 60} y={yPos(nivelActual) - 6} fontSize="11" fontWeight="bold" fill={nivelColor} fontFamily="ui-monospace, monospace" textAnchor="end">
+                <text x={labelX + 60} y={yPos(nivelActual) - 6} fontSize="12" fontWeight="bold" fill={nivelColor} fontFamily="ui-monospace, monospace" textAnchor="end">
                   {nivelActual.toFixed(2)}m
                 </text>
               </g>

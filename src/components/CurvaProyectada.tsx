@@ -43,11 +43,11 @@ export default function CurvaProyectada({ observaciones, vientoHistorico, viento
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
   const W = 680;
-  const Hpx = 220;
-  const padL = 40;
+  const Hpx = 240;
+  const padL = 44;
   const padR = 18;
-  const padT = 16;
-  const padB = 30;
+  const padT = 18;
+  const padB = 32;
 
   const t0 = Math.min(ahora, ...(obs48h.map((o) => new Date(o.timestamp).getTime()) ?? [ahora]));
   const t1 = proyeccion.puntos[proyeccion.puntos.length - 1].timestamp;
@@ -141,29 +141,29 @@ export default function CurvaProyectada({ observaciones, vientoHistorico, viento
         {yLabels.map((v) => (
           <g key={v}>
             <line x1={padL} y1={yPos(v)} x2={W - padR} y2={yPos(v)} stroke="var(--chart-grid)" strokeWidth="1" />
-            <text x={padL - 6} y={yPos(v) + 3} fontSize="9" fill="var(--chart-axis)" textAnchor="end">{v.toFixed(1)}</text>
+            <text x={padL - 8} y={yPos(v) + 3.5} fontSize="11" fill="var(--chart-axis)" textAnchor="end">{v.toFixed(1)}</text>
           </g>
         ))}
 
         {xLabels.map((xl) => (
-          <text key={xl.label + xl.x.toFixed(0)} x={xl.x} y={Hpx - 8} fontSize={xl.esDia ? "9" : "8"} fontWeight={xl.esDia ? 600 : 400} fill="var(--chart-axis)" textAnchor="middle">
+          <text key={xl.label + xl.x.toFixed(0)} x={xl.x} y={Hpx - 9} fontSize={xl.esDia ? "11" : "10"} fontWeight={xl.esDia ? 600 : 400} fill="var(--chart-axis)" textAnchor="middle">
             {xl.label}
           </text>
         ))}
 
         <line x1={xPos(ahora)} y1={padT} x2={xPos(ahora)} y2={Hpx - padB} stroke="var(--chart-ahora)" strokeWidth="1" strokeDasharray="3,3" />
-        <text x={xPos(ahora) + 3} y={padT + 9} fontSize="8" fill="var(--chart-ahora)" fontWeight="600">AHORA</text>
+        <text x={xPos(ahora) + 4} y={padT + 10} fontSize="10" fill="var(--chart-ahora)" fontWeight="600">AHORA</text>
 
         {umbralEval && (
           <g>
             <line x1={padL} y1={yPos(umbralEval.valor_m)} x2={W - padR} y2={yPos(umbralEval.valor_m)} stroke="var(--color-atencion)" strokeWidth="1.5" strokeDasharray="6,4" />
-            <text x={padL + 3} y={yPos(umbralEval.valor_m) - 4} fontSize="8" fill="var(--color-atencion)" fontStyle="italic" fontWeight="600">eval {umbralEval.valor_m.toFixed(1)}</text>
+            <text x={padL + 4} y={yPos(umbralEval.valor_m) - 4} fontSize="10" fill="var(--color-atencion)" fontStyle="italic" fontWeight="600">eval {umbralEval.valor_m.toFixed(1)}</text>
           </g>
         )}
         {umbralNR && (
           <g>
             <line x1={padL} y1={yPos(umbralNR.valor_m)} x2={W - padR} y2={yPos(umbralNR.valor_m)} stroke="var(--color-rojo-alerta)" strokeWidth="1.5" strokeDasharray="6,4" />
-            <text x={padL + 3} y={yPos(umbralNR.valor_m) - 4} fontSize="8" fill="var(--color-rojo-alerta)" fontStyle="italic" fontWeight="600">NR {umbralNR.valor_m.toFixed(1)}</text>
+            <text x={padL + 4} y={yPos(umbralNR.valor_m) - 4} fontSize="10" fill="var(--color-rojo-alerta)" fontStyle="italic" fontWeight="600">NR {umbralNR.valor_m.toFixed(1)}</text>
           </g>
         )}
 
@@ -178,7 +178,7 @@ export default function CurvaProyectada({ observaciones, vientoHistorico, viento
         {proyeccion.extremos.filter((e) => e.timestamp > ahora).slice(0, 4).map((e) => (
           <g key={e.timestamp}>
             <circle cx={xPos(e.timestamp)} cy={yPos(e.nivel_m)} r="3.5" fill={e.tipo === "pleamar" ? "var(--chart-main)" : "var(--chart-axis)"} stroke="#fff" strokeWidth="1.2" />
-            <text x={xPos(e.timestamp)} y={yPos(e.nivel_m) - 7} fontSize="8" fill={e.tipo === "pleamar" ? "var(--chart-main)" : "var(--chart-axis)"} fontWeight="600" textAnchor="middle">
+            <text x={xPos(e.timestamp)} y={yPos(e.nivel_m) - 7} fontSize="10" fill={e.tipo === "pleamar" ? "var(--chart-main)" : "var(--chart-axis)"} fontWeight="600" textAnchor="middle">
               {e.tipo === "pleamar" ? "P" : "B"}{formatearFecha(e.timestamp).split(",").pop()}
             </text>
           </g>
@@ -186,9 +186,9 @@ export default function CurvaProyectada({ observaciones, vientoHistorico, viento
       </svg>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-texto-sec dark:text-gray-400">
-        <span className="flex items-center gap-1"><span className="w-3 h-[2px] bg-baliza inline-block" /> Observado</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-[2px] bg-baliza dark:bg-marea-dark inline-block" /> Observado</span>
         <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-2 border-dashed border-alerta" /> Proyección modelo</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-[6px] bg-baliza/10 inline-block" /> banda p10–p90</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-[6px] bg-alerta/10 inline-block" /> banda p10–p90</span>
         {proyeccion.regresion && <span className="flex items-center gap-1"><span className="w-3 h-[2px] bg-bajante inline-block" /> con viento (sudestada)</span>}
         {umbralNR && <span className="flex items-center gap-1"><span className="w-3 h-0 inline-block border-t-[1.5px] border-dashed border-rojo-alerta" /> NR {umbralNR.valor_m.toFixed(1)}m</span>}
       </div>
