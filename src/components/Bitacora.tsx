@@ -11,6 +11,18 @@ interface AlertaItem {
 
 const colorAlertaChart = { verde: "var(--color-ok)", amarilla: "var(--color-atencion)", roja: "var(--color-rojo-alerta)", azul: "var(--color-bajante)", evacuacion: "var(--color-rojo-oscuro)" } as const;
 
+const TIPOS_EVENTO = [
+  { valor: "organizacion", etiqueta: "Organización" },
+  { valor: "comunicacion", etiqueta: "Comunicación" },
+  { valor: "logistica", etiqueta: "Logística" },
+  { valor: "evacuacion", etiqueta: "Evacuación" },
+  { valor: "otro", etiqueta: "Otro" },
+] as const;
+
+function etiquetaTipo(valor: string | null | undefined): string {
+  return TIPOS_EVENTO.find((t) => t.valor === valor)?.etiqueta ?? "Otro";
+}
+
 function formatearFecha(iso: string) {
   return new Date(iso).toLocaleString("es-AR", {
     day: "numeric", month: "short", year: "numeric",
@@ -18,10 +30,18 @@ function formatearFecha(iso: string) {
   });
 }
 
+function aLocalInputValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial, alertas, umbralEval, umbralNR }:
   { nivelActual: number; onRegistro: () => void; loggedIn?: boolean; historial?: Lectura[]; alertas?: AlertaItem[]; umbralEval?: number; umbralNR?: number }) {
   const [abierto, setAbierto] = useState(false);
   const [escalones, setEscalones] = useState("");
+  const [tipoEvento, setTipoEvento] = useState<string>("organizacion");
+  const [fechaEvento, setFechaEvento] = useState(() => aLocalInputValue(new Date().toISOString()));
   const [evacuo, setEvacuo] = useState(false);
   const [horaSalida, setHoraSalida] = useState("");
   const [notas, setNotas] = useState("");
@@ -121,6 +141,8 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
     const payload = {
       nivel_registrado_m: nivelActual,
       escalones_restantes: escalones ? parseInt(escalones, 10) : null,
+      tipo_evento: tipoEvento,
+      fecha_evento: fechaEvento ? new Date(fechaEvento).toISOString() : null,
       se_evacuo: evacuo,
       hora_salida: horaSalida || null,
       notas: notas || null,
@@ -147,6 +169,8 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
     } else {
       setMensaje("Registrado");
       setEscalones("");
+      setTipoEvento("organizacion");
+      setFechaEvento(aLocalInputValue(new Date().toISOString()));
       setEvacuo(false);
       setHoraSalida("");
       setNotas("");
@@ -189,6 +213,29 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
             <p className="text-xs font-mono text-texto-sec dark:text-gray-400">Nivel actual: {nivelActual.toFixed(2)}m</p>
 
             <div>
+              <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Tipo de evento</label>
+              <select
+                value={tipoEvento}
+                onChange={(e) => setTipoEvento(e.target.value)}
+                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm"
+              >
+                {TIPOS_EVENTO.map((t) => (
+                  <option key={t.valor} value={t.valor}>{t.etiqueta}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Fecha y hora del evento</label>
+              <input
+                type="datetime-local"
+                value={fechaEvento}
+                onChange={(e) => setFechaEvento(e.target.value)}
+                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+              />
+            </div>
+
+            <div>
               <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Escalones restantes (opcional)</label>
               <input
                 type="number"
@@ -199,26 +246,30 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
               />
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="evacuo"
-                checked={evacuo}
-                onChange={(e) => setEvacuo(e.target.checked)}
-                className="rounded border-borde dark:border-gray-600 dark:bg-surface-dark"
-              />
-              <label htmlFor="evacuo" className="text-sm text-texto-sec dark:text-gray-400">Se evacuó</label>
-            </div>
+            {tipoEvento === "evacuacion" && (
+              <>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="evacuo"
+                    checked={evacuo}
+                    onChange={(e) => setEvacuo(e.target.checked)}
+                    className="rounded border-borde dark:border-gray-600 dark:bg-surface-dark"
+                  />
+                  <label htmlFor="evacuo" className="text-sm text-texto-sec dark:text-gray-400">Se evacuó</label>
+                </div>
 
-            <div>
-              <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Hora de salida</label>
-              <input
-                type="time"
-                value={horaSalida}
-                onChange={(e) => setHoraSalida(e.target.value)}
-                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
-              />
-            </div>
+                <div>
+                  <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Hora de salida</label>
+                  <input
+                    type="time"
+                    value={horaSalida}
+                    onChange={(e) => setHoraSalida(e.target.value)}
+                    className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                  />
+                </div>
+              </>
+            )}
 
             <div>
               <label className="text-xs text-texto-sec dark:text-gray-400 block mb-1">Notas</label>
@@ -253,11 +304,20 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {entradas.map((e) => (
                   <div key={e.id} className="text-xs border-b border-borde/50 dark:border-gray-700 pb-2 last:border-0">
-                    <p className="text-texto-sec dark:text-gray-400 font-mono">{formatearFecha(e.timestamp)}</p>
-                    <p className="text-texto dark:text-gray-300">
+                    <p className="flex items-center gap-2 text-texto-sec dark:text-gray-400">
+                      <span className="inline-block px-1.5 py-0.5 rounded border border-baliza/30 bg-baliza/10 text-baliza dark:text-marea-dark font-sans uppercase tracking-wide">
+                        {etiquetaTipo(e.tipo_evento)}
+                      </span>
+                      <span className="font-mono">
+                        {e.fecha_evento ? formatearFecha(e.fecha_evento) : formatearFecha(e.timestamp)}
+                      </span>
+                      <span className="text-texto-sec/70 dark:text-gray-500 italic">· registrado {formatearFecha(e.timestamp)}</span>
+                    </p>
+                    <p className="text-texto dark:text-gray-300 mt-0.5">
                       Nivel: <span className="font-mono">{e.nivel_registrado_m.toFixed(2)}m</span>
                       {e.escalones_restantes !== null && <span> · {e.escalones_restantes} escalones</span>}
                       {e.se_evacuo && <span> · Evacuó</span>}
+                      {e.hora_salida && <span> · salida {e.hora_salida.slice(0, 5)}</span>}
                     </p>
                     {e.notas && <p className="text-texto-sec dark:text-gray-400 italic">{e.notas}</p>}
                   </div>

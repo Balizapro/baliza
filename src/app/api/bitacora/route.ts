@@ -23,6 +23,8 @@ export async function POST(req: Request) {
     se_evacuo: body.se_evacuo ?? false,
     hora_salida: body.hora_salida || null,
     notas: body.notas || null,
+    tipo_evento: body.tipo_evento || "otro",
+    fecha_evento: body.fecha_evento || null,
   }).select().single();
 
   if (error) {

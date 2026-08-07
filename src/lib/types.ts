@@ -60,6 +60,8 @@ export interface Bitacora {
   se_evacuo: boolean;
   hora_salida: string | null;
   notas: string | null;
+  tipo_evento?: string | null;
+  fecha_evento?: string | null;
 }
 
 export interface EquivalenciaEscalon {
