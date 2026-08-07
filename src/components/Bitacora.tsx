@@ -12,28 +12,52 @@ interface AlertaItem {
 const colorAlertaChart = { verde: "var(--color-ok)", amarilla: "var(--color-atencion)", roja: "var(--color-rojo-alerta)", azul: "var(--color-bajante)", evacuacion: "var(--color-rojo-oscuro)" } as const;
 
 const TIPOS_EVENTO = [
-  { valor: "organizacion", etiqueta: "Organización" },
-  { valor: "comunicacion", etiqueta: "Comunicación" },
-  { valor: "logistica", etiqueta: "Logística" },
-  { valor: "evacuacion", etiqueta: "Evacuación" },
-  { valor: "otro", etiqueta: "Otro" },
+  { valor: "organizacion", etiqueta: "Organización", color: "var(--color-baliza)", bg: "rgba(14,71,73,0.12)" },
+  { valor: "comunicacion", etiqueta: "Comunicación", color: "var(--color-bajante)", bg: "rgba(29,78,216,0.12)" },
+  { valor: "logistica", etiqueta: "Logística", color: "var(--color-atencion)", bg: "rgba(139,78,10,0.12)" },
+  { valor: "evacuacion", etiqueta: "Evacuación", color: "var(--color-rojo-alerta)", bg: "rgba(169,50,29,0.12)" },
+  { valor: "otro", etiqueta: "Otro", color: "var(--color-texto-sec)", bg: "rgba(91,110,104,0.12)" },
 ] as const;
 
-function etiquetaTipo(valor: string | null | undefined): string {
-  return TIPOS_EVENTO.find((t) => t.valor === valor)?.etiqueta ?? "Otro";
+function tipoInfo(valor: string | null | undefined) {
+  return TIPOS_EVENTO.find((t) => t.valor === valor) ?? TIPOS_EVENTO[4];
 }
 
-function formatearFecha(iso: string) {
-  return new Date(iso).toLocaleString("es-AR", {
-    day: "numeric", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
+function formatearHora(iso: string): string {
+  return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function etiquetaDia(iso: string): string {
+  const d = new Date(iso);
+  const hoy = new Date();
+  const ayer = new Date();
+  ayer.setDate(hoy.getDate() - 1);
+  const mismoDia = (a: Date, b: Date) =>
+    a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
+  if (mismoDia(d, hoy)) return "Hoy";
+  if (mismoDia(d, ayer)) return "Ayer";
+  return d.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "short" });
 }
 
 function aLocalInputValue(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Agrupa las entradas (ya ordenadas desc por timestamp) por día calendario.
+function agruparPorDia(entradas: BitacoraType[]): { clave: string; etiqueta: string; items: BitacoraType[] }[] {
+  const grupos: { clave: string; etiqueta: string; items: BitacoraType[] }[] = [];
+  for (const e of entradas) {
+    const clave = new Date(e.timestamp).toDateString();
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && ultimo.clave === clave) {
+      ultimo.items.push(e);
+    } else {
+      grupos.push({ clave, etiqueta: etiquetaDia(e.timestamp), items: [e] });
+    }
+  }
+  return grupos;
 }
 
 export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial, alertas, umbralEval, umbralNR }:
@@ -295,31 +319,69 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
           </form>
 
           <div>
-            <p className="font-serif text-sm font-medium text-texto dark:text-gray-300 mb-2">Historial</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="font-serif text-sm font-medium text-texto dark:text-gray-300">Historial</p>
+              {entradas.length > 0 && (
+                <span className="text-xs px-2 py-0.5 rounded-full border border-baliza/30 bg-baliza/10 text-baliza dark:text-marea-dark font-mono">
+                  {entradas.length} eventos
+                </span>
+              )}
+            </div>
             {cargandoHistorial ? (
               <p className="text-xs italic text-texto-sec dark:text-gray-400">Cargando...</p>
             ) : entradas.length === 0 ? (
               <p className="text-xs italic text-texto-sec dark:text-gray-400">Sin registros</p>
             ) : (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {entradas.map((e) => (
-                  <div key={e.id} className="text-xs border-b border-borde/50 dark:border-gray-700 pb-2 last:border-0">
-                    <p className="flex items-center gap-2 text-texto-sec dark:text-gray-400">
-                      <span className="inline-block px-1.5 py-0.5 rounded border border-baliza/30 bg-baliza/10 text-baliza dark:text-marea-dark font-sans uppercase tracking-wide">
-                        {etiquetaTipo(e.tipo_evento)}
-                      </span>
-                      <span className="font-mono">
-                        {e.fecha_evento ? formatearFecha(e.fecha_evento) : formatearFecha(e.timestamp)}
-                      </span>
-                      <span className="text-texto-sec/70 dark:text-gray-500 italic">· registrado {formatearFecha(e.timestamp)}</span>
+              <div className="space-y-4 max-h-72 overflow-y-auto pr-1">
+                {agruparPorDia(entradas).map((grupo) => (
+                  <div key={grupo.clave}>
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-texto-sec/80 dark:text-gray-500 mb-1.5">
+                      {grupo.etiqueta}
                     </p>
-                    <p className="text-texto dark:text-gray-300 mt-0.5">
-                      Nivel: <span className="font-mono">{e.nivel_registrado_m.toFixed(2)}m</span>
-                      {e.escalones_restantes !== null && <span> · {e.escalones_restantes} escalones</span>}
-                      {e.se_evacuo && <span> · Evacuó</span>}
-                      {e.hora_salida && <span> · salida {e.hora_salida.slice(0, 5)}</span>}
-                    </p>
-                    {e.notas && <p className="text-texto-sec dark:text-gray-400 italic">{e.notas}</p>}
+                    <ol className="relative ml-2 border-l-2 border-borde dark:border-gray-700 pl-3 space-y-3">
+                      {grupo.items.map((e) => {
+                        const tipo = tipoInfo(e.tipo_evento);
+                        return (
+                          <li key={e.id} className="relative">
+                            <span
+                              className="absolute -left-[17.5px] top-[3px] w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-card-dark"
+                              style={{ background: tipo.color }}
+                              aria-hidden="true"
+                            />
+                            <div className="flex items-start gap-2">
+                              <span className="font-mono text-[11px] text-texto-sec dark:text-gray-400 mt-px flex-shrink-0">
+                                {formatearHora(e.fecha_evento || e.timestamp)}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="flex flex-wrap items-center gap-1.5">
+                                  <span
+                                    className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide"
+                                    style={{ color: tipo.color, background: tipo.bg }}
+                                  >
+                                    {tipo.etiqueta}
+                                  </span>
+                                  <span className="font-mono text-texto dark:text-gray-200">
+                                    {e.nivel_registrado_m.toFixed(2)}m
+                                  </span>
+                                  {e.escalones_restantes !== null && (
+                                    <span className="text-texto-sec dark:text-gray-400">· {e.escalones_restantes} escalones</span>
+                                  )}
+                                  {e.se_evacuo && (
+                                    <span className="text-rojo-alerta dark:text-red-400 font-medium">· Evacuó</span>
+                                  )}
+                                  {e.hora_salida && (
+                                    <span className="text-texto-sec dark:text-gray-400">· salida {e.hora_salida.slice(0, 5)}</span>
+                                  )}
+                                </p>
+                                {e.notas && (
+                                  <p className="text-texto-sec dark:text-gray-400 mt-0.5 leading-snug">{e.notas}</p>
+                                )}
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ol>
                   </div>
                 ))}
               </div>
