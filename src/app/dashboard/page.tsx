@@ -580,6 +580,7 @@ export default function Dashboard() {
           nivelActual={sfObs?.nivel_m ?? null}
           tendencia={tendenciaSF}
           ahora={ahora}
+          proxPleamar={prediccionExtremos.pleamar}
         />
 
         {/* SHN + SMN en paralelo */}

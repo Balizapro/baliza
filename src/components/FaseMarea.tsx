@@ -10,6 +10,8 @@ interface Props {
   nivelActual: number | null;
   tendencia: Tendencia | null;
   ahora: number;
+  // Próxima pleamar del siguiente ciclo, estimada del historial observado (no del SHN).
+  proxPleamar?: { timestamp: number; nivel_m: number | null } | null;
 }
 
 // Convierte "DD/MM/YYYY HH:MM" (local) a timestamp ms.
@@ -32,7 +34,7 @@ function formatoCuentaAtras(ms: number): string {
   return "ahora";
 }
 
-export default function FaseMarea({ avisos, nivelActual, tendencia, ahora }: Props) {
+export default function FaseMarea({ avisos, nivelActual, tendencia, ahora, proxPleamar }: Props) {
   const mareologico = [...avisos]
     .filter((a) => a.tipo === "pronostico_mareologico")
     .sort((a, b) => (b.publicado ?? "").localeCompare(a.publicado ?? ""))[0];
@@ -78,8 +80,8 @@ export default function FaseMarea({ avisos, nivelActual, tendencia, ahora }: Pro
     veredicto = `El agua está subiendo hacia el pico (${picoTxt}). Si el pico es alto, evacuar ANTES de que llegue (evitás salir en el agua más alta). Si no es posible, la bajada posterior es la ventana de respaldo.`;
     clase = "bg-atencion/10 text-atencion dark:text-atencion-dark";
   } else if (bajando) {
-    veredicto = pico
-      ? `El pico (${picoPasado ? `≈ ${formatearHora(picoPasado.ts)}` : "ya alcanzado"}) pasó — el agua baja: ventana segura para evacuar AHORA. Volverá a subir recién con la próxima pleamar (${formatearHora(pico.ts)}).`
+    veredicto = proxPleamar
+      ? `El pico (${picoPasado ? `≈ ${formatearHora(picoPasado.ts)}` : "ya alcanzado"}) pasó — el agua baja: ventana segura para evacuar AHORA. Volverá a subir con la próxima crecida estacional, ≈ ${formatearHora(proxPleamar.timestamp)}.`
       : "El pico ya pasó — el agua está bajando: ventana segura para evacuar AHORA.";
     clase = "bg-ok/10 text-ok dark:text-ok";
   } else {
