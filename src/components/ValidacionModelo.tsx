@@ -38,7 +38,6 @@ export default function ValidacionModelo({ observaciones, vientoHistorico }: Pro
     );
   }
 
-  const mejor = val.horizontes[0];
   const label24 = val.horizontes.find((h) => h.horizonte_h === 24);
 
   return (
