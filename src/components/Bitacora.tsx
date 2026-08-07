@@ -100,9 +100,9 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
     const minVal = Math.min(...lecturas.map((l) => l.nivel_m), 0);
     const rango = maxVal - minVal || 1;
     const ancho = 600;
-    const alto = 100;
-    const padTop = 8;
-    const padBot = 16;
+    const alto = 120;
+    const padTop = 10;
+    const padBot = 18;
     const chartH = alto - padTop - padBot;
     const xScale = (i: number) => (i / Math.max(lecturas.length - 1, 1)) * ancho;
     const yScale = (v: number) => padTop + chartH - ((v - minVal) / rango) * chartH;
@@ -126,13 +126,13 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
         {umbralEval && (
           <>
             <line x1="0" y1={yScale(umbralEval)} x2={ancho} y2={yScale(umbralEval)} stroke="var(--color-atencion)" strokeWidth="0.5" strokeDasharray="3,2"/>
-            <text x={ancho - 1} y={yScale(umbralEval) - 1} fontSize="5" fill="var(--color-atencion)" textAnchor="end">eval</text>
+            <text x={ancho - 2} y={yScale(umbralEval) - 2} fontSize="9" fill="var(--color-atencion)" textAnchor="end">eval</text>
           </>
         )}
         {umbralNR && (
           <>
             <line x1="0" y1={yScale(umbralNR)} x2={ancho} y2={yScale(umbralNR)} stroke="var(--color-rojo-alerta)" strokeWidth="0.5" strokeDasharray="3,2"/>
-            <text x={ancho - 1} y={yScale(umbralNR) - 1} fontSize="5" fill="var(--color-rojo-alerta)" textAnchor="end">NR</text>
+            <text x={ancho - 2} y={yScale(umbralNR) - 2} fontSize="9" fill="var(--color-rojo-alerta)" textAnchor="end">NR</text>
           </>
         )}
         {/* Alertas */}
@@ -146,13 +146,13 @@ export default function Bitacora({ nivelActual, onRegistro, loggedIn, historial,
           ).nivel_m);
           return (
             <g key={i}>
-              <line x1={x} y1={padTop} x2={x} y2={alto - padBot} stroke={colorAlertaChart[a.nivel]} strokeWidth="0.5" strokeDasharray="2,2" opacity="0.5"/>
-              <circle cx={x} cy={y} r="2.5" fill={colorAlertaChart[a.nivel]} stroke="#fff" strokeWidth="0.5"/>
+              <line x1={x} y1={padTop} x2={x} y2={alto - padBot} stroke={colorAlertaChart[a.nivel]} strokeWidth="1" strokeDasharray="2,2" opacity="0.6"/>
+              <circle cx={x} cy={y} r="3.5" fill={colorAlertaChart[a.nivel]} stroke="#fff" strokeWidth="1"/>
             </g>
           );
         })}
         {/* Nivel actual */}
-        <circle cx={ancho - 1} cy={yScale(nivelActual)} r="3" fill="var(--chart-obs)" stroke="#fff" strokeWidth="0.5"/>
+        <circle cx={ancho - 1} cy={yScale(nivelActual)} r="4" fill="var(--chart-obs)" stroke="#fff" strokeWidth="1.5"/>
       </svg>
     );
   }, [historial, alertas, umbralEval, umbralNR, nivelActual]);
