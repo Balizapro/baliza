@@ -422,6 +422,45 @@ if (empeoro || recordProno) {
         }
       }
     }
+
+    // "Evacuar antes del pico": mientras el agua sube hacia un pico pronosticado
+    // alto (supera el umbral de evaluación), avisa ANTES de que llegue — evitando
+    // salir en el agua más alta. Dedup por timestamp del pico: solo se re-notifica
+    // si el pico pronosticado cambia (otra crecida), no en cada lectura.
+    if (tendencia === "subiendo" && picoProno && picoProno.valor_m > umbralEval) {
+      const clavePico = `preaviso_pico_${new Date(picoProno.timestamp).getTime()}`;
+      const { data: cfgPrePico } = await supabase
+        .from("configuracion")
+        .select("valor")
+        .eq("clave", clavePico)
+        .maybeSingle();
+      if (!cfgPrePico) {
+        await supabase.from("configuracion").upsert(
+          { clave: clavePico, valor: "1" },
+          { onConflict: "clave" }
+        );
+        const tituloPrePico = "Baliza — El agua sigue subiendo";
+        const cuerpoPrePico =
+          `Aún sube y el pico pronosticado (${picoProno.valor_m.toFixed(2)}m) llega ${formatearMomento(picoProno.timestamp)} ` +
+          `— por encima de la evaluación (${umbralEval.toFixed(1)}m). Si el pico es alto, evacuar ANTES de que llegue.`;
+        try {
+          await fetch(
+            `${Deno.env.get("SUPABASE_URL")}/functions/v1/enviar-notificacion`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") ?? ""}`,
+                "x-notificacion-secret": Deno.env.get("NOTIFICACION_SECRET") ?? "",
+              },
+              body: JSON.stringify({ titulo: tituloPrePico, cuerpo: cuerpoPrePico, url: "/dashboard" }),
+            }
+          );
+        } catch (preErr) {
+          console.error("[evaluar-alerta] evacuar antes del pico: error notif", preErr);
+        }
+      }
+    }
     // Resetea la marca de "ventana segura" cuando vuelve a subir, para el próximo ciclo.
     if (tendencia === "subiendo") {
       await supabase.from("configuracion").upsert(
