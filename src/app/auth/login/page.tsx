@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -35,9 +36,11 @@ export default function LoginPage() {
     <div className="min-h-screen bg-fondo dark:bg-surface-dark flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <img
+          <Image
             src="/baliza-logo-principal.svg"
             alt="Baliza"
+            width={320}
+            height={160}
             className="h-28 w-auto mb-3"
           />
         </div>

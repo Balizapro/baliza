@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn, AvisoCrecida, NivelAlerta } from "@/lib/types";
@@ -357,7 +358,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-fondo dark:bg-surface-dark">
       <header className="bg-baliza dark:bg-header-dark text-white px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center gap-x-3 gap-y-2 relative shadow-sm">
         <Link href="/" className="flex items-center gap-3">
-          <img src="/baliza-boya.svg" alt="Baliza" className="w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0" />
+          <Image src="/baliza-boya.svg" alt="Baliza" width={56} height={56} className="w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0" />
           <span className="logo-wordmark">baliza</span>
         </Link>
         <p className="text-xs text-fondo/70 dark:text-white/50 italic font-serif hidden sm:block border-l border-fondo/20 pl-3 leading-tight">
