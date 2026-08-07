@@ -25,6 +25,7 @@ import AvisoCrecidaCard from "@/components/AvisoCrecidaCard";
 import { analizarCiclo, predecirProximosExtremos } from "@/lib/ciclo";
 import { useAhora } from "@/lib/useAhora";
 import CurvaProyectada from "@/components/CurvaProyectada";
+import FaseMarea from "@/components/FaseMarea";
 import { ADMINS } from "@/lib/constants";
 
 function direccionCardinal(grados: number): string {
@@ -571,6 +572,14 @@ export default function Dashboard() {
           ahora={ahora}
           umbralEval={umbralEval ?? null}
           umbralNR={umbralNR ?? null}
+        />
+
+        {/* Fase de marea: veredicto de subida/bajada y pico pronosticado (SHN) */}
+        <FaseMarea
+          avisos={datos?.avisosShn ?? []}
+          nivelActual={sfObs?.nivel_m ?? null}
+          tendencia={tendenciaSF}
+          ahora={ahora}
         />
 
         {/* SHN + SMN en paralelo */}
