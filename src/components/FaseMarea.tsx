@@ -27,8 +27,8 @@ function formatoCuentaAtras(ms: number): string {
   const diff = Math.max(0, ms - Date.now());
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
-  if (h > 0) return `en ${h}h ${m}m`;
-  if (m > 0) return `en ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}min`;
   return "ahora";
 }
 
@@ -43,8 +43,15 @@ export default function FaseMarea({ avisos, nivelActual, tendencia, ahora }: Pro
     .filter((a) => a.ts >= ahora)
     .sort((a, b) => a.ts - b.ts);
 
-  const proxiPleamar = futuros.find((a) => a.estado === "PLEAMAR") ?? null;
-  const proxiBajamar = futuros.find((a) => a.estado === "BAJAMAR") ?? null;
+  // Próximo pico y próximo pozo (extremos pronosticados que aún no pasaron).
+  const pico = futuros.find((a) => a.estado === "PLEAMAR") ?? null;
+  const pozo = futuros.find((a) => a.estado === "BAJAMAR") ?? null;
+
+  // Último pico que ya pasó (para el estado bajando: referenciar el techo reciente).
+  const picoPasado = [...alturas]
+    .map((a) => ({ ...a, ts: tsAltura(a.fecha, a.hora) }))
+    .filter((a) => a.estado === "PLEAMAR" && a.ts <= ahora)
+    .sort((a, b) => b.ts - a.ts)[0] ?? null;
 
   if (!mareologico || (alturas.length === 0 && !tendencia)) {
     return (
@@ -60,34 +67,25 @@ export default function FaseMarea({ avisos, nivelActual, tendencia, ahora }: Pro
   const subiendo = tendencia?.direccion === "subiendo";
   const bajando = tendencia?.direccion === "bajando";
 
-  // Veredicto según la fase actual y la posición respecto al próximo pico.
+  // VeredicTo según la fase y el extremo del ciclo actual.
   let veredicto: string;
   let clase: string;
   if (subiendo) {
-    if (proxiPleamar) {
-      veredicto = `El agua sigue subiendo. Pico pronosticado ${formatearHora(proxiPleamar.ts)} (${proxiPleamar.altura.toFixed(2)}m) ${formatoCuentaAtras(proxiPleamar.ts)}. Esperar al pico y salir en bajada deja el agua más baja para evacuar.`;
-    } else {
-      veredicto = "El agua sigue subiendo. No hay pleamar pronosticada en la vigencia actual del SHN.";
-    }
+    // Muestra ambos escenarios: lo ideal (evacuar antes del pico) y el respaldo (la bajada).
+    const picoTxt = pico
+      ? `${formatearHora(pico.ts)} (${pico.altura.toFixed(2)}m), ${formatoCuentaAtras(pico.ts)}`
+      : "aún sin pleamar pronosticada en la vigencia";
+    veredicto = `El agua está subiendo hacia el pico (${picoTxt}). Si el pico es alto, evacuar ANTES de que llegue (evitás salir en el agua más alta). Si no es posible, la bajada posterior es la ventana de respaldo.`;
     clase = "bg-atencion/10 text-atencion dark:text-atencion-dark";
   } else if (bajando) {
-    veredicto = proxiPleamar
-      ? `El agua ya está bajando — ventana segura para evacuar. Volverá a subir recién ${formatearHora(proxiPleamar.ts)} (${proxiPleamar.altura.toFixed(2)}m).`
-      : "El agua ya está bajando — ventana segura para evacuar.";
+    veredicto = pico
+      ? `El pico (${picoPasado ? `≈ ${formatearHora(picoPasado.ts)}` : "ya alcanzado"}) pasó — el agua baja: ventana segura para evacuar AHORA. Volverá a subir recién con la próxima pleamar (${formatearHora(pico.ts)}).`
+      : "El pico ya pasó — el agua está bajando: ventana segura para evacuar AHORA.";
     clase = "bg-ok/10 text-ok dark:text-ok";
   } else {
     veredicto = "Nivel estable en este momento.";
     clase = "bg-fondo/50 dark:bg-white/5 text-texto-sec dark:text-gray-400";
   }
-
-const picoSupera = proxiPleamar && nivelActual != null && proxiPleamar.altura > nivelActual;
-
-  // Comparación medido vs pronosticado: si el nivel medido ya alcanza/supera el
-  // pico pronosticado, el agua llegó antes de lo esperado (señal de viento/met.).
-  const medidorPorProno =
-    proxiPleamar && nivelActual != null
-      ? nivelActual - proxiPleamar.altura
-      : null;
 
   return (
     <section className="dashboard-section">
@@ -116,29 +114,21 @@ const picoSupera = proxiPleamar && nivelActual != null && proxiPleamar.altura > 
           )}
         </div>
 
-        {proxiPleamar && (
-          <div className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${picoSupera ? "bg-rojo-alerta/10 text-rojo-alerta dark:text-rojo-dark" : "bg-fondo/50 dark:bg-white/5 text-texto-sec dark:text-gray-400"}`}>
-            <span>Pico (pleamar) pronosticado</span>
-            <span className="font-mono font-bold">
-              {proxiPleamar.altura.toFixed(2)}m · {formatearHora(proxiPleamar.ts)}
+        {pico && (
+          <div className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${subiendo ? "bg-rojo-alerta/10 text-rojo-alerta dark:text-rojo-dark" : "bg-fondo/50 dark:bg-white/5 text-texto-sec dark:text-gray-400"}`}>
+            <span>Próximo pico (pleamar)</span>
+            <span className="font-mono font-bold text-right">
+              {pico.altura.toFixed(2)}m · {formatearHora(pico.ts)}
+              {subiendo && <span className="block text-xs font-normal mt-0.5">{formatoCuentaAtras(pico.ts)}</span>}
             </span>
           </div>
         )}
 
-        {proxiBajamar && (
+        {pozo && (
           <div className="flex items-center justify-between rounded-lg px-3 py-2 text-sm bg-fondo/50 dark:bg-white/5 text-texto-sec dark:text-gray-400">
             <span>Bajada (bajamar)</span>
             <span className="font-mono font-bold">
-              {proxiBajamar.altura.toFixed(2)}m · {formatearHora(proxiBajamar.ts)}
-            </span>
-          </div>
-        )}
-
-        {medidorPorProno != null && proxiPleamar && (
-          <div className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${medidorPorProno >= 0 ? "bg-rojo-alerta/10 text-rojo-alerta dark:text-rojo-dark" : "bg-fondo/50 dark:bg-white/5 text-texto-sec dark:text-gray-400"}`}>
-            <span>Medido vs pronosticado</span>
-            <span className="font-mono font-bold">
-              {medidorPorProno >= 0 ? `el agua ya supera al pico pronosticado (+${medidorPorProno.toFixed(2)}m)` : `faltan ${Math.abs(medidorPorProno).toFixed(2)}m para el pico pronosticado`}
+              {pozo.altura.toFixed(2)}m · {formatearHora(pozo.ts)}
             </span>
           </div>
         )}
@@ -154,8 +144,7 @@ const picoSupera = proxiPleamar && nivelActual != null && proxiPleamar.altura > 
           mensaje={[
             `🌊 Baliza — Fase de marea`,
             `Nivel ahora: ${nivelActual != null ? `${nivelActual.toFixed(2)}m` : "--"} ${tendencia ? `(${tendencia.direccion})` : ""}`,
-            proxiPleamar ? `Pico: ${proxiPleamar.altura.toFixed(2)}m · ${formatearHora(proxiPleamar.ts)}` : null,
-            medidorPorProno != null && proxiPleamar ? (medidorPorProno >= 0 ? `⚠ El agua ya supera el pico pronosticado (+${medidorPorProno.toFixed(2)}m)` : `El agua sube; faltan ${Math.abs(medidorPorProno).toFixed(2)}m al pico`) : null,
+            pico ? `Próximo pico: ${pico.altura.toFixed(2)}m · ${formatearHora(pico.ts)}` : null,
             veredicto,
             `⚠ Más info: https://baliza-ashy.vercel.app`,
           ].filter(Boolean).join("\n")}
