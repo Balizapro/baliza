@@ -345,7 +345,7 @@ serve(async (req) => {
       }
     }
 
-    if (empeoro || recordProno) {
+if (empeoro || recordProno) {
       const titulo =
         alertaFinal === "evacuacion"
           ? "Baliza — EVACUACIÓN"
@@ -376,6 +376,63 @@ serve(async (req) => {
         console.error("[evaluar-alerta] Error enviando notificación:", notifErr);
       }
     }
+
+    // "Ventana segura": cuando el mareógrafo pasa de subiendo→bajando tras un pico,
+    // el agua ya baja y es la ventana ideal para evacuar (sale con el menor nivel).
+    // Solo notifica si hubo riesgo real (> umbral de evaluación), y recién en la
+    // transición, para no spamear cada subida/bajada normal del día.
+    if (tendencia === "bajando" && nivelActual > umbralEval) {
+      const { data: faseAnt } = await supabase
+        .from("configuracion")
+        .select("valor")
+        .eq("clave", "ultima_fase_marcador")
+        .maybeSingle();
+      const faseAnterior = (faseAnt as { valor: string } | null)?.valor ?? null;
+      const eraSubiendo = faseAnterior === "subiendo";
+
+      const { data: cfgVs } = await supabase
+        .from("configuracion")
+        .select("valor")
+        .eq("clave", "ventana_segura_notificada")
+        .maybeSingle();
+      const vsNotif = (cfgVs as { valor: string } | null)?.valor ?? "";
+
+      if (eraSubiendo && vsNotif !== "1") {
+        await supabase.from("configuracion").upsert(
+          { clave: "ventana_segura_notificada", valor: "1" },
+          { onConflict: "clave" }
+        );
+        const tituloSeguro = "Baliza — El agua empezó a bajar";
+        const cuerpoSeguro = `Ventana segura para evacuar: el nivel bajó de su pico y ahora es ${nivelActual.toFixed(2)}m en San Fernando (bajando). Pico pronosticado pasado.`;
+        try {
+          await fetch(
+            `${Deno.env.get("SUPABASE_URL")}/functions/v1/enviar-notificacion`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") ?? ""}`,
+                "x-notificacion-secret": Deno.env.get("NOTIFICACION_SECRET") ?? "",
+              },
+              body: JSON.stringify({ titulo: tituloSeguro, cuerpo: cuerpoSeguro, url: "/dashboard" }),
+            }
+          );
+        } catch (vsErr) {
+          console.error("[evaluar-alerta] ventana segura: error notif", vsErr);
+        }
+      }
+    }
+    // Resetea la marca de "ventana segura" cuando vuelve a subir, para el próximo ciclo.
+    if (tendencia === "subiendo") {
+      await supabase.from("configuracion").upsert(
+        { clave: "ventana_segura_notificada", valor: "0" },
+        { onConflict: "clave" }
+      );
+    }
+    await supabase.from("configuracion").upsert(
+      { clave: "ultima_fase_marcador", valor: tendencia },
+      { onConflict: "clave" }
+    );
 
     return new Response(JSON.stringify({ ok: true, alerta: alertaRow, notifico: empeoro || recordProno }), {
       headers: { "Content-Type": "application/json" },

@@ -3,6 +3,7 @@
 import type { AvisoShn } from "@/lib/types";
 import type { Tendencia } from "@/lib/types";
 import { alturasSanFernando } from "@/lib/shn";
+import CompartirWhatsApp from "@/components/CompartirWhatsApp";
 
 interface Props {
   avisos: AvisoShn[];
@@ -79,7 +80,14 @@ export default function FaseMarea({ avisos, nivelActual, tendencia, ahora }: Pro
     clase = "bg-fondo/50 dark:bg-white/5 text-texto-sec dark:text-gray-400";
   }
 
-  const picoSupera = proxiPleamar && nivelActual != null && proxiPleamar.altura > nivelActual;
+const picoSupera = proxiPleamar && nivelActual != null && proxiPleamar.altura > nivelActual;
+
+  // Comparación medido vs pronosticado: si el nivel medido ya alcanza/supera el
+  // pico pronosticado, el agua llegó antes de lo esperado (señal de viento/met.).
+  const medidorPorProno =
+    proxiPleamar && nivelActual != null
+      ? nivelActual - proxiPleamar.altura
+      : null;
 
   return (
     <section className="dashboard-section">
@@ -126,9 +134,32 @@ export default function FaseMarea({ avisos, nivelActual, tendencia, ahora }: Pro
           </div>
         )}
 
+        {medidorPorProno != null && proxiPleamar && (
+          <div className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${medidorPorProno >= 0 ? "bg-rojo-alerta/10 text-rojo-alerta dark:text-rojo-dark" : "bg-fondo/50 dark:bg-white/5 text-texto-sec dark:text-gray-400"}`}>
+            <span>Medido vs pronosticado</span>
+            <span className="font-mono font-bold">
+              {medidorPorProno >= 0 ? `el agua ya supera al pico pronosticado (+${medidorPorProno.toFixed(2)}m)` : `faltan ${Math.abs(medidorPorProno).toFixed(2)}m para el pico pronosticado`}
+            </span>
+          </div>
+        )}
+
         <p className={`text-sm rounded-lg px-3 py-2 font-medium leading-snug ${clase}`}>
           {veredicto}
         </p>
+      </div>
+
+      <div className="mt-3">
+        <CompartirWhatsApp
+          small
+          mensaje={[
+            `🌊 Baliza — Fase de marea`,
+            `Nivel ahora: ${nivelActual != null ? `${nivelActual.toFixed(2)}m` : "--"} ${tendencia ? `(${tendencia.direccion})` : ""}`,
+            proxiPleamar ? `Pico: ${proxiPleamar.altura.toFixed(2)}m · ${formatearHora(proxiPleamar.ts)}` : null,
+            medidorPorProno != null && proxiPleamar ? (medidorPorProno >= 0 ? `⚠ El agua ya supera el pico pronosticado (+${medidorPorProno.toFixed(2)}m)` : `El agua sube; faltan ${Math.abs(medidorPorProno).toFixed(2)}m al pico`) : null,
+            veredicto,
+            `⚠ Más info: https://baliza-ashy.vercel.app`,
+          ].filter(Boolean).join("\n")}
+        />
       </div>
 
       <p className="text-xs text-texto-sec dark:text-gray-400 mt-3">
