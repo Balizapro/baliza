@@ -24,11 +24,60 @@ interface PronosticoRow {
 
 const PROPAGACION_LP_A_SF = 2.5;
 const PROPAGACION_BA_A_SF = 1.0;
+const EXTERIORES_GIRO = ["La Plata", "Oyarvide", "Atalaya", "Puerto de Buenos Aires"];
+const PICO_MAX_EDAD_HS = 6;
+const PENDIENTE_MIN_M_H = 0.005;
+const GIRO_MIN_ESTACIONES = 2;
 
 const TZ = "America/Argentina/Buenos_Aires";
 
 function formatearMomento(iso: string): string {
   return new Date(iso).toLocaleString("es-AR", { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: TZ });
+}
+
+// Detecta si una serie de lecturas pasó su pico reciente y viene bajando.
+// Devuelve { picoTs (ms), pendiente_m_h } o null si no giró.
+function detectarGiro(lecturas: LecturaRow[]): { picoTs: number; pendiente_m_h: number } | null {
+  if (lecturas.length < 4) return null;
+  // Entrada desc; ordenar asc.
+  const asc = [...lecturas].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const n = asc.length;
+  // Último pico local interior (mayor que anterior y que los 2 siguientes).
+  let idxPico = -1;
+  for (let i = n - 3; i >= 1; i--) {
+    const ant = asc[i - 1].nivel_m;
+    const act = asc[i].nivel_m;
+    const sig = asc[i + 1].nivel_m;
+    const sig2 = i + 2 < n ? asc[i + 2].nivel_m : sig;
+    if (act >= ant && act > sig && act > sig2) {
+      idxPico = i;
+      break;
+    }
+  }
+  if (idxPico < 0) return null;
+  const picoTs = new Date(asc[idxPico].timestamp).getTime();
+  const ahoraMs = Date.now();
+  if (ahoraMs - picoTs > PICO_MAX_EDAD_HS * 3600000) return null;
+
+  // Pendiente con los puntos posteriores al pico.
+  const despues = asc.slice(idxPico);
+  if (despues.length < 2) return null;
+  const t0 = new Date(despues[0].timestamp).getTime() / 3600000;
+  let sx = 0, sy = 0;
+  for (const p of despues) { sx += new Date(p.timestamp).getTime() / 3600000 - t0; sy += p.nivel_m; }
+  const n2 = despues.length;
+  const mx = sx / n2;
+  const my = sy / n2;
+  let sxx = 0, sxy = 0;
+  for (const p of despues) {
+    const x = new Date(p.timestamp).getTime() / 3600000 - t0;
+    sxx += (x - mx) * (x - mx);
+    sxy += (x - mx) * (p.nivel_m - my);
+  }
+  if (sxx < 1e-9) return null;
+  const pend = sxy / sxx;
+  if (pend >= 0) return null;
+  return { picoTs, pendiente_m_h: pend };
 }
 
 // Cruces de umbral según el pronóstico INA (qualifier main) de San Fernando.
@@ -472,6 +521,71 @@ if (empeoro || recordProno) {
       { clave: "ultima_fase_marcador", valor: tendencia },
       { onConflict: "clave" }
     );
+
+    // "Exteriores bajando": cuando las estaciones exteriores pasaron su pico y
+    // vienen bajando mientras SF aún está alto, es la señal adelantada de que la
+    // bajada llega a SF en ~lag horas. Avisa una vez por crecida (dedup por pico).
+    if (nivelActual > umbralEval) {
+      let girados: { nombre: string; picoTs: number }[] = [];
+      for (const nombre of EXTERIORES_GIRO) {
+        const { data: extEst } = await supabase
+          .from("estaciones")
+          .select("id")
+          .eq("nombre", nombre)
+          .single();
+        if (!extEst) continue;
+        const { data: extLect } = await supabase
+          .from("lecturas")
+          .select("timestamp, nivel_m")
+          .eq("estacion_id", extEst.id)
+          .eq("tipo", "observado")
+          .order("timestamp", { ascending: false })
+          .limit(48);
+        if (!extLect || extLect.length < 4) continue;
+        const giro = detectarGiro(extLect as LecturaRow[]);
+        if (giro && giro.pendiente_m_h < -PENDIENTE_MIN_M_H) {
+          girados.push({ nombre, picoTs: giro.picoTs });
+        }
+      }
+      if (girados.length >= GIRO_MIN_ESTACIONES) {
+        const picoMasReciente = Math.max(...girados.map((g) => g.picoTs));
+        const claveGiro = `exteriores_bajando_pico_${picoMasReciente}`;
+        const { data: cfgGiro } = await supabase
+          .from("configuracion")
+          .select("valor")
+          .eq("clave", claveGiro)
+          .maybeSingle();
+        if (!cfgGiro) {
+          await supabase.from("configuracion").upsert(
+            { clave: claveGiro, valor: "1" },
+            { onConflict: "clave" }
+          );
+          const nombres = girados.map((g) => g.nombre).join(", ");
+          const horaPico = new Date(picoMasReciente).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
+          const tituloExt = "Baliza — El agua va a bajar";
+          const cuerpoExt =
+            `Las estaciones exteriores (${nombres}) ya pasaron su pico (≈ ${horaPico}) y están bajando — ` +
+            `el agua en San Fernando tocará su pico pronto y empezará a bajar (retraso ~${Math.round(PROPAGACION_LP_A_SF)}hs). ` +
+            `Si el nivel aún es alto, conviene esperar a que baje en vez de evacuar en el pico.`;
+          try {
+            await fetch(
+              `${Deno.env.get("SUPABASE_URL")}/functions/v1/enviar-notificacion`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") ?? ""}`,
+                  "x-notificacion-secret": Deno.env.get("NOTIFICACION_SECRET") ?? "",
+                },
+                body: JSON.stringify({ titulo: tituloExt, cuerpo: cuerpoExt, url: "/dashboard" }),
+              }
+            );
+          } catch (extErr) {
+            console.error("[evaluar-alerta] exteriores bajando: error notif", extErr);
+          }
+        }
+      }
+    }
 
     return new Response(JSON.stringify({ ok: true, alerta: alertaRow, notifico: empeoro || recordProno }), {
       headers: { "Content-Type": "application/json" },

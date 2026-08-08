@@ -1,0 +1,28 @@
+{
+  "version": "5",
+  "remote": {
+    "https://deno.land/std@0.208.0/async/delay.ts": "a6142eb44cdd856b645086af2b811b1fcce08ec06bb7d50969e6a872ee9b8659",
+    "https://deno.land/std@0.208.0/http/server.ts": "f3cde6672e631d3e00785743cfa96bfed275618c0352c5ae84abbe5a2e0e4afc",
+    "https://esm.sh/@supabase/supabase-js@2.39.0": "f51aeb2dbf8f67c8fa396628af45793e3513067d45705f1ea158f5c678bb0cea"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@supabase/ssr@~0.12.4",
+        "npm:@supabase/supabase-js@^2.111.0",
+        "npm:@tailwindcss/postcss@4",
+        "npm:@types/node@20",
+        "npm:@types/react-dom@19",
+        "npm:@types/react@19",
+        "npm:eslint-config-next@16.2.12",
+        "npm:eslint@9",
+        "npm:next@16.2.12",
+        "npm:pg@^8.22.0",
+        "npm:react-dom@19.2.4",
+        "npm:react@19.2.4",
+        "npm:tailwindcss@4",
+        "npm:typescript@5"
+      ]
+    }
+  }
+}

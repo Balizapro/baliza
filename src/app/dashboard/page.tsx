@@ -26,6 +26,7 @@ import { analizarCiclo, predecirProximosExtremos } from "@/lib/ciclo";
 import { useAhora } from "@/lib/useAhora";
 import CurvaProyectada from "@/components/CurvaProyectada";
 import FaseMarea from "@/components/FaseMarea";
+import AnticipacionBajada from "@/components/AnticipacionBajada";
 import { ADMINS } from "@/lib/constants";
 
 function direccionCardinal(grados: number): string {
@@ -91,6 +92,7 @@ export default function Dashboard() {
   const [alertasList, setAlertasList] = useState<{ timestamp: string; nivel: NivelAlerta }[]>([]);
   const [lecturasLP, setLecturasLP] = useState<Lectura[]>([]);
   const [lecturasLPHist, setLecturasLPHist] = useState<Lectura[]>([]);
+  const [exterioresLecturas, setExterioresLecturas] = useState<{ nombre: string; lecturas: Lectura[] }[]>([]);
   const [vientoHist, setVientoHist] = useState<{ timestamp: string; velocidad_kmh: number; direccion_grados: number; presion_hpa?: number | null }[]>([]);
   const [vientoProno, setVientoProno] = useState<{ timestamp: string; velocidad_kmh: number; direccion_grados: number; presion_hpa?: number | null }[]>([]);
   const router = useRouter();
@@ -104,6 +106,8 @@ export default function Dashboard() {
 
       const sfId = estaciones.find((e) => e.nombre.includes("San Fernando"))?.id;
       const lpId = estaciones.find((e) => e.nombre.includes("La Plata") && e.fuente === "INA")?.id;
+      const oyId = estaciones.find((e) => e.nombre.includes("Oyarvide"))?.id;
+      const atId = estaciones.find((e) => e.nombre.includes("Atalaya"))?.id;
       const baId = estaciones.find((e) => e.nombre.includes("Buenos Aires"))?.id;
       const pnId = estaciones.find((e) => e.nombre.includes("Pilote Norden"))?.id;
       const rosId = estaciones.find((e) => e.nombre === "Rosario")?.id;
@@ -112,7 +116,7 @@ export default function Dashboard() {
       const campId = estaciones.find((e) => e.nombre === "Campana")?.id;
       const escId = estaciones.find((e) => e.nombre === "Escobar")?.id;
 
-      const ids = [sfId, lpId, baId, pnId, rosId, snId, zarId, campId, escId].filter(Boolean);
+      const ids = [sfId, lpId, oyId, atId, baId, pnId, rosId, snId, zarId, campId, escId].filter(Boolean);
       const { data: lecturas } = await supabase
         .from("lecturas")
         .select("*")
@@ -234,6 +238,18 @@ export default function Dashboard() {
       setLecturasLP(todasLP.slice(0, 24));
       setLecturasLPHist(todasLP);
 
+      // Lecturas de las estaciones exteriores para la anticipación de la bajada.
+      setExterioresLecturas(
+        [
+          { nombre: "La Plata", id: lpId },
+          { nombre: "Oyarvide", id: oyId },
+          { nombre: "Atalaya", id: atId },
+          { nombre: "Puerto de Buenos Aires", id: baId },
+        ]
+          .filter((e) => e.id)
+          .map((e) => ({ nombre: e.nombre, lecturas: filtrarPorEstacion(e.id) }))
+      );
+
       const d: DatosAgregados = {
         sanFernando: {
           observado: obs(sfId),
@@ -286,6 +302,7 @@ export default function Dashboard() {
   const umbralBajEvac = datos?.umbrales.find((u) => u.nombre === "bajante_evacuacion") ?? null;
   const umbralProno = datos?.umbrales.find((u) => u.nombre === "pronostico_crecida") ?? null;
   const trasladoMin = parseInt(datos?.config.find((c) => c.clave === "tiempo_traslado_minutos")?.valor ?? "10", 10);
+  const nivelSeguroM = parseFloat(datos?.config.find((c) => c.clave === "poseidon_acceso_seco_m")?.valor ?? "2.25");
   const escalones = datos?.escalones ?? [];
   const alertaNivel = alerta?.nivel ?? "verde";
   const esAdmin = !!user?.email && (ADMINS as readonly string[]).includes(user.email);
@@ -581,6 +598,14 @@ export default function Dashboard() {
           tendencia={tendenciaSF}
           ahora={ahora}
           proxPleamar={prediccionExtremos.pleamar}
+        />
+
+        {/* Anticipación de la bajada: las exteriores pasaron su pico y SF bajará */}
+        <AnticipacionBajada
+          sf={historial}
+          exteriores={exterioresLecturas}
+          nivelSeguroM={nivelSeguroM}
+          ahora={ahora}
         />
 
         {/* SHN + SMN en paralelo */}
