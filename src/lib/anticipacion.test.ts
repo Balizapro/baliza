@@ -89,3 +89,39 @@ test("sin datos suficientes => sin señal", () => {
   assert.equal(r.giraron, false);
   assert.equal(r.metodo, null);
 });
+
+test("SF subiendo y pico por debajo del nivel seguro => sin cruce falso", () => {
+  // SF subiendo (aún no pasó su pico), exteriores girando: la anticipación se activa,
+  // pero si el pico predicho de SF queda por debajo del nivel seguro no debe
+  // proyectarse un cruce absurdo del nivel seguro en el pasado.
+  const lp = serie(9, 2.2, 12);
+  const oyarvide = serie(8, 2.3, 12);
+  const atalaya = serie(8, 2.28, 12);
+  const ba = serie(11, 2.18, 12);
+  // SF subiendo desde ~1.2m, aún sin pico a la hora `ahora`.
+  const sfSubiendo: Punto[] = [];
+  for (let i = 0; i < 21; i++) {
+    const h = 1 + i * 0.5;
+    sfSubiendo.push({ timestamp: new Date(2026, 7, 7, h).toISOString(), nivel_m: 1.2 + (2.1 - 1.2) * Math.min(i / 20, 1) });
+  }
+
+  const r = anticiparBajada(
+    [
+      { nombre: "La Plata", lecturas: lp },
+      { nombre: "Oyarvide", lecturas: oyarvide },
+      { nombre: "Atalaya", lecturas: atalaya },
+      { nombre: "Puerto de Buenos Aires", lecturas: ba },
+    ],
+    sfSubiendo,
+    2.25,
+    new Date(2026, 7, 7, 12).getTime()
+  );
+
+  assert.equal(r.giraron, true);
+  assert.equal(r.metodo, "exterior");
+  assert.ok(r.sfPicoTs != null, "sfPicoTs estimado");
+  // Nunca un cruce en el pasado: si se proyecta cruce, debe ser posterior al pico.
+  if (r.sfCruceSeguroTs != null) {
+    assert.ok(r.sfCruceSeguroTs >= r.sfPicoTs!, "cruce posterior al pico");
+  }
+});

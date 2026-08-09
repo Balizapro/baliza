@@ -64,14 +64,23 @@ export default function AnticipacionBajada({ sf, exteriores, nivelSeguroM, ahora
             <p className="text-xs text-texto-sec dark:text-gray-400 mb-0.5">SF tocará pico ≈</p>
             <p className="font-mono font-bold text-atencion">{formatearHora(r.sfPicoTs)}</p>
             <p className="text-xs font-mono text-texto-sec dark:text-gray-400 mt-0.5">{formatoCuentaAtras(r.sfPicoTs)}</p>
+            {r.sfPicoNivel != null && (
+              <p className="text-xs font-mono text-texto-sec dark:text-gray-400">{r.sfPicoNivel.toFixed(2)}m</p>
+            )}
           </div>
           <div className="rounded-lg bg-fondo/50 dark:bg-white/5 px-3 py-2 text-sm">
-            <p className="text-xs text-texto-sec dark:text-gray-400 mb-0.5">Baja a {nivelSeguroM.toFixed(2)}m ≈</p>
-            <p className="font-mono font-bold text-ok">
-              {r.sfCruceSeguroTs != null ? formatearHora(r.sfCruceSeguroTs) : "estimando"}
-            </p>
-            {r.sfCruceSeguroTs != null && (
-              <p className="text-xs font-mono text-texto-sec dark:text-gray-400 mt-0.5">{formatoCuentaAtras(r.sfCruceSeguroTs)}</p>
+            {r.sfCruceSeguroTs != null ? (
+              <>
+                <p className="text-xs text-texto-sec dark:text-gray-400 mb-0.5">Baja a {nivelSeguroM.toFixed(2)}m ≈</p>
+                <p className="font-mono font-bold text-ok">{formatearHora(r.sfCruceSeguroTs)}</p>
+                <p className="text-xs font-mono text-texto-sec dark:text-gray-400 mt-0.5">{formatoCuentaAtras(r.sfCruceSeguroTs)}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-texto-sec dark:text-gray-400 mb-0.5">Acceso al muelle</p>
+                <p className="font-mono font-bold text-ok">quedará accesible</p>
+                <p className="text-xs font-mono text-texto-sec dark:text-gray-400 mt-0.5">SF no supera {nivelSeguroM.toFixed(2)}m</p>
+              </>
             )}
           </div>
         </div>
@@ -90,6 +99,7 @@ export default function AnticipacionBajada({ sf, exteriores, nivelSeguroM, ahora
             `🌊 Baliza — Anticipación de la bajada`,
             r.mensaje,
             r.sfCruceSeguroTs != null ? `Baja a ${nivelSeguroM.toFixed(2)}m ≈ ${formatearHora(r.sfCruceSeguroTs)}` : null,
+            r.sfCruceSeguroTs == null && r.sfPicoNivel != null ? `Muelle accesible (máx ${r.sfPicoNivel.toFixed(2)}m)` : null,
             `⚠ Más info: https://baliza-ashy.vercel.app`,
           ].filter(Boolean).join("\n")}
         />

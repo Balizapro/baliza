@@ -23,6 +23,7 @@ export interface Anticipacion {
   metodo: "exterior" | "sf" | null;
   exteriores: ExteriorGiro[];
   sfPicoTs: number | null;
+  sfPicoNivel: number | null;
   sfCruceSeguroTs: number | null;
   nivelSeguroM: number;
   pendienteSF_m_h: number | null;
@@ -121,6 +122,7 @@ export function anticiparBajada(
     metodo: null,
     exteriores: [],
     sfPicoTs: null,
+    sfPicoNivel: null,
     sfCruceSeguroTs: null,
     nivelSeguroM,
     pendienteSF_m_h: null,
@@ -176,9 +178,17 @@ export function anticiparBajada(
   const est = exteriores.find((e) => e.nombre === mejor.nombre)?.lecturas;
   const regModelo = est ? regresarPropagacion(lecturasSF, est, ahora, lagHs) : null;
 
+  // Altura del pico de SF: con el nivel de la exterior en su pico y el modelo de propagación.
+  const sfPicoNivel =
+    regModelo && mejor.picoNivel != null
+      ? regModelo.intercepto_m + regModelo.pendiente * mejor.picoNivel
+      : null;
+
   let sfCruce: number | null = null;
   let pendSF: number | null = null;
-  if (regModelo && mejor.pendiente_m_h != null && mejor.pendiente_m_h < 0) {
+  // Solo tiene sentido proyectar el cruce si SF llega a superar el nivel seguro;
+  // si el pico predicho queda por debajo, el muelle nunca queda tapado.
+  if (regModelo && mejor.pendiente_m_h != null && mejor.pendiente_m_h < 0 && sfPicoNivel != null && sfPicoNivel > nivelSeguroM) {
     // nivelSF(t+lag) = intercepto + pendiente * nivelExt(t). SF cruza el nivel seguro
     // cuando la exterior alcanza nivelExtObj = (nivelSeguro - intercepto)/pendiente.
     const nivelExtObj = (nivelSeguroM - regModelo.intercepto_m) / regModelo.pendiente;
@@ -193,13 +203,16 @@ export function anticiparBajada(
 
   const mensaje = sfCruce != null
     ? `Exteriores ya bajan (${giraron.map((e) => e.nombre).join(", ")}) — SF tocará pico ≈ ${new Date(sfPico).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} y bajará a ${nivelSeguroM.toFixed(2)}m ≈ ${new Date(sfCruce).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}.`
-    : `Exteriores ya bajan (${giraron.map((e) => e.nombre).join(", ")}) — SF tocará pico ≈ ${new Date(sfPico).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}.`;
+    : sfPicoNivel != null && sfPicoNivel <= nivelSeguroM
+      ? `Exteriores ya bajan (${giraron.map((e) => e.nombre).join(", ")}) — SF tocará pico ≈ ${new Date(sfPico).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} (${sfPicoNivel.toFixed(2)}m), sin superar el nivel seguro: el muelle queda accesible.`
+      : `Exteriores ya bajan (${giraron.map((e) => e.nombre).join(", ")}) — SF tocará pico ≈ ${new Date(sfPico).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}.`;
 
   return {
     giraron: true,
     metodo: "exterior",
     exteriores: externos,
     sfPicoTs: sfPico,
+    sfPicoNivel,
     sfCruceSeguroTs: sfCruce,
     nivelSeguroM,
     pendienteSF_m_h: pendSF,
