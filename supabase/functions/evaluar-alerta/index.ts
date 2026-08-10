@@ -49,9 +49,12 @@ function detectarGiro(lecturas: LecturaRow[]): { picoTs: number; pendiente_m_h: 
   // Entrada desc; ordenar asc.
   const asc = [...lecturas].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   const n = asc.length;
-  // Último pico local interior (mayor que anterior y que los 2 siguientes).
+  // Último pico local interior (mayor que anterior y que el/los siguiente/s).
+  // Solo se exige UNA lectura posterior al pico: con datos horarios, exigir dos
+  // retrasaba la detección del giro ~2h (pico 06:45 se confirmaba recién 08:45),
+  // y el aviso "el agua va a bajar" llegaba cuando SF ya bajaba.
   let idxPico = -1;
-  for (let i = n - 3; i >= 1; i--) {
+  for (let i = n - 2; i >= 1; i--) {
     const ant = asc[i - 1].nivel_m;
     const act = asc[i].nivel_m;
     const sig = asc[i + 1].nivel_m;
