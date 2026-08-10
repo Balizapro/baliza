@@ -28,6 +28,13 @@ const EXTERIORES_GIRO = ["La Plata", "Oyarvide", "Atalaya", "Puerto de Buenos Ai
 const PICO_MAX_EDAD_HS = 6;
 const PENDIENTE_MIN_M_H = 0.005;
 const GIRO_MIN_ESTACIONES = 2;
+// El preaviso de pico solo avisa si el pico pronosticado está lo suficientemente
+// cerca (inminencia): evita avisar con 2+ días de anticipación cuando el pronóstico
+// recién marca el evento (caso 08-08: avisó 2 días antes y quemó el dedup).
+const PICO_PREAVISO_MAX_HORIZONTE_HS = 12;
+// Dedup por episodio: si el pronóstico ya avisó para un pico en la misma ventana
+// (±3h, el pico se corrió 1-2h entre actualizaciones), no re-notifica.
+const PREAVISO_PICO_TOLERANCIA_MS = 3 * 3600000;
 
 const TZ = "America/Argentina/Buenos_Aires";
 
@@ -474,18 +481,27 @@ if (empeoro || recordProno) {
 
     // "Evacuar antes del pico": mientras el agua sube hacia un pico pronosticado
     // alto (supera el umbral de evaluación), avisa ANTES de que llegue — evitando
-    // salir en el agua más alta. Dedup por timestamp del pico: solo se re-notifica
-    // si el pico pronosticado cambia (otra crecida), no en cada lectura.
+    // salir en el agua más alta.
+    // - Solo avisa si el pico es INMINENTE (dentro de las próximas 12h), para no
+    //   anticipar con días de distancia (el pronóstico marca el evento temprano).
+    // - Dedup por EPISODIO con tolerancia (±3h sobre el timestamp del pico): si ya
+    //   se avisó para el mismo pico (corrido 1-2h entre actualizaciones del INA),
+    //   no se re-notifica. Solo re-notifica si es otra crecida.
     if (tendencia === "subiendo" && picoProno && picoProno.valor_m > umbralEval) {
-      const clavePico = `preaviso_pico_${new Date(picoProno.timestamp).getTime()}`;
-      const { data: cfgPrePico } = await supabase
+      const picoMs = new Date(picoProno.timestamp).getTime();
+      const esInminente = picoMs - Date.now() <= PICO_PREAVISO_MAX_HORIZONTE_HS * 3600000;
+      const { data: preavisosPrevios } = await supabase
         .from("configuracion")
-        .select("valor")
-        .eq("clave", clavePico)
-        .maybeSingle();
-      if (!cfgPrePico) {
+        .select("clave")
+        .like("clave", "preaviso_pico_%");
+      const clavesPrevias = (preavisosPrevios as { clave: string }[] | null) ?? [];
+      const yaAvisadoMismoEpisodio = clavesPrevias.some((c) => {
+        const tsPico = parseInt(c.clave.replace("preaviso_pico_", ""), 10);
+        return Number.isFinite(tsPico) && Math.abs(tsPico - picoMs) <= PREAVISO_PICO_TOLERANCIA_MS;
+      });
+      if (esInminente && !yaAvisadoMismoEpisodio) {
         await supabase.from("configuracion").upsert(
-          { clave: clavePico, valor: "1" },
+          { clave: `preaviso_pico_${picoMs}`, valor: "1" },
           { onConflict: "clave" }
         );
         const tituloPrePico = "Baliza — El agua sigue subiendo";
