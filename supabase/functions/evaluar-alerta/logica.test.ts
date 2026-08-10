@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calcularVentana, ceseExpirado, MARGEN_AMARILLA_M } from "./logica.ts";
+import {
+  calcularVentana,
+  ceseExpirado,
+  detectarGiro,
+  esPicoInminente,
+  mismoEpisodioPreaviso,
+  MARGEN_AMARILLA_M,
+} from "./logica.ts";
 
 const U = {
   evaluacion: 2.0,
@@ -85,4 +92,92 @@ test("aviso no-cese nunca se descarta por expiracion", () => {
   const ahora = Date.now();
   assert.equal(ceseExpirado(new Date(ahora - 24 * 3600 * 1000).toISOString()), true);
   assert.equal(ceseExpirado(new Date(ahora).toISOString()), false);
+});
+
+// ── detectarGiro (giro de exteriores, 1 lectura posterior) ──────────────────
+
+const OPC = { picoMaxEdadHs: 6, pendienteMinMH: 0.005 };
+
+function serie(entradas: [string, number][]): { timestamp: string; nivel_m: number }[] {
+  return entradas.map(([t, v]) => ({ timestamp: `2026-08-10T${t}:00Z`, nivel_m: v }));
+}
+
+const BA = serie([
+  ["00:45", 0.93], ["01:45", 1.3], ["02:45", 1.62], ["03:00", 1.62],
+  ["03:45", 1.83], ["04:45", 2.02], ["05:45", 2.09], ["06:45", 2.11],
+  ["07:45", 2.04], ["08:45", 1.9],
+]);
+
+test("detectarGiro con datos reales 10/08: BA gira a las 07:45 (1 lectura posterior, pico 06:45)", () => {
+  const hasta = new Date("2026-08-10T07:45:00Z").getTime();
+  const r = detectarGiro(BA.filter((x) => new Date(x.timestamp).getTime() <= hasta), { ...OPC, ahoraMs: hasta });
+  assert.ok(r, "debería detectar giro con solo la lectura 07:45 tras el pico 06:45");
+  assert.equal(r.picoTs, new Date("2026-08-10T06:45:00Z").getTime());
+  assert.ok(r.pendiente_m_h < 0);
+});
+
+test("detectarGiro: sin confirmar giro si la ultima lectura es el pico (aun subiendo)", () => {
+  // BA hasta 06:45: la 06:45 (2.11) es el máximo y no hay lectura posterior más baja.
+  const hasta = new Date("2026-08-10T06:45:00Z").getTime();
+  const r = detectarGiro(BA.filter((x) => new Date(x.timestamp).getTime() <= hasta), { ...OPC, ahoraMs: hasta });
+  assert.equal(r, null);
+});
+
+test("detectarGiro: giro descartado si el pico es demasiado viejo (mayor a 6h)", () => {
+  const hasta = new Date("2026-08-10T15:00:00Z").getTime();
+  const r = detectarGiro(BA, { ...OPC, ahoraMs: hasta });
+  assert.equal(r, null);
+});
+
+test("detectarGiro: serie sin pico (monotona creciente) => null", () => {
+  const sube = serie([["00:00", 1.0], ["01:00", 1.1], ["02:00", 1.2], ["03:00", 1.3]]);
+  const hasta = new Date("2026-08-10T03:00:00Z").getTime();
+  assert.equal(detectarGiro(sube, { ...OPC, ahoraMs: hasta }), null);
+});
+
+test("detectarGiro: menos de 4 lecturas => null", () => {
+  const corta = serie([["00:00", 1.0], ["01:00", 1.1], ["02:00", 1.0]]);
+  assert.equal(detectarGiro(corta, { ...OPC, ahoraMs: Date.now() }), null);
+});
+
+test("detectarGiro: pendiente positiva (sigue subiendo tras mini-pico) => null", () => {
+  const v = serie([["00:00", 1.0], ["01:00", 1.1], ["02:00", 1.0], ["03:00", 1.2]]);
+  const hasta = new Date("2026-08-10T03:00:00Z").getTime();
+  assert.equal(detectarGiro(v, { ...OPC, ahoraMs: hasta }), null);
+});
+
+// ── esPicoInminente ─────────────────────────────────────────────────────────
+
+test("esPicoInminente: pico dentro de 12h => true", () => {
+  const ahora = Date.parse("2026-08-10T00:00:00Z");
+  assert.equal(esPicoInminente(ahora + 5 * 3600000, ahora, 12), true);
+});
+
+test("esPicoInminente: pico a 2 dias => false (no avisar con mucha anticipacion)", () => {
+  const ahora = Date.parse("2026-08-08T04:00:00Z");
+  const pico = Date.parse("2026-08-10T08:00:00Z"); // 52h despues (caso real 08-08)
+  assert.equal(esPicoInminente(pico, ahora, 12), false);
+});
+
+// ── mismoEpisodioPreaviso (dedup por episodio con tolerancia) ───────────────
+
+test("mismoEpisodioPreaviso: pico corrido 1h (08:00->09:00) => mismo episodio, no re-notifica", () => {
+  const claves = ["preaviso_pico_1786348800000"]; // pico 08-10 08:00 UTC
+  const picoNuevo = Date.parse("2026-08-10T09:00:00Z"); // 1786352400000
+  assert.equal(mismoEpisodioPreaviso(claves, picoNuevo, 3 * 3600000), true);
+});
+
+test("mismoEpisodioPreaviso: pico 2 dias despues => otra crecida, si re-notifica", () => {
+  const claves = ["preaviso_pico_1786348800000"];
+  const picoOtro = Date.parse("2026-08-12T09:00:00Z");
+  assert.equal(mismoEpisodioPreaviso(claves, picoOtro, 3 * 3600000), false);
+});
+
+test("mismoEpisodioPreaviso: sin claves previas => false", () => {
+  assert.equal(mismoEpisodioPreaviso([], Date.now(), 3 * 3600000), false);
+});
+
+test("mismoEpisodioPreaviso: clave con timestamp no numerico se ignora", () => {
+  const claves = ["preaviso_pico_abc", "otra_clave"];
+  assert.equal(mismoEpisodioPreaviso(claves, Date.now(), 3 * 3600000), false);
 });

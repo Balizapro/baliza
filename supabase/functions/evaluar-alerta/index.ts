@@ -1,6 +1,13 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-import { calcularVentana, ceseExpirado, type NivelAlerta } from "./logica.ts";
+import {
+  calcularVentana,
+  ceseExpirado,
+  detectarGiro,
+  esPicoInminente,
+  mismoEpisodioPreaviso,
+  type NivelAlerta,
+} from "./logica.ts";
 
 interface UmbralRow {
   nombre: string;
@@ -40,54 +47,6 @@ const TZ = "America/Argentina/Buenos_Aires";
 
 function formatearMomento(iso: string): string {
   return new Date(iso).toLocaleString("es-AR", { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: TZ });
-}
-
-// Detecta si una serie de lecturas pasó su pico reciente y viene bajando.
-// Devuelve { picoTs (ms), pendiente_m_h } o null si no giró.
-function detectarGiro(lecturas: LecturaRow[]): { picoTs: number; pendiente_m_h: number } | null {
-  if (lecturas.length < 4) return null;
-  // Entrada desc; ordenar asc.
-  const asc = [...lecturas].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  const n = asc.length;
-  // Último pico local interior (mayor que anterior y que el/los siguiente/s).
-  // Solo se exige UNA lectura posterior al pico: con datos horarios, exigir dos
-  // retrasaba la detección del giro ~2h (pico 06:45 se confirmaba recién 08:45),
-  // y el aviso "el agua va a bajar" llegaba cuando SF ya bajaba.
-  let idxPico = -1;
-  for (let i = n - 2; i >= 1; i--) {
-    const ant = asc[i - 1].nivel_m;
-    const act = asc[i].nivel_m;
-    const sig = asc[i + 1].nivel_m;
-    const sig2 = i + 2 < n ? asc[i + 2].nivel_m : sig;
-    if (act >= ant && act > sig && act > sig2) {
-      idxPico = i;
-      break;
-    }
-  }
-  if (idxPico < 0) return null;
-  const picoTs = new Date(asc[idxPico].timestamp).getTime();
-  const ahoraMs = Date.now();
-  if (ahoraMs - picoTs > PICO_MAX_EDAD_HS * 3600000) return null;
-
-  // Pendiente con los puntos posteriores al pico.
-  const despues = asc.slice(idxPico);
-  if (despues.length < 2) return null;
-  const t0 = new Date(despues[0].timestamp).getTime() / 3600000;
-  let sx = 0, sy = 0;
-  for (const p of despues) { sx += new Date(p.timestamp).getTime() / 3600000 - t0; sy += p.nivel_m; }
-  const n2 = despues.length;
-  const mx = sx / n2;
-  const my = sy / n2;
-  let sxx = 0, sxy = 0;
-  for (const p of despues) {
-    const x = new Date(p.timestamp).getTime() / 3600000 - t0;
-    sxx += (x - mx) * (x - mx);
-    sxy += (x - mx) * (p.nivel_m - my);
-  }
-  if (sxx < 1e-9) return null;
-  const pend = sxy / sxx;
-  if (pend >= 0) return null;
-  return { picoTs, pendiente_m_h: pend };
 }
 
 // Cruces de umbral según el pronóstico INA (qualifier main) de San Fernando.
@@ -492,16 +451,17 @@ if (empeoro || recordProno) {
     //   no se re-notifica. Solo re-notifica si es otra crecida.
     if (tendencia === "subiendo" && picoProno && picoProno.valor_m > umbralEval) {
       const picoMs = new Date(picoProno.timestamp).getTime();
-      const esInminente = picoMs - Date.now() <= PICO_PREAVISO_MAX_HORIZONTE_HS * 3600000;
+      const esInminente = esPicoInminente(picoMs, Date.now(), PICO_PREAVISO_MAX_HORIZONTE_HS);
       const { data: preavisosPrevios } = await supabase
         .from("configuracion")
         .select("clave")
         .like("clave", "preaviso_pico_%");
       const clavesPrevias = (preavisosPrevios as { clave: string }[] | null) ?? [];
-      const yaAvisadoMismoEpisodio = clavesPrevias.some((c) => {
-        const tsPico = parseInt(c.clave.replace("preaviso_pico_", ""), 10);
-        return Number.isFinite(tsPico) && Math.abs(tsPico - picoMs) <= PREAVISO_PICO_TOLERANCIA_MS;
-      });
+      const yaAvisadoMismoEpisodio = mismoEpisodioPreaviso(
+        clavesPrevias.map((c) => c.clave),
+        picoMs,
+        PREAVISO_PICO_TOLERANCIA_MS
+      );
       if (esInminente && !yaAvisadoMismoEpisodio) {
         await supabase.from("configuracion").upsert(
           { clave: `preaviso_pico_${picoMs}`, valor: "1" },
@@ -564,7 +524,10 @@ if (empeoro || recordProno) {
           .order("timestamp", { ascending: false })
           .limit(48);
         if (!extLect || extLect.length < 4) continue;
-        const giro = detectarGiro(extLect as LecturaRow[]);
+        const giro = detectarGiro(extLect as LecturaRow[], {
+          picoMaxEdadHs: PICO_MAX_EDAD_HS,
+          pendienteMinMH: PENDIENTE_MIN_M_H,
+        });
         if (giro && giro.pendiente_m_h < -PENDIENTE_MIN_M_H) {
           girados.push({ nombre, picoTs: giro.picoTs });
         }
