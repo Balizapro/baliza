@@ -342,6 +342,33 @@ export default function Dashboard() {
     return d > 0 ? `${d}d ${h}h ${m}m` : h > 0 ? `${h}h ${m}m` : `${m}m`;
   }, [sfProno, ahora]);
 
+  // Pico del pronóstico oficial (qualifier main) hacia adelante, usado para el color
+  // del banner: rojo si el pico supera el umbral de pronóstico (2.10m).
+  const picoMain = useMemo(() => {
+    const futuros = (sfProno ?? [])
+      .filter((p) => p.qualifier === "main")
+      .filter((p) => new Date(p.timestamp).getTime() >= ahora)
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return futuros.length > 0
+      ? futuros.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futuros[0])
+      : null;
+  }, [sfProno, ahora]);
+
+  // Color del primer banner, independiente del job: el río puede subir y el banner
+  // seguir verde si no hay crecidas a la vista; naranja cuando la crecida se observa
+  // (nivel sobre evaluación o pico pronosticado alcanzando evaluación); rojo solo si
+  // el nivel supera el no retorno o el pronóstico supera el umbral (2.10m).
+  const bannerColor: string = useMemo(() => {
+    const nivel = sfObs?.nivel_m ?? null;
+    if (umbralBajEvac && nivel !== null && nivel <= umbralBajEvac.valor_m) return "evacuacion";
+    if (umbralBajAlarma && nivel !== null && nivel <= umbralBajAlarma.valor_m) return "azul";
+    if (umbralNR && nivel !== null && nivel >= umbralNR.valor_m) return "roja";
+    if (umbralProno && picoMain && picoMain.valor_m > umbralProno.valor_m) return "roja";
+    if (umbralEval && nivel !== null && nivel >= umbralEval.valor_m) return "amarilla";
+    if (umbralEval && picoMain && picoMain.valor_m >= umbralEval.valor_m) return "amarilla";
+    return "verde";
+  }, [sfObs, umbralBajEvac, umbralBajAlarma, umbralNR, umbralProno, umbralEval, picoMain]);
+
   const ciclo = useMemo(
     () => analizarCiclo(historial, lecturasLP.slice(0, 24), 2.5, ahora),
     [historial, lecturasLP, ahora]
@@ -416,19 +443,22 @@ export default function Dashboard() {
       <main className="max-w-5xl mx-auto px-3 sm:px-6 py-4 space-y-4 sm:space-y-5">
         {/* Alerta / Recomendación */}
         <div className="recomendacion-banner-wrapper">
-          <div className={`recomendacion-banner ${alertaNivel === "roja" ? "roja" : alertaNivel === "evacuacion" ? "evacuacion" : alertaNivel === "amarilla" ? "amarilla" : alertaNivel === "azul" ? "azul" : "verde"}`}>
-            <div className="rb-icono">
-              {alertaNivel === "roja" || alertaNivel === "evacuacion" ? (
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 1 21h22L12 2zm1 14h-2v2h2v-2zm0-7h-2v5h2V9z"/></svg>
-              ) : alertaNivel === "amarilla" || alertaNivel === "azul" ? (
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          <div className={`recomendacion-banner ${bannerColor}`}>
+            <div className={`rb-flecha ${tendenciaSF?.direccion === "subiendo" ? "subiendo" : tendenciaSF?.direccion === "bajando" ? "bajando" : "estable"}`}>
+              {tendenciaSF?.direccion === "subiendo" ? (
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              ) : tendenciaSF?.direccion === "bajando" ? (
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>
               ) : (
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 12h16M10 7l-5 5 5 5M14 7l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>
               )}
+              <span className="rb-flecha-texto">
+                {tendenciaSF?.direccion === "subiendo" ? "sube" : tendenciaSF?.direccion === "bajando" ? "baja" : "estable"}
+              </span>
             </div>
             <div className="rb-cuerpo">
               <p className="rb-etiqueta">
-                {alertaNivel === "roja" ? "Alerta roja" : alertaNivel === "evacuacion" ? "Evacuación" : alertaNivel === "amarilla" ? "Atención" : alertaNivel === "azul" ? "Bajante" : "Normal"}
+                {bannerColor === "roja" ? "Alerta roja" : bannerColor === "evacuacion" ? "Evacuación" : bannerColor === "amarilla" ? "Atención" : bannerColor === "azul" ? "Bajante" : "Normal"}
               </p>
               <h1 className="recomendacion-titulo">
                 {alerta?.mensaje?.split("| Preaviso:")[0]?.trim() ?? "Sin datos — esperando primera ingesta"}
@@ -475,20 +505,20 @@ export default function Dashboard() {
                 }
                 return null;
               })()}
-              {alertaNivel !== "verde" && (
+              {bannerColor !== "verde" && (
                 <div className="rb-accion">
                   <span>
-                    {alertaNivel === "evacuacion"
+                    {bannerColor === "evacuacion"
                       ? "Evacuar ahora — alejarse de la zona de riesgo"
-                      : alertaNivel === "roja"
+                      : bannerColor === "roja"
                         ? "Preparar salida — no esperar a último momento"
-                        : alertaNivel === "amarilla"
-                          ? "Vigilar de cerca — nivel subiendo"
+                        : bannerColor === "amarilla"
+                          ? "Vigilar de cerca — crecida a la vista"
                           : "Cuidado con la bajante"}
                   </span>
                 </div>
               )}
-              {(cuentaRegresiva && alertaNivel === "roja") && (
+              {(cuentaRegresiva && bannerColor === "roja") && (
                 <div className="rb-cuenta-regresiva">
                   <span className="rb-tiempo">{cuentaRegresiva}</span>
                   <span className="rb-tiempo-label">
@@ -505,10 +535,10 @@ export default function Dashboard() {
                   ? futuros.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futuros[0])
                   : null;
                 const etiquetaNivel =
-                  alertaNivel === "roja" ? "ALERTA ROJA" :
-                  alertaNivel === "evacuacion" ? "EVACUACIÓN" :
-                  alertaNivel === "amarilla" ? "ATENCIÓN" :
-                  alertaNivel === "azul" ? "BAJANTE" : "NIVEL NORMAL";
+                  bannerColor === "roja" ? "ALERTA ROJA" :
+                  bannerColor === "evacuacion" ? "EVACUACIÓN" :
+                  bannerColor === "amarilla" ? "ATENCIÓN" :
+                  bannerColor === "azul" ? "BAJANTE" : "NIVEL NORMAL";
                 const partes = [
                   `🔴 Baliza — ${etiquetaNivel}`,
                   sfObs?.nivel_m != null ? `Nivel actual en San Fernando: ${sfObs.nivel_m.toFixed(2)}m (${tendenciaSF?.direccion ?? "estable"})` : null,
