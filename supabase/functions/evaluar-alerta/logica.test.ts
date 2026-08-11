@@ -98,8 +98,8 @@ test("aviso no-cese nunca se descarta por expiracion", () => {
 
 const OPC = { picoMaxEdadHs: 6, pendienteMinMH: 0.005 };
 
-function serie(entradas: [string, number][]): { timestamp: string; nivel_m: number }[] {
-  return entradas.map(([t, v]) => ({ timestamp: `2026-08-10T${t}:00Z`, nivel_m: v }));
+function serie(entradas: [string, number][], fecha = "2026-08-10"): { timestamp: string; nivel_m: number }[] {
+  return entradas.map(([t, v]) => ({ timestamp: `${fecha}T${t}:00Z`, nivel_m: v }));
 }
 
 const BA = serie([
@@ -144,6 +144,29 @@ test("detectarGiro: pendiente positiva (sigue subiendo tras mini-pico) => null",
   const v = serie([["00:00", 1.0], ["01:00", 1.1], ["02:00", 1.0], ["03:00", 1.2]]);
   const hasta = new Date("2026-08-10T03:00:00Z").getTime();
   assert.equal(detectarGiro(v, { ...OPC, ahoraMs: hasta }), null);
+});
+
+test("detectarGiro con datos reales 11/08: SF gira con lecturas hasta 07:45 aunque la tendencia puntual dea estable", () => {
+  // Serie SF 11/08 hasta 07:45 (sin la lectura 08:45): 06:45=2.19 pico seguido de 07:45=2.18.
+  // Esto reproduce la corrida de las 09:00 que usaba la lectura vieja: tendencia puntual
+  // 2.19->2.18 = -0.01 = "estable", pero detectarGiro sí debe ver el giro (bajada desde el pico).
+  const SF = serie([
+    ["00:45", 1.57], ["01:45", 1.52], ["02:45", 1.66], ["03:45", 1.84],
+    ["04:45", 2.04], ["05:45", 2.16], ["06:45", 2.19], ["07:45", 2.18],
+  ], "2026-08-11");
+  const hasta = new Date("2026-08-11T09:00:00Z").getTime();
+  const r = detectarGiro(SF, { ...OPC, ahoraMs: hasta });
+  assert.ok(r, "SF ya gira (pico 2.19 el 06:45) => no debe avisar exteriores bajando");
+  assert.equal(r.picoTs, new Date("2026-08-11T06:45:00Z").getTime());
+});
+
+test("detectarGiro con datos reales 11/08: SF sin giro a las 05:00 (aun subiendo) => null, aviso de exteriores procede", () => {
+  // Serie SF 11/08 hasta 04:45: sube de 1.57 a 2.04 sin pico confirmado.
+  const SF = serie([
+    ["00:45", 1.57], ["01:45", 1.52], ["02:45", 1.66], ["03:45", 1.84], ["04:45", 2.04],
+  ], "2026-08-11");
+  const hasta = new Date("2026-08-11T05:00:00Z").getTime();
+  assert.equal(detectarGiro(SF, { ...OPC, ahoraMs: hasta }), null);
 });
 
 // ── esPicoInminente ─────────────────────────────────────────────────────────

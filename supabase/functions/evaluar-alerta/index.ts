@@ -504,10 +504,25 @@ if (empeoro || recordProno) {
     // "Exteriores bajando": cuando las estaciones exteriores pasaron su pico y
     // vienen bajando mientras SF aún está alto, es la señal adelantada de que la
     // bajada llega a SF en ~lag horas. Avisa una vez por crecida (dedup por pico).
-    // Guard adicional: no avisar si SF ya está BAJANDO — si el agua ya tocó su pico
-    // y viene cayendo, el aviso "el agua va a bajar" llega tarde y confunde
-    // (caso 10/08: giro de La Plata/BA confirmado 09:00, SF ya en bajada 2.01m).
-    if (nivelActual > umbralEval && tendencia !== "bajando") {
+    // Guard: no avisar si SF YA GIRÓ — si el agua en SF ya pasó su pico y viene
+    // bajando, el aviso "el agua va a bajar" llega tarde y confunde. Se usa
+    // detectarGiro sobre la serie de SF (más robusto que la tendencia puntual:
+    // el 11/08 2.19->2.18 = -0.01 dio "estable" y aun así avisó a las 09:00).
+    const { data: sfParaGiro } = await supabase
+      .from("lecturas")
+      .select("timestamp, nivel_m")
+      .eq("estacion_id", estaciones.id)
+      .eq("tipo", "observado")
+      .order("timestamp", { ascending: false })
+      .limit(48);
+    const sfGiro = sfParaGiro && (sfParaGiro as LecturaRow[]).length >= 4
+      ? detectarGiro(sfParaGiro as LecturaRow[], {
+          picoMaxEdadHs: PICO_MAX_EDAD_HS,
+          pendienteMinMH: PENDIENTE_MIN_M_H,
+        })
+      : null;
+
+    if (nivelActual > umbralEval && !sfGiro) {
       let girados: { nombre: string; picoTs: number }[] = [];
       for (const nombre of EXTERIORES_GIRO) {
         const { data: extEst } = await supabase
