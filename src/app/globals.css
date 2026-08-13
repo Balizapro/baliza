@@ -409,6 +409,44 @@ html {
   opacity: 0.9;
 }
 
+.rb-muelle-no-accesible {
+  margin-top: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.rb-muelle-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.rb-muelle-detalle {
+  margin-top: 4px;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.rb-muelle-detalle strong {
+  color: #fff;
+  font-weight: 800;
+}
+
+.rb-muelle-detalle em {
+  font-style: normal;
+  color: rgba(255, 255, 255, 0.8);
+}
+
 .rb-cuenta-regresiva {
   margin-top: 12px;
   display: flex;

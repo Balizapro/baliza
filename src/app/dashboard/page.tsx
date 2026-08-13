@@ -381,6 +381,20 @@ export default function Dashboard() {
       : null;
   }, [sfProno, ahora]);
 
+  // Estado del muelle: NO accesible mientras SF supera el nivel seguro (2.25m).
+  // La hora de regreso es el primer punto del pronóstico INA que vuelve a quedar
+  // por debajo del límite (la bajada típica de la marea hace que SF baje de 2.25m).
+  const muelleAcceso = useMemo(() => {
+    const nivel = sfObs?.nivel_m ?? null;
+    const noAccesible = nivel != null && nivel > nivelSeguroM;
+    const futuros = (sfProno ?? [])
+      .filter((p) => p.qualifier === "main")
+      .filter((p) => new Date(p.timestamp).getTime() >= ahora)
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    const regreso = futuros.find((p) => p.valor_m <= nivelSeguroM) ?? null;
+    return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0 };
+  }, [sfObs, sfProno, nivelSeguroM, ahora]);
+
   // Color del primer banner, independiente del job: el río puede subir y el banner
   // seguir verde si no hay crecidas a la vista; naranja cuando la crecida se observa
   // (nivel sobre evaluación o pico pronosticado alcanzando evaluación); rojo solo si
@@ -514,6 +528,22 @@ export default function Dashboard() {
                   ? `Nivel actual: ${sfObs.nivel_m.toFixed(2)}m ${tendenciaSF?.direccion === "subiendo" ? "subiendo" : tendenciaSF?.direccion === "bajando" ? "bajando" : "estable"}`
                   : "Esperando primera ingesta de datos"}
               </p>
+              {muelleAcceso.noAccesible && (
+                <div className="rb-muelle-no-accesible">
+                  <p className="rb-muelle-titulo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 shrink-0" aria-hidden="true"><path d="M6 3h12M6 3v18M6 12h12M18 3v18M10 7l-2 2 2 2M14 7l2 2-2 2"/></svg>
+                    Muelle NO accesible
+                  </p>
+                  <p className="rb-muelle-detalle">
+                    Nivel {muelleAcceso.nivel?.toFixed(2)}m — límite {nivelSeguroM.toFixed(2)}m
+                    {muelleAcceso.regreso != null ? (
+                      <> · <strong>vuelve a bajar ≈ {formatearFechaHora(muelleAcceso.regreso.timestamp)}</strong></>
+                    ) : muelleAcceso.tieneProno ? (
+                      <> · <em>sin bajada por debajo de {nivelSeguroM.toFixed(2)}m en el pronóstico</em></>
+                    ) : null}
+                  </p>
+                </div>
+              )}
               {!avisoSHN && (() => {
                 const futuros = (sfProno ?? [])
                   .filter((p) => p.qualifier === "main")
