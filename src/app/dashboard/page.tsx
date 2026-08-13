@@ -39,6 +39,33 @@ function formatearFechaHora(iso: string | null): string {
   return new Date(iso).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+// Minutos del día (0-1439) en la zona horaria de la escuela (Buenos Aires), o null si inválido.
+function minutosDiaArgentina(iso: string | null): number | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const h = parseInt(parts.find((p) => p.type === "hour")?.value ?? "", 10);
+  const m = parseInt(parts.find((p) => p.type === "minute")?.value ?? "", 10);
+  if (Number.isNaN(h)) return null;
+  const hora = h === 24 ? 0 : h;
+  return hora * 60 + m;
+}
+
+// Horario escolar de la escuela (primaria + jardín): de 08:00 a 14:30 local.
+function enHorarioEscolar(iso: string | null): boolean | null {
+  const min = minutosDiaArgentina(iso);
+  if (min == null) return null;
+  const desde = 8 * 60;
+  const hasta = 14 * 60 + 30;
+  return min >= desde && min <= hasta;
+}
+
 function tendenciaIcono(lecturas: Lectura[] | undefined | null): string {
   if (!lecturas || lecturas.length < 2) return "—";
   const diff = lecturas[0].nivel_m - lecturas[1].nivel_m;
@@ -369,6 +396,14 @@ export default function Dashboard() {
     return "verde";
   }, [sfObs, umbralBajEvac, umbralBajAlarma, umbralNR, umbralProno, umbralEval, picoMain]);
 
+  // Aviso SHN vigente: es el más autoritativo (SHN oficial). El pronóstico INA se
+  // considera mientras no haya aviso SHN; cuando este sale, es desplazado en el banner.
+  const avisoSHN = datos?.avisoCrecida ?? null;
+  const alturaSF_SHN = (avisoSHN?.alturas ?? []).find((a) =>
+    a.puerto.toUpperCase().includes("SAN FERNANDO")
+  ) ?? null;
+  const tipoSHN = avisoSHN?.tipo ?? "";
+
   const ciclo = useMemo(
     () => analizarCiclo(historial, lecturasLP.slice(0, 24), 2.5, ahora),
     [historial, lecturasLP, ahora]
@@ -443,6 +478,17 @@ export default function Dashboard() {
       <main className="max-w-5xl mx-auto px-3 sm:px-6 py-4 space-y-4 sm:space-y-5">
         {/* Alerta / Recomendación */}
         <div className="recomendacion-banner-wrapper">
+          {avisoSHN && (
+            <div className={`shn-franja ${tipoSHN.startsWith("alerta_") ? "alerta" : tipoSHN.startsWith("aviso_") ? "aviso" : tipoSHN.startsWith("cese_") ? "cese" : "info"}`}>
+              <span className="shn-franja-etiqueta">
+                {tipoSHN.startsWith("alerta_") ? "ALERTA SHN" : tipoSHN.startsWith("aviso_") ? "AVISO SHN" : tipoSHN.startsWith("cese_") ? "CESE DE AVISO SHN" : "SHN"}
+              </span>
+              <span className="shn-franja-titulo">{avisoSHN.titulo}</span>
+              {alturaSF_SHN && (
+                <span className="shn-franja-altura">San Fernando: <strong>{alturaSF_SHN.altura_m.toFixed(2)}m</strong></span>
+              )}
+            </div>
+          )}
           <div className={`recomendacion-banner ${bannerColor}`}>
             <div className={`rb-flecha ${tendenciaSF?.direccion === "subiendo" ? "subiendo" : tendenciaSF?.direccion === "bajando" ? "bajando" : "estable"}`}>
               {tendenciaSF?.direccion === "subiendo" ? (
@@ -468,7 +514,7 @@ export default function Dashboard() {
                   ? `Nivel actual: ${sfObs.nivel_m.toFixed(2)}m ${tendenciaSF?.direccion === "subiendo" ? "subiendo" : tendenciaSF?.direccion === "bajando" ? "bajando" : "estable"}`
                   : "Esperando primera ingesta de datos"}
               </p>
-              {(() => {
+              {!avisoSHN && (() => {
                 const futuros = (sfProno ?? [])
                   .filter((p) => p.qualifier === "main")
                   .filter((p) => new Date(p.timestamp).getTime() >= ahora)
@@ -477,6 +523,7 @@ export default function Dashboard() {
                 const pico = futuros.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futuros[0]);
                 const umbral = umbralEval?.valor_m ?? 2.0;
                 if (pico.valor_m < umbral) return null;
+                const enHorario = enHorarioEscolar(pico.timestamp);
                 return (
                   <p className="rb-pico">
                     Pico esperado en San Fernando: <strong>{pico.valor_m.toFixed(2)}m</strong> — {formatearFechaHora(pico.timestamp)}
@@ -484,6 +531,16 @@ export default function Dashboard() {
                       <span className="ml-2 inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded-full bg-rojo-oscuro/10 text-rojo-oscuro dark:bg-red-400/10 dark:text-red-300 border border-rojo-oscuro/20">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3" aria-hidden="true"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="10"/></svg>
                         en {cuentaPico}
+                      </span>
+                    )}
+                    {enHorario != null && (
+                      <span className={`ml-2 inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded-full border ${
+                        enHorario
+                          ? "bg-ok/10 text-ok dark:bg-green-400/10 dark:text-green-300 border-ok/30"
+                          : "bg-texto-sec/10 text-texto-sec dark:bg-gray-500/20 dark:text-gray-300 border-texto-sec/30"
+                      }`}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                        {enHorario ? "en horario escolar (8-14:30)" : "fuera de horario escolar"}
                       </span>
                     )}
                   </p>
@@ -518,14 +575,27 @@ export default function Dashboard() {
                   </span>
                 </div>
               )}
-              {(cuentaRegresiva && bannerColor === "roja") && (
-                <div className="rb-cuenta-regresiva">
-                  <span className="rb-tiempo">{cuentaRegresiva}</span>
-                  <span className="rb-tiempo-label">
-                    hasta punto de no retorno ({umbralNR?.valor_m.toFixed(1) ?? "--"}m)
-                  </span>
-                </div>
-              )}
+              {(cuentaRegresiva && bannerColor === "roja") && (() => {
+                const enHorarioNR = enHorarioEscolar(datos?.alerta?.ventana_fin ?? null);
+                return (
+                  <div className="rb-cuenta-regresiva">
+                    <span className="rb-tiempo">{cuentaRegresiva}</span>
+                    <span className="rb-tiempo-label">
+                      hasta punto de no retorno ({umbralNR?.valor_m.toFixed(1) ?? "--"}m)
+                    </span>
+                    {enHorarioNR != null && (
+                      <span className={`ml-2 inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded-full border ${
+                        enHorarioNR
+                          ? "bg-ok/10 text-ok dark:bg-green-400/10 dark:text-green-300 border-ok/30"
+                          : "bg-texto-sec/10 text-texto-sec dark:bg-gray-500/20 dark:text-gray-300 border-texto-sec/30"
+                      }`}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                        {enHorarioNR ? "en horario escolar (8-14:30)" : "fuera de horario escolar"}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
               {(() => {
                 const futuros = (sfProno ?? [])
                   .filter((p) => p.qualifier === "main")
