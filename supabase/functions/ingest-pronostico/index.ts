@@ -44,10 +44,12 @@ serve(async (req) => {
     const sf = estaciones?.find((e) => e.nombre.includes("San Fernando"));
     if (!sf) throw new Error("San Fernando no encontrada en BD");
 
-    // Fetch 4-day window: 1 day past + 3 days future
+    // Fetch window: 1 day past + 5 days future (el pronóstico INA suele llegar
+    // hasta ~4-5 días; ampliar la ventana permite ver picos del fin de semana
+    // / días hábiles siguientes antes de que ocurran).
     const now = new Date();
     const start = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
-    const end = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const end = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
     const timestart = start.toISOString().split("T")[0];
     const timeend = end.toISOString().split("T")[0];
 

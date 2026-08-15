@@ -57,13 +57,38 @@ function minutosDiaArgentina(iso: string | null): number | null {
   return hora * 60 + m;
 }
 
-// Horario escolar de la escuela (primaria + jardín): de 08:00 a 14:30 local.
+// Feriados sin clases (fechas locales AAAA-MM-DD). Mantener al día.
+const FERIADOS_SIN_CLASES = new Set([
+  "2026-08-17", // Paso a la Inmortalidad del Gral. San Martín
+]);
+
+// Día civil en la zona de la escuela (AAAA-MM-DD), o null si inválido.
+function fechaDiaArgentina(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
+}
+
+// Día de la semana en la zona de la escuela (short ISO weekday: Mon..Sun).
+function weekdayArgentina(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat("en-US", { timeZone: "America/Argentina/Buenos_Aires", weekday: "short" }).format(d);
+}
+
+// Horario escolar de la escuela (primaria + jardín): de 08:00 a 14:30 local,
+// solo de lunes a viernes y sin clases en feriados.
 function enHorarioEscolar(iso: string | null): boolean | null {
   const min = minutosDiaArgentina(iso);
   if (min == null) return null;
-  const desde = 8 * 60;
-  const hasta = 14 * 60 + 30;
-  return min >= desde && min <= hasta;
+  const dia = fechaDiaArgentina(iso);
+  const weekday = weekdayArgentina(iso);
+  if (!dia || !weekday) return null;
+  if (FERIADOS_SIN_CLASES.has(dia)) return false;
+  if (weekday === "Sat" || weekday === "Sun") return false;
+  return min >= 8 * 60 && min <= 14 * 60 + 30;
 }
 
 function tendenciaIcono(lecturas: Lectura[] | undefined | null): string {
@@ -384,6 +409,9 @@ export default function Dashboard() {
   // Estado del muelle: NO accesible mientras SF supera el nivel seguro (2.25m).
   // La hora de regreso es el primer punto del pronóstico INA que vuelve a quedar
   // por debajo del límite (la bajada típica de la marea hace que SF baje de 2.25m).
+  // Además, `picoNoAccesible` = primer pico pronosticado que supera el límite del
+  // muelle dentro del horario escolar de los próximos días (p. ej. pronóstico de
+  // 2.81m el martes a las 12): permite avisar "no ir a la escuela" por adelantado.
   const muelleAcceso = useMemo(() => {
     const nivel = sfObs?.nivel_m ?? null;
     const noAccesible = nivel != null && nivel > nivelSeguroM;
@@ -392,7 +420,10 @@ export default function Dashboard() {
       .filter((p) => new Date(p.timestamp).getTime() >= ahora)
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     const regreso = futuros.find((p) => p.valor_m <= nivelSeguroM) ?? null;
-    return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0 };
+    const picoNoAccesible = futuros.find(
+      (p) => p.valor_m > nivelSeguroM && enHorarioEscolar(p.timestamp) === true
+    ) ?? null;
+    return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible };
   }, [sfObs, sfProno, nivelSeguroM, ahora]);
 
   // Color del primer banner, independiente del job: el río puede subir y el banner
@@ -528,6 +559,23 @@ export default function Dashboard() {
                   ? `Nivel actual: ${sfObs.nivel_m.toFixed(2)}m ${tendenciaSF?.direccion === "subiendo" ? "subiendo" : tendenciaSF?.direccion === "bajando" ? "bajando" : "estable"}`
                   : "Esperando primera ingesta de datos"}
               </p>
+              {muelleAcceso.picoNoAccesible && !muelleAcceso.noAccesible && (
+                <div className="rb-muelle-no-accesible rb-muelle-preaviso">
+                  <p className="rb-muelle-titulo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 shrink-0" aria-hidden="true"><path d="M12 9v4M12 17.5h.01M10.3 4.7 2.6 18a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 4.7a1.8 1.8 0 0 0-3 0Z"/></svg>
+                    Precaución — muelle NO accesible estimado
+                  </p>
+                  <p className="rb-muelle-detalle">
+                    Se pronostica <strong>{muelleAcceso.picoNoAccesible.valor_m.toFixed(2)}m</strong> el {formatearFechaHora(muelleAcceso.picoNoAccesible.timestamp)}
+                  </p>
+                  {enHorarioEscolar(muelleAcceso.picoNoAccesible.timestamp) === true && (
+                    <p className="rb-muelle-escuela">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                      <span><strong>No embarcar</strong> — en horario escolar (8–14:30): no ir a la escuela ese día si se confirma la crecida</span>
+                    </p>
+                  )}
+                </div>
+              )}
               {muelleAcceso.noAccesible && (
                 <div className="rb-muelle-no-accesible">
                   <p className="rb-muelle-titulo">
@@ -542,6 +590,12 @@ export default function Dashboard() {
                       <> · <em>sin bajada por debajo de {nivelSeguroM.toFixed(2)}m en el pronóstico</em></>
                     ) : null}
                   </p>
+                  {enHorarioEscolar(new Date(ahora).toISOString()) === true && (
+                    <p className="rb-muelle-escuela">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                      <span><strong>No embarcar</strong> — en horario escolar (8–14:30): no ir a la escuela hasta que el muelle sea accesible</span>
+                    </p>
+                  )}
                 </div>
               )}
               {!avisoSHN && (() => {

@@ -447,6 +447,31 @@ html {
   color: rgba(255, 255, 255, 0.8);
 }
 
+.rb-muelle-escuela {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.35);
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #fff;
+}
+
+.rb-muelle-escuela strong {
+  font-weight: 800;
+}
+
+.rb-muelle-preaviso {
+  border-color: rgba(255, 200, 90, 0.9);
+}
+
+.rb-muelle-preaviso .rb-muelle-titulo {
+  color: #ffe9b8;
+}
+
 .rb-cuenta-regresiva {
   margin-top: 12px;
   display: flex;
