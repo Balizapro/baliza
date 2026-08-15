@@ -472,6 +472,58 @@ html {
   color: #ffe9b8;
 }
 
+.rb-plan {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.rb-plan-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.rb-plan-hora {
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  min-width: 3.2em;
+}
+
+.rb-plan-altura {
+  font-family: ui-monospace, monospace;
+  color: rgba(255, 255, 255, 0.95);
+  min-width: 4.5em;
+}
+
+.rb-plan-row.ok .rb-plan-veredicto {
+  color: #a8e6b8;
+}
+
+.rb-plan-row.mal .rb-plan-veredicto {
+  color: #ffb4a2;
+  font-weight: 700;
+}
+
+.rb-plan-limit {
+  margin-top: 2px;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #ffe9b8;
+}
+
+.rb-plan-limit strong {
+  color: #fff;
+  font-weight: 800;
+}
+
 .rb-cuenta-regresiva {
   margin-top: 12px;
   display: flex;

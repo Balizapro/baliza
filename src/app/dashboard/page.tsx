@@ -407,11 +407,9 @@ export default function Dashboard() {
   }, [sfProno, ahora]);
 
   // Estado del muelle: NO accesible mientras SF supera el nivel seguro (2.25m).
-  // La hora de regreso es el primer punto del pronóstico INA que vuelve a quedar
-  // por debajo del límite (la bajada típica de la marea hace que SF baje de 2.25m).
-  // Además, `picoNoAccesible` = primer pico pronosticado que supera el límite del
-  // muelle dentro del horario escolar de los próximos días (p. ej. pronóstico de
-  // 2.81m el martes a las 12): permite avisar "no ir a la escuela" por adelantado.
+  // Cuando hay un pico pronosticado que supera el límite dentro del horario
+  // escolar de un día próximo, se arma un "plan del día" (entrada 8:00, vuelta
+  // 14:15, hora límite de salida) para anticipar el cruce por lancha.
   const muelleAcceso = useMemo(() => {
     const nivel = sfObs?.nivel_m ?? null;
     const noAccesible = nivel != null && nivel > nivelSeguroM;
@@ -423,8 +421,83 @@ export default function Dashboard() {
     const picoNoAccesible = futuros.find(
       (p) => p.valor_m > nivelSeguroM && enHorarioEscolar(p.timestamp) === true
     ) ?? null;
-    return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible };
+
+    // Plan del día del pico: qué pasa a las 8:00, a las 14:15 y cuándo corta.
+    let plan: {
+      entradaMin: number; entradaM: number;
+      vueltaMin: number; vueltaM: number;
+      salidaLimiteMin: number;
+      ventanaMin: number; ventanaMax: number;
+    } | null = null;
+    if (picoNoAccesible) {
+      const dia = fechaDiaArgentina(picoNoAccesible.timestamp);
+      const pts = futuros
+        .filter((p) => fechaDiaArgentina(p.timestamp) === dia)
+        .filter((p) => minutosDiaArgentina(p.timestamp) != null)
+        .sort((a, b) => (minutosDiaArgentina(a.timestamp) ?? 0) - (minutosDiaArgentina(b.timestamp) ?? 0));
+      const valorEn = (targetMin: number): { v: number; m: number } | null => {
+        if (!pts.length) return null;
+        const exact = pts.find((p) => minutosDiaArgentina(p.timestamp) === targetMin);
+        if (exact) return { v: exact.valor_m, m: targetMin };
+        let antes: (typeof pts)[0] | null = null;
+        let despues: (typeof pts)[0] | null = null;
+        for (const p of pts) {
+          const m = minutosDiaArgentina(p.timestamp) ?? 0;
+          if (m <= targetMin) antes = p;
+          else { despues = p; break; }
+        }
+        if (antes && despues) {
+          const m1 = minutosDiaArgentina(antes.timestamp) ?? 0;
+          const m2 = minutosDiaArgentina(despues.timestamp) ?? 0;
+          const frac = (targetMin - m1) / (m2 - m1 || 1);
+          return { v: antes.valor_m + (despues.valor_m - antes.valor_m) * frac, m: targetMin };
+        }
+        if (antes) return { v: antes.valor_m, m: minutosDiaArgentina(antes.timestamp) ?? targetMin };
+        if (despues) return { v: despues.valor_m, m: minutosDiaArgentina(despues.timestamp) ?? targetMin };
+        return null;
+      };
+      const ENTRADA = 8 * 60;
+      const VUELTA = 14 * 60 + 15;
+      const entrada = valorEn(ENTRADA);
+      const vuelta = valorEn(VUELTA);
+      // Cruce por encima del límite (hora límite de salida): última transición
+      // subiendo de <= límite a > límite dentro del día.
+      let cruceSup: number | null = null;
+      let cruceInf: number | null = null;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const v1 = pts[i].valor_m;
+        const v2 = pts[i + 1].valor_m;
+        const m1 = minutosDiaArgentina(pts[i].timestamp) ?? 0;
+        const m2 = minutosDiaArgentina(pts[i + 1].timestamp) ?? 0;
+        if (cruceSup === null && v1 <= nivelSeguroM && v2 > nivelSeguroM) {
+          cruceSup = m1 + ((nivelSeguroM - v1) / ((v2 - v1) || 1)) * (m2 - m1);
+        }
+        if (cruceSup !== null && cruceInf === null && v1 > nivelSeguroM && v2 <= nivelSeguroM) {
+          cruceInf = m1 + ((nivelSeguroM - v1) / ((v2 - v1) || 1)) * (m2 - m1);
+        }
+      }
+      if (entrada && vuelta && (cruceSup !== null || cruceInf !== null)) {
+        plan = {
+          entradaMin: entrada.m,
+          entradaM: entrada.v,
+          vueltaMin: vuelta.m,
+          vueltaM: vuelta.v,
+          salidaLimiteMin: cruceSup ?? 0,
+          ventanaMin: Math.min(entrada.m, vuelta.m, cruceSup ?? vuelta.m),
+          ventanaMax: Math.max(entrada.m, vuelta.m, cruceInf ?? vuelta.m),
+        };
+      }
+    }
+
+    return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible, plan };
   }, [sfObs, sfProno, nivelSeguroM, ahora]);
+
+  function hhmm(min: number | null): string {
+    if (min == null) return "--";
+    const h = Math.floor(min / 60);
+    const m = Math.round(min % 60);
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
 
   // Color del primer banner, independiente del job: el río puede subir y el banner
   // seguir verde si no hay crecidas a la vista; naranja cuando la crecida se observa
@@ -568,6 +641,39 @@ export default function Dashboard() {
                   <p className="rb-muelle-detalle">
                     Se pronostica <strong>{muelleAcceso.picoNoAccesible.valor_m.toFixed(2)}m</strong> el {formatearFechaHora(muelleAcceso.picoNoAccesible.timestamp)}
                   </p>
+                  {muelleAcceso.plan && (
+                    <div className="rb-plan">
+                      <div className={`rb-plan-row ${muelleAcceso.plan.entradaM > nivelSeguroM ? "mal" : "ok"}`}>
+                        <span className="rb-plan-hora">{hhmm(muelleAcceso.plan.entradaMin)}</span>
+                        <span className="rb-plan-altura">{muelleAcceso.plan.entradaM.toFixed(2)}m</span>
+                        <span className="rb-plan-veredicto">
+                          {muelleAcceso.plan.entradaM > nivelSeguroM
+                            ? "NO se puede embarcar"
+                            : "sí se puede embarcar"}
+                        </span>
+                      </div>
+                      <div className={`rb-plan-row ${muelleAcceso.plan.vueltaM > nivelSeguroM ? "mal" : "ok"}`}>
+                        <span className="rb-plan-hora">{hhmm(muelleAcceso.plan.vueltaMin)}</span>
+                        <span className="rb-plan-altura">{muelleAcceso.plan.vueltaM.toFixed(2)}m</span>
+                        <span className="rb-plan-veredicto">
+                          {muelleAcceso.plan.vueltaM > nivelSeguroM
+                            ? "NO se puede volver"
+                            : "sí se puede volver"}
+                        </span>
+                      </div>
+                      {muelleAcceso.plan.entradaM <= nivelSeguroM && muelleAcceso.plan.salidaLimiteMin > 0 && muelleAcceso.plan.salidaLimiteMin < 15 * 60 + 30 && (
+                        <div className="rb-plan-limit">
+                          ⏱ Se entra a las 8, pero hay que irse antes de las{" "}
+                          <strong>{hhmm(muelleAcceso.plan.salidaLimiteMin)}</strong>
+                        </div>
+                      )}
+                      {muelleAcceso.plan.entradaM > nivelSeguroM && (
+                        <div className="rb-plan-limit">
+                          🚫 El muelle no vuelve a bajar de {nivelSeguroM.toFixed(2)}m ese día a la tarde
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {enHorarioEscolar(muelleAcceso.picoNoAccesible.timestamp) === true && (
                     <p className="rb-muelle-escuela">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
