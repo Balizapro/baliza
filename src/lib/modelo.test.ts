@@ -164,7 +164,10 @@ test("validarModelo: el modelo con viento recupera niveles con MAE bajo y alto a
     assert.ok(v!.n >= 3, `h${h} n=${v!.n}`);
     // tolerancia amplia: el residuo meteorológico degrada el ajuste en ventanas cortas
     assert.ok(v!.mae_m < 0.7, `h${h} mae=${v!.mae_m}`);
-    assert.ok(v!.acierto_pct > 10, `h${h} acierto=${v!.acierto_pct}`);
+    // El backtest usa solo el viento conocido hasta el corte (sin lookahead),
+    // como en producción; a 24h el viento oscilante de la serie sintética
+    // clampa al último valor, así que el umbral es más laxo.
+    assert.ok(v!.acierto_pct > 5, `h${h} acierto=${v!.acierto_pct}`);
   }
 });
 

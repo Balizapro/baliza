@@ -320,9 +320,27 @@ export function proyectarCurva(
 
   const sigmaBase = regresion?.sigma_m ?? ajuste?.sigma_m ?? 0.15;
 
+  // Error del modelo en la última observación (persistencia): el residuo
+  // meteorológico (sudestada/ría) decae con una escala ~24h, no vuelve a cero
+  // de inmediato. Usamos observado - (armónico + corrección de viento).
+  const ultObs = lecturas[lecturas.length - 1];
+  const tUlt = new Date(ultObs.timestamp).getTime();
+  const vUlt = regresion ? vientoEn(ventos, tUlt - regresion.lag_h * H) : null;
+  const compSEUlt = vUlt ? componenteSE(vUlt.velocidad_kmh, vUlt.direccion_grados) : null;
+  const anomPresUlt = vUlt?.presion_hpa != null && regresion?.presionRefHpa != null
+    ? vUlt.presion_hpa - regresion.presionRefHpa
+    : 0;
+  const corrUlt = regresion
+    ? regresion.intercepto_m +
+      (compSEUlt != null ? regresion.pendiente_m_por_kmh * compSEUlt : 0) +
+      (regresion.presion_m_por_hpa ?? 0) * anomPresUlt
+    : 0;
+  const errUlt = ultObs.nivel_m - (ajuste ? valorArmonico(ajuste, tUlt, t0) : 0) - corrUlt;
+  const tauPersistenciaH = 24;
+
   for (let ts = ahora; ts <= ahora + horizonteHs * H; ts += pasoMs) {
     const arm = ajuste ? valorArmonico(ajuste, ts, t0) : null;
-    const v = ventos.length ? vientoEn(ventos, ts) : null;
+    const v = ventos.length ? vientoEn(ventos, ts - (regresion?.lag_h ?? 0) * H) : null;
     const compSE = v ? componenteSE(v.velocidad_kmh, v.direccion_grados) : null;
     const anomPresion = v?.presion_hpa != null && regresion?.presionRefHpa != null
       ? v.presion_hpa - regresion.presionRefHpa
@@ -332,8 +350,9 @@ export function proyectarCurva(
         (compSE != null ? regresion.pendiente_m_por_kmh * compSE : 0) +
         (regresion.presion_m_por_hpa ?? 0) * anomPresion
       : 0;
+    const persistencia = ts >= tUlt ? errUlt * Math.exp(-(ts - tUlt) / (tauPersistenciaH * H)) : 0;
 
-    const nivel = arm != null ? arm + correccionViento : (compSE != null ? correccionViento : null);
+    const nivel = arm != null ? arm + correccionViento + persistencia : (compSE != null ? correccionViento : null);
     if (nivel == null) continue;
 
     // La banda crece con el horizonte (incertidumbre del pronóstico de viento).
@@ -420,12 +439,26 @@ export function validarModelo(
     const regresion = regresarViento(pre, ajuste, ventosPre);
     const t0 = pre[0].t0;
 
+    // persistencia del residuo meteorológico en el corte (úsala al nivel del modelo)
+    const ultPre = pre[pre.length - 1];
+    const vUlt = regresion ? vientoEn(ventosPre, ultPre.t0 - regresion.lag_h * H) : null;
+    const compSEUlt = vUlt ? componenteSE(vUlt.velocidad_kmh, vUlt.direccion_grados) : null;
+    const anomPresUlt = vUlt?.presion_hpa != null && regresion?.presionRefHpa != null
+      ? vUlt.presion_hpa - regresion.presionRefHpa
+      : 0;
+    const corrUlt = regresion
+      ? regresion.intercepto_m +
+        (compSEUlt != null ? regresion.pendiente_m_por_kmh * compSEUlt : 0) +
+        (regresion.presion_m_por_hpa ?? 0) * anomPresUlt
+      : 0;
+    const errUlt = ultPre.nivel_m - (ajuste ? valorArmonico(ajuste, ultPre.t0, t0) : 0) - corrUlt;
+
     for (const h of horizontesHs) {
       const target = corte + h * H;
       const obs = nivelObservadoEn(ordenadas, target);
       if (obs == null) continue;
       const arm = valorArmonico(ajuste, target, t0);
-      const v = ventosT.length ? vientoEn(ventosT, target) : null;
+      const v = ventosT.length ? vientoEn(ventosPre.length ? ventosPre : ventosT, target - (regresion?.lag_h ?? 0) * H) : null;
       const compSE = v ? componenteSE(v.velocidad_kmh, v.direccion_grados) : null;
       const anomPresion = v?.presion_hpa != null && regresion?.presionRefHpa != null
         ? v.presion_hpa - regresion.presionRefHpa
@@ -435,7 +468,8 @@ export function validarModelo(
           (compSE != null ? regresion.pendiente_m_por_kmh * compSE : 0) +
           (regresion.presion_m_por_hpa ?? 0) * anomPresion
         : 0;
-      const pred = arm + corr;
+      const persistencia = errUlt * Math.exp(-h / 24);
+      const pred = arm + corr + persistencia;
       const arr = erroresPorHorizonte.get(h) ?? [];
       arr.push(pred - obs);
       erroresPorHorizonte.set(h, arr);
