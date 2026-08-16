@@ -163,7 +163,8 @@ function valorArmonico(ajuste: AjusteArmonico, tsMs: number, t0Ms: number): numb
   let v = ajuste.c0;
   for (const c of ajuste.componentes) {
     const w = (2 * Math.PI) / c.periodo_h;
-    v += c.amplitud_m * Math.sin(w * th + c.fase_rad);
+    // Ajuste c0 + Σ(a·cos + b·sin) con a=A·cos(fase), b=A·sin(fase) => A·cos(w·t − fase).
+    v += c.amplitud_m * Math.cos(w * th - c.fase_rad);
   }
   return v;
 }
@@ -311,9 +312,27 @@ export function proyectarCurva(
 
   const sigmaBase = regresion?.sigma_m ?? ajuste?.sigma_m ?? 0.15;
 
+  // Persistencia del residuo meteorológico: el error del modelo en la última
+  // observación decae con escala ~24h (autocorrelación 6h≈0.75, 12h≈0.48);
+  // un evento de sudestada no vuelve a cero de inmediato.
+  const ultObs = lecturas[lecturas.length - 1];
+  const tUlt = new Date(ultObs.timestamp).getTime();
+  const vUlt = regresion ? vientoEn(ventos, tUlt - regresion.lag_h * H) : null;
+  const compSEUlt = vUlt ? componenteSE(vUlt.velocidad_kmh, vUlt.direccion_grados) : null;
+  const anomPresUlt = vUlt?.presion_hpa != null && regresion?.presionRefHpa != null
+    ? vUlt.presion_hpa - regresion.presionRefHpa
+    : 0;
+  const corrUlt = regresion
+    ? regresion.intercepto_m +
+      (compSEUlt != null ? regresion.pendiente_m_por_kmh * compSEUlt : 0) +
+      (regresion.presion_m_por_hpa ?? 0) * anomPresUlt
+    : 0;
+  const errUlt = ultObs.nivel_m - (ajuste ? valorArmonico(ajuste, tUlt, t0) : 0) - corrUlt;
+  const tauPersistenciaH = 24;
+
   for (let ts = ahora; ts <= ahora + horizonteHs * H; ts += pasoMs) {
     const arm = ajuste ? valorArmonico(ajuste, ts, t0) : null;
-    const v = ventos.length ? vientoEn(ventos, ts) : null;
+    const v = ventos.length ? vientoEn(ventos, ts - (regresion?.lag_h ?? 0) * H) : null;
     const compSE = v ? componenteSE(v.velocidad_kmh, v.direccion_grados) : null;
     const anomPresion = v?.presion_hpa != null && regresion?.presionRefHpa != null
       ? v.presion_hpa - regresion.presionRefHpa
@@ -323,8 +342,9 @@ export function proyectarCurva(
         (compSE != null ? regresion.pendiente_m_por_kmh * compSE : 0) +
         (regresion.presion_m_por_hpa ?? 0) * anomPresion
       : 0;
+    const persistencia = ts >= tUlt ? errUlt * Math.exp(-(ts - tUlt) / (tauPersistenciaH * H)) : 0;
 
-    const nivel = arm != null ? arm + correccionViento : (compSE != null ? correccionViento : null);
+    const nivel = arm != null ? arm + correccionViento + persistencia : (compSE != null ? correccionViento : null);
     if (nivel == null) continue;
 
     const factor = 1 + (ts - ahora) / (horizonteHs * H) * 0.5;
