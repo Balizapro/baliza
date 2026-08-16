@@ -162,7 +162,10 @@ function valorArmonico(ajuste: AjusteArmonico, tsMs: number, t0Ms: number): numb
   let v = ajuste.c0;
   for (const c of ajuste.componentes) {
     const w = (2 * Math.PI) / c.periodo_h;
-    v += c.amplitud_m * Math.sin(w * th + c.fase_rad);
+    // El ajuste es c0 + Σ(a·cos + b·sin) con a=A·cos(fase), b=A·sin(fase);
+    // la reconstrucción correcta es A·cos(w·t − fase). Usar sin(w·t + fase)
+    // intercambiaba cos/sin (fase corrida un cuarto de período, ~3h en M2).
+    v += c.amplitud_m * Math.cos(w * th - c.fase_rad);
   }
   return v;
 }

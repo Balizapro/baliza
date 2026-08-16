@@ -85,6 +85,34 @@ test("proyección: genera puntos futuros con banda y extremos en horizonte", () 
   assert.ok(Math.abs(gapHs - 12.4) < 1.5, `gap=${gapHs}`);
 });
 
+test("proyección: reconstruye la fase de una senoide pura (regresión cos/sin)", () => {
+  // Serie artificial M2 pura con fase conocida: h(t)=2+0.9·sin(w·t+π/4).
+  // El ajuste es c0 + Σ(a·cos+b·sin); si la reconstrucción invierte cos/sin
+  // (bug de fase), la proyección queda corrida ~1/4 de período y el error
+  // ronda la amplitud (~0.9 m). Con la fase correcta el error es < 0.15 m.
+  const A_M2 = 0.9;
+  const wM2 = (2 * Math.PI) / 12.4206;
+  const fase = Math.PI / 4;
+  const pts: Punto[] = [];
+  for (let i = 0; i < 12 * 48; i++) {
+    const ts = T0 + i * 30 * 60000;
+    const th = ts / H;
+    pts.push({ timestamp: new Date(ts).toISOString(), nivel_m: 2 + A_M2 * Math.sin(wM2 * th + fase) });
+  }
+  const ahora = T0 + 12 * 24 * H;
+  const proy = proyectarCurva(pts, [], ahora, 48);
+  assert.ok(proy.puntos.length > 0, "sin proyección");
+  assert.ok(proy.ajuste, "sin ajuste");
+  const m2 = proy.ajuste!.componentes.find((c) => c.periodo_h === 12.4206);
+  assert.ok(m2, "sin comp M2");
+  assert.ok(Math.abs(m2!.amplitud_m - A_M2) < 0.1, `A_M2=${m2!.amplitud_m}`);
+  for (const p of proy.puntos) {
+    const th = new Date(p.timestamp).getTime() / H;
+    const esperado = 2 + A_M2 * Math.sin(wM2 * th + fase);
+    assert.ok(Math.abs(p.nivel_m - esperado) < 0.15, `ts=${p.timestamp} got=${p.nivel_m.toFixed(3)} esperado=${esperado.toFixed(3)}`);
+  }
+});
+
 test("proyección: banda superior siempre >= puntos >= banda inferior", () => {
   const { pts, ventos } = serieSintetica(6, 0, 0);
   const proy = proyectarCurva(pts, ventos, T0 + 5 * 24 * H, 24);
