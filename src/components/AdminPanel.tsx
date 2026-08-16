@@ -160,6 +160,52 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
   const [editMax, setEditMax] = useState("");
   const [msgEsc, setMsgEsc] = useState("");
 
+  const [abiertoDias, setAbiertoDias] = useState(false);
+  const [dias, setDias] = useState<{ fecha: string; motivo: string }[]>([]);
+  const [cargandoDias, setCargandoDias] = useState(false);
+  const [nuevaFecha, setNuevaFecha] = useState("");
+  const [nuevoMotivo, setNuevoMotivo] = useState("");
+  const [msgDias, setMsgDias] = useState("");
+
+  useEffect(() => {
+    if (!abiertoDias) return;
+    cargarDias();
+  }, [abiertoDias]);
+
+  async function cargarDias() {
+    setCargandoDias(true);
+    const res = await fetch("/api/dias-sin-clases");
+    const json = await res.json();
+    if (json.data) setDias(json.data);
+    setCargandoDias(false);
+  }
+
+  async function agregarDia() {
+    setMsgDias("");
+    if (!nuevaFecha) { setMsgDias("Elegí una fecha"); return; }
+    const res = await fetch("/api/dias-sin-clases", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fecha: nuevaFecha, motivo: nuevoMotivo }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) { setMsgDias(json.error ?? "Error al guardar"); return; }
+    setNuevaFecha(""); setNuevoMotivo("");
+    setMsgDias("Guardado");
+    await cargarDias();
+    onSaved();
+  }
+
+  async function eliminarDia(fecha: string) {
+    if (!confirm("¿Quitar este día sin clases?")) return;
+    setMsgDias("");
+    const res = await fetch(`/api/dias-sin-clases?fecha=${fecha}`, { method: "DELETE" });
+    if (!res.ok) { setMsgDias("Error al eliminar"); return; }
+    setMsgDias("Eliminado");
+    await cargarDias();
+    onSaved();
+  }
+
   useEffect(() => {
     if (!abiertoEscalones) return;
     cargarEscalones();
@@ -459,6 +505,72 @@ export default function AdminPanel({ umbralEval, umbralNR, umbralBajAlarma, umbr
 
             {msgEsc && (
               <p className={`text-xs ${msgEsc === "Error al crear" || msgEsc === "Error al guardar" || msgEsc === "Error al eliminar" || msgEsc === "Valores inválidos" ? "text-rojo-alerta dark:text-red-400" : "text-ok dark:text-green-400"}`}>{msgEsc}</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <button
+          onClick={() => setAbiertoDias(!abiertoDias)}
+          className="w-full text-left flex items-center justify-between group"
+        >
+          <h2 className="seccion-titulo">
+            Días sin clases
+          </h2>
+          <span className="text-texto-sec group-hover:text-texto-sec dark:text-gray-400 transition-colors">{abiertoDias ? "▲" : "▼"}</span>
+        </button>
+
+        {abiertoDias && (
+          <div className="mt-3 space-y-3">
+            {cargandoDias && <p className="text-xs italic text-texto-sec dark:text-gray-400">Cargando...</p>}
+
+            {!cargandoDias && dias.length === 0 && (
+              <p className="text-xs italic text-texto-sec dark:text-gray-400">No hay días sin clases cargados.</p>
+            )}
+
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {dias.map((d) => (
+                <div key={d.fecha} className="flex items-center justify-between border border-borde/50 dark:border-gray-700 rounded-lg px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-mono text-texto dark:text-gray-200">{d.fecha}</p>
+                    {d.motivo && <p className="text-xs text-texto-sec dark:text-gray-400 truncate">{d.motivo}</p>}
+                  </div>
+                  <button
+                    onClick={() => eliminarDia(d.fecha)}
+                    className="text-xs text-rojo-alerta dark:text-red-400 hover:underline flex-shrink-0 ml-2"
+                  >
+                    Quitar
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-2 space-y-2 border-t border-borde/40 dark:border-gray-700">
+              <p className="text-xs font-sans text-texto-sec dark:text-gray-400 uppercase tracking-[0.15em]">Agregar día</p>
+              <input
+                type="date"
+                value={nuevaFecha}
+                onChange={(e) => setNuevaFecha(e.target.value)}
+                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+              />
+              <input
+                type="text"
+                value={nuevoMotivo}
+                onChange={(e) => setNuevoMotivo(e.target.value)}
+                placeholder="Motivo (ej: feriado, asueto, jornada)"
+                className="w-full border border-borde dark:border-gray-600 bg-white dark:bg-surface-dark text-texto dark:text-gray-200 rounded-lg px-3 py-2 text-sm"
+              />
+              <button
+                onClick={agregarDia}
+                className="bg-baliza text-white text-xs px-4 py-1.5 rounded hover:bg-baliza/90 transition-colors"
+              >
+                Agregar
+              </button>
+            </div>
+
+            {msgDias && (
+              <p className={`text-xs ${msgDias === "Guardado" || msgDias === "Eliminado" ? "text-ok dark:text-green-400" : "text-rojo-alerta dark:text-red-400"}`}>{msgDias}</p>
             )}
           </div>
         )}

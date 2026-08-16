@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
-import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn, AvisoCrecida, NivelAlerta } from "@/lib/types";
+import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn, AvisoCrecida, NivelAlerta, Bitacora as BitacoraType } from "@/lib/types";
 import Bitacora from "@/components/Bitacora";
 import { useAuth } from "@/components/AuthProvider";
 import AdminPanel from "@/components/AdminPanel";
@@ -23,6 +23,7 @@ import ValidacionModelo from "@/components/ValidacionModelo";
 import CompartirWhatsApp from "@/components/CompartirWhatsApp";
 import AvisoCrecidaCard from "@/components/AvisoCrecidaCard";
 import { analizarCiclo, predecirProximosExtremos } from "@/lib/ciclo";
+import { calcularVeredicto } from "@/lib/planEscolar";
 import { useAhora } from "@/lib/useAhora";
 import CurvaProyectada from "@/components/CurvaProyectada";
 import FaseMarea from "@/components/FaseMarea";
@@ -58,6 +59,7 @@ function minutosDiaArgentina(iso: string | null): number | null {
 }
 
 // Feriados sin clases (fechas locales AAAA-MM-DD). Mantener al día.
+// El equipo puede sumar/editar más días desde AdminPanel (tabla dias_sin_clases).
 const FERIADOS_SIN_CLASES = new Set([
   "2026-08-17", // Paso a la Inmortalidad del Gral. San Martín
 ]);
@@ -79,14 +81,14 @@ function weekdayArgentina(iso: string | null): string | null {
 }
 
 // Horario escolar de la escuela (primaria + jardín): de 08:00 a 14:30 local,
-// solo de lunes a viernes y sin clases en feriados.
-function enHorarioEscolar(iso: string | null): boolean | null {
+// solo de lunes a viernes y sin clases en feriados (fijos + editables por el equipo).
+function enHorarioEscolar(iso: string | null, diasSinClases: string[] = []): boolean | null {
   const min = minutosDiaArgentina(iso);
   if (min == null) return null;
   const dia = fechaDiaArgentina(iso);
   const weekday = weekdayArgentina(iso);
   if (!dia || !weekday) return null;
-  if (FERIADOS_SIN_CLASES.has(dia)) return false;
+  if (FERIADOS_SIN_CLASES.has(dia) || diasSinClases.includes(dia)) return false;
   if (weekday === "Sat" || weekday === "Sun") return false;
   return min >= 8 * 60 && min <= 14 * 60 + 30;
 }
@@ -147,6 +149,8 @@ export default function Dashboard() {
   const [exterioresLecturas, setExterioresLecturas] = useState<{ nombre: string; lecturas: Lectura[] }[]>([]);
   const [vientoHist, setVientoHist] = useState<{ timestamp: string; velocidad_kmh: number; direccion_grados: number; presion_hpa?: number | null }[]>([]);
   const [vientoProno, setVientoProno] = useState<{ timestamp: string; velocidad_kmh: number; direccion_grados: number; presion_hpa?: number | null }[]>([]);
+  const [diasSinClases, setDiasSinClases] = useState<string[]>([]);
+  const [bitacora, setBitacora] = useState<BitacoraType[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -205,6 +209,17 @@ export default function Dashboard() {
       const { data: umbrales } = await supabase.from("umbrales").select("*");
 
       const { data: config } = await supabase.from("configuracion").select("*");
+
+      const { data: diasRaw } = await supabase.from("dias_sin_clases").select("fecha");
+      setDiasSinClases((diasRaw ?? []).map((d: { fecha: string }) => d.fecha));
+
+      // Bitácora reciente: se vincula al veredicto del día (cruces/eventos previos).
+      const { data: bitacoraRaw } = await supabase
+        .from("bitacora")
+        .select("*")
+        .order("timestamp", { ascending: false })
+        .limit(60);
+      setBitacora((bitacoraRaw as BitacoraType[]) ?? []);
 
       const { data: escalones } = await supabase
         .from("equivalencia_escalones")
@@ -408,8 +423,9 @@ export default function Dashboard() {
 
   // Estado del muelle: NO accesible mientras SF supera el nivel seguro (2.25m).
   // Cuando hay un pico pronosticado que supera el límite dentro del horario
-  // escolar de un día próximo, se arma un "plan del día" (entrada 8:00, vuelta
-  // 14:15, hora límite de salida) para anticipar el cruce por lancha.
+  // escolar de un día próximo, se arma un "plan del día" (veredicto: entrada
+  // 8:00, vuelta 14:15, hora de veredicto 7:00, hora límite de salida y
+  // confianza por bandas p25/p95) para anticipar el cruce por lancha.
   const muelleAcceso = useMemo(() => {
     const nivel = sfObs?.nivel_m ?? null;
     const noAccesible = nivel != null && nivel > nivelSeguroM;
@@ -419,78 +435,21 @@ export default function Dashboard() {
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     const regreso = futuros.find((p) => p.valor_m <= nivelSeguroM) ?? null;
     const picoNoAccesible = futuros.find(
-      (p) => p.valor_m > nivelSeguroM && enHorarioEscolar(p.timestamp) === true
+      (p) => p.valor_m > nivelSeguroM && enHorarioEscolar(p.timestamp, diasSinClases) === true
     ) ?? null;
 
-    // Plan del día del pico: qué pasa a las 8:00, a las 14:15 y cuándo corta.
-    let plan: {
-      entradaMin: number; entradaM: number;
-      vueltaMin: number; vueltaM: number;
-      salidaLimiteMin: number;
-      ventanaMin: number; ventanaMax: number;
-    } | null = null;
+    // Veredicto escolar del día del pico (lógica compartida, ver src/lib/planEscolar.ts).
+    // Cubre 7:00 (hora de decisión), 8:00 (entrada) y 14:15 (vuelta), más la hora
+    // límite de salida cuando la vuelta queda cortada y la confianza por bandas
+    // p25/p95 del pronóstico INA.
+    let veredicto: ReturnType<typeof calcularVeredicto> | null = null;
     if (picoNoAccesible) {
       const dia = fechaDiaArgentina(picoNoAccesible.timestamp);
-      const pts = futuros
-        .filter((p) => fechaDiaArgentina(p.timestamp) === dia)
-        .filter((p) => minutosDiaArgentina(p.timestamp) != null)
-        .sort((a, b) => (minutosDiaArgentina(a.timestamp) ?? 0) - (minutosDiaArgentina(b.timestamp) ?? 0));
-      const valorEn = (targetMin: number): { v: number; m: number } | null => {
-        if (!pts.length) return null;
-        const exact = pts.find((p) => minutosDiaArgentina(p.timestamp) === targetMin);
-        if (exact) return { v: exact.valor_m, m: targetMin };
-        let antes: (typeof pts)[0] | null = null;
-        let despues: (typeof pts)[0] | null = null;
-        for (const p of pts) {
-          const m = minutosDiaArgentina(p.timestamp) ?? 0;
-          if (m <= targetMin) antes = p;
-          else { despues = p; break; }
-        }
-        if (antes && despues) {
-          const m1 = minutosDiaArgentina(antes.timestamp) ?? 0;
-          const m2 = minutosDiaArgentina(despues.timestamp) ?? 0;
-          const frac = (targetMin - m1) / (m2 - m1 || 1);
-          return { v: antes.valor_m + (despues.valor_m - antes.valor_m) * frac, m: targetMin };
-        }
-        if (antes) return { v: antes.valor_m, m: minutosDiaArgentina(antes.timestamp) ?? targetMin };
-        if (despues) return { v: despues.valor_m, m: minutosDiaArgentina(despues.timestamp) ?? targetMin };
-        return null;
-      };
-      const ENTRADA = 8 * 60;
-      const VUELTA = 14 * 60 + 15;
-      const entrada = valorEn(ENTRADA);
-      const vuelta = valorEn(VUELTA);
-      // Cruce por encima del límite (hora límite de salida): última transición
-      // subiendo de <= límite a > límite dentro del día.
-      let cruceSup: number | null = null;
-      let cruceInf: number | null = null;
-      for (let i = 0; i < pts.length - 1; i++) {
-        const v1 = pts[i].valor_m;
-        const v2 = pts[i + 1].valor_m;
-        const m1 = minutosDiaArgentina(pts[i].timestamp) ?? 0;
-        const m2 = minutosDiaArgentina(pts[i + 1].timestamp) ?? 0;
-        if (cruceSup === null && v1 <= nivelSeguroM && v2 > nivelSeguroM) {
-          cruceSup = m1 + ((nivelSeguroM - v1) / ((v2 - v1) || 1)) * (m2 - m1);
-        }
-        if (cruceSup !== null && cruceInf === null && v1 > nivelSeguroM && v2 <= nivelSeguroM) {
-          cruceInf = m1 + ((nivelSeguroM - v1) / ((v2 - v1) || 1)) * (m2 - m1);
-        }
-      }
-      if (entrada && vuelta && (cruceSup !== null || cruceInf !== null)) {
-        plan = {
-          entradaMin: entrada.m,
-          entradaM: entrada.v,
-          vueltaMin: vuelta.m,
-          vueltaM: vuelta.v,
-          salidaLimiteMin: cruceSup ?? 0,
-          ventanaMin: Math.min(entrada.m, vuelta.m, cruceSup ?? vuelta.m),
-          ventanaMax: Math.max(entrada.m, vuelta.m, cruceInf ?? vuelta.m),
-        };
-      }
+      if (dia) veredicto = calcularVeredicto(sfProno ?? [], dia, nivelSeguroM, diasSinClases);
     }
 
-    return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible, plan };
-  }, [sfObs, sfProno, nivelSeguroM, ahora]);
+    return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible, veredicto };
+  }, [sfObs, sfProno, nivelSeguroM, ahora, diasSinClases]);
 
   function hhmm(min: number | null): string {
     if (min == null) return "--";
@@ -641,44 +600,87 @@ export default function Dashboard() {
                   <p className="rb-muelle-detalle">
                     Se pronostica <strong>{muelleAcceso.picoNoAccesible.valor_m.toFixed(2)}m</strong> el {formatearFechaHora(muelleAcceso.picoNoAccesible.timestamp)}
                   </p>
-                  {muelleAcceso.plan && (
+                  {muelleAcceso.veredicto && (
                     <div className="rb-plan">
-                      <div className={`rb-plan-row ${muelleAcceso.plan.entradaM > nivelSeguroM ? "mal" : "ok"}`}>
-                        <span className="rb-plan-hora">{hhmm(muelleAcceso.plan.entradaMin)}</span>
-                        <span className="rb-plan-altura">{muelleAcceso.plan.entradaM.toFixed(2)}m</span>
-                        <span className="rb-plan-veredicto">
-                          {muelleAcceso.plan.entradaM > nivelSeguroM
-                            ? "NO se puede embarcar"
-                            : "sí se puede embarcar"}
-                        </span>
-                      </div>
-                      <div className={`rb-plan-row ${muelleAcceso.plan.vueltaM > nivelSeguroM ? "mal" : "ok"}`}>
-                        <span className="rb-plan-hora">{hhmm(muelleAcceso.plan.vueltaMin)}</span>
-                        <span className="rb-plan-altura">{muelleAcceso.plan.vueltaM.toFixed(2)}m</span>
-                        <span className="rb-plan-veredicto">
-                          {muelleAcceso.plan.vueltaM > nivelSeguroM
-                            ? "NO se puede volver"
-                            : "sí se puede volver"}
-                        </span>
-                      </div>
-                      {muelleAcceso.plan.entradaM <= nivelSeguroM && muelleAcceso.plan.salidaLimiteMin > 0 && muelleAcceso.plan.salidaLimiteMin < 15 * 60 + 30 && (
-                        <div className="rb-plan-limit">
-                          ⏱ Se entra a las 8, pero hay que irse antes de las{" "}
-                          <strong>{hhmm(muelleAcceso.plan.salidaLimiteMin)}</strong>
-                        </div>
-                      )}
-                      {muelleAcceso.plan.entradaM > nivelSeguroM && (
-                        <div className="rb-plan-limit">
-                          🚫 El muelle no vuelve a bajar de {nivelSeguroM.toFixed(2)}m ese día a la tarde
-                        </div>
-                      )}
+                      {(() => {
+                        const v = muelleAcceso.veredicto;
+                        const banda = (h: { main: number | null; p25: number | null; p95: number | null }) => {
+                          if (h.main == null) return "--";
+                          if (h.p25 != null && h.p95 != null) return `${h.p25.toFixed(2)}–${h.p95.toFixed(2)}`;
+                          if (h.p95 != null) return `hasta ${h.p95.toFixed(2)}`;
+                          return h.main.toFixed(2);
+                        };
+                        const confianzaLabel = v.confianza === "alta" ? "alta" : v.confianza === "media" ? "media" : "baja";
+                        return (
+                          <>
+                            <div className="rb-plan-verdicto-linea">
+                              <strong>
+                                {v.estado === "no_clases" ? "No ir a la escuela" : v.estado === "salida_temprana" ? "Salida temprana" : v.estado === "sin_datos" ? "Sin datos" : "Día normal"}
+                              </strong>
+                              <span className={`rb-confianza rb-confianza-${v.confianza}`} title={`Confianza del veredicto (bandas p25–p95 del pronóstico)`}>
+                                confianza {confianzaLabel}
+                              </span>
+                            </div>
+                            <div className={`rb-plan-row ${(v.hora7.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
+                              <span className="rb-plan-hora">07:00</span>
+                              <span className="rb-plan-altura">{v.hora7.main != null ? `${v.hora7.main.toFixed(2)}m` : "--"}</span>
+                              <span className="rb-plan-banda">p25–p95: {banda(v.hora7)}</span>
+                              <span className="rb-plan-veredicto">
+                                {(v.hora7.main ?? 0) > nivelSeguroM ? "ya no se puede" : "se decide el día"}
+                              </span>
+                            </div>
+                            <div className={`rb-plan-row ${(v.entrada.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
+                              <span className="rb-plan-hora">08:00</span>
+                              <span className="rb-plan-altura">{v.entrada.main != null ? `${v.entrada.main.toFixed(2)}m` : "--"}</span>
+                              <span className="rb-plan-banda">p25–p95: {banda(v.entrada)}</span>
+                              <span className="rb-plan-veredicto">
+                                {(v.entrada.main ?? 0) > nivelSeguroM ? "NO se puede embarcar" : "sí se puede embarcar"}
+                              </span>
+                            </div>
+                            <div className={`rb-plan-row ${(v.vuelta.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
+                              <span className="rb-plan-hora">14:15</span>
+                              <span className="rb-plan-altura">{v.vuelta.main != null ? `${v.vuelta.main.toFixed(2)}m` : "--"}</span>
+                              <span className="rb-plan-banda">p25–p95: {banda(v.vuelta)}</span>
+                              <span className="rb-plan-veredicto">
+                                {(v.vuelta.main ?? 0) > nivelSeguroM ? "NO se puede volver" : "sí se puede volver"}
+                              </span>
+                            </div>
+                            {v.estado === "salida_temprana" && v.salidaLimiteMin != null && v.salidaLimiteMin < 15 * 60 + 30 && (
+                              <div className="rb-plan-limit">
+                                ⏱ Se entra a las 8, pero hay que irse antes de las{" "}
+                                <strong>{hhmm(v.salidaLimiteMin)}</strong>
+                              </div>
+                            )}
+                            {v.estado === "no_clases" && (
+                              <div className="rb-plan-limit">
+                                🚫 El muelle no vuelve a bajar de {nivelSeguroM.toFixed(2)}m ese día a la tarde
+                              </div>
+                            )}
+                            <p className="rb-plan-motivo">{v.motivo}</p>
+                            {(() => {
+                              const evento = bitacora.find((b) => fechaDiaArgentina(b.fecha_evento ?? b.timestamp) === v.fecha);
+                              if (!evento) return null;
+                              return (
+                                <p className="rb-plan-bitacora">
+                                  <strong>Bitácora:</strong> {formatearFechaHora(evento.fecha_evento ?? evento.timestamp)}
+                                  {evento.nivel_registrado_m != null && ` · ${evento.nivel_registrado_m.toFixed(2)}m`}
+                                  {evento.notas ? ` · ${evento.notas}` : ""}
+                                </p>
+                              );
+                            })()}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
-                  {enHorarioEscolar(muelleAcceso.picoNoAccesible.timestamp) === true && (
+                  {enHorarioEscolar(muelleAcceso.picoNoAccesible.timestamp, diasSinClases) === true && (
                     <p className="rb-muelle-escuela">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                       <span><strong>No embarcar</strong> — en horario escolar (8–14:30): no ir a la escuela ese día si se confirma la crecida</span>
                     </p>
+                  )}
+                  {muelleAcceso.veredicto?.motivo?.startsWith("Sin pronóstico") && (
+                    <p className="rb-plan-motivo">Esperando próxima actualización del pronóstico INA.</p>
                   )}
                 </div>
               )}
@@ -696,7 +698,7 @@ export default function Dashboard() {
                       <> · <em>sin bajada por debajo de {nivelSeguroM.toFixed(2)}m en el pronóstico</em></>
                     ) : null}
                   </p>
-                  {enHorarioEscolar(new Date(ahora).toISOString()) === true && (
+                  {enHorarioEscolar(new Date(ahora).toISOString(), diasSinClases) === true && (
                     <p className="rb-muelle-escuela">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                       <span><strong>No embarcar</strong> — en horario escolar (8–14:30): no ir a la escuela hasta que el muelle sea accesible</span>
@@ -713,7 +715,7 @@ export default function Dashboard() {
                 const pico = futuros.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futuros[0]);
                 const umbral = umbralEval?.valor_m ?? 2.0;
                 if (pico.valor_m < umbral) return null;
-                const enHorario = enHorarioEscolar(pico.timestamp);
+                const enHorario = enHorarioEscolar(pico.timestamp, diasSinClases);
                 return (
                   <p className="rb-pico">
                     Pico esperado en San Fernando: <strong>{pico.valor_m.toFixed(2)}m</strong> — {formatearFechaHora(pico.timestamp)}
@@ -766,7 +768,7 @@ export default function Dashboard() {
                 </div>
               )}
               {(cuentaRegresiva && bannerColor === "roja") && (() => {
-                const enHorarioNR = enHorarioEscolar(datos?.alerta?.ventana_fin ?? null);
+                const enHorarioNR = enHorarioEscolar(datos?.alerta?.ventana_fin ?? null, diasSinClases);
                 return (
                   <div className="rb-cuenta-regresiva">
                     <span className="rb-tiempo">{cuentaRegresiva}</span>

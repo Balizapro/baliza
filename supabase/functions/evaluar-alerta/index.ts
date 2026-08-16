@@ -8,6 +8,7 @@ import {
   mismoEpisodioPreaviso,
   type NivelAlerta,
 } from "./logica.ts";
+import { calcularVeredicto, fechaDiaArgentina, hhmm as hhmmPlan, type PuntoProno } from "./plan_escolar.ts";
 
 interface UmbralRow {
   nombre: string;
@@ -587,11 +588,91 @@ if (empeoro || recordProno) {
       }
     }
 
+    // Veredicto escolar del día (puntos 1-4): con el pronóstico INA más
+    // reciente, decide si mañana/el próximo día hábil se puede ir a la escuela
+    // (8:00), volver (14:15) o hay que salir temprano, y notifica por push una
+    // vez por día cuando el plan NO es normal (dedup por fechaclave).
+    try {
+      const { data: diasRaw } = await supabase
+        .from("dias_sin_clases")
+        .select("fecha");
+      const diasSinClases = ((diasRaw as { fecha: string }[] | null) ?? []).map((d) => d.fecha);
+
+      const { data: cfgSeguro } = await supabase
+        .from("configuracion")
+        .select("valor")
+        .eq("clave", "poseidon_acceso_seco_m")
+        .maybeSingle();
+      const nivelSeguroM = cfgSeguro ? parseFloat((cfgSeguro as ConfigRow).valor) || 2.25 : 2.25;
+
+      // Todos los qualifiers (main + bandas) para los próximos 4 días
+      const { data: pronosTodos } = await supabase
+        .from("pronosticos")
+        .select("timestamp, valor_m, qualifier")
+        .eq("estacion_id", estaciones.id)
+        .gte("timestamp", new Date(Date.now()).toISOString())
+        .lte("timestamp", new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString());
+
+      if (pronosTodos && (pronosTodos as PuntoProno[]).length > 0) {
+        // Próximos días a evaluar: hoy y los siguientes 3 días
+        const fechas: string[] = [];
+        for (let i = 0; i < 4; i++) {
+          const d = new Date(Date.now() + i * 24 * 60 * 60 * 1000);
+          const f = d.toLocaleDateString("en-CA", { timeZone: TZ });
+          if (!fechas.includes(f)) fechas.push(f);
+        }
+
+        for (const fecha of fechas) {
+          const v = calcularVeredicto(pronosTodos as PuntoProno[], fecha, nivelSeguroM, diasSinClases);
+          if (!v.esDiaEscolar || v.estado === "normal" || v.estado === "sin_datos") continue;
+
+          const claveVeredicto = `veredicto_escolar_${v.fecha}_${v.estado}`;
+          const { data: yaNotif } = await supabase
+            .from("configuracion")
+            .select("valor")
+            .eq("clave", claveVeredicto)
+            .maybeSingle();
+
+          if (!yaNotif) {
+            await supabase.from("configuracion").upsert(
+              { clave: claveVeredicto, valor: "1" },
+              { onConflict: "clave" }
+            );
+            const tituloV =
+              v.estado === "no_clases"
+                ? "Baliza — No ir a la escuela"
+                : "Baliza — Salida temprana de la escuela";
+            const cuerpoV =
+              v.estado === "no_clases"
+                ? `El ${v.fecha} a las 8:00 el agua estaría en ${v.entrada.main?.toFixed(2)}m — no se puede embarcar (límite ${nivelSeguroM.toFixed(2)}m).`
+                : `Se puede entrar a las 8 (${v.entrada.main?.toFixed(2)}m) pero hay que volver antes de las ${hhmmPlan(v.salidaLimiteMin)} — a las 14:15 estaría en ${v.vuelta.main?.toFixed(2)}m.`;
+            try {
+              await fetch(
+                `${Deno.env.get("SUPABASE_URL")}/functions/v1/enviar-notificacion`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") ?? ""}`,
+                    "x-notificacion-secret": Deno.env.get("NOTIFICACION_SECRET") ?? "",
+                  },
+                  body: JSON.stringify({ titulo: tituloV, cuerpo: cuerpoV, url: "/dashboard" }),
+                }
+              );
+            } catch (verErr) {
+              console.error("[evaluar-alerta] veredicto escolar: error notif", verErr);
+            }
+          }
+        }
+      }
+    } catch (verdictErr) {
+      console.error("[evaluar-alerta] veredicto escolar: error", verdictErr);
+    }
+
     return new Response(JSON.stringify({ ok: true, alerta: alertaRow, notifico: empeoro || recordProno }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("[evaluar-alerta] Error:", err);
     return new Response(
       JSON.stringify({ ok: false, error: (err as Error).message }),
       { status: 500, headers: { "Content-Type": "application/json" } }
