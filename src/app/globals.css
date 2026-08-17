@@ -643,4 +643,33 @@ html {
   .rb-preavisos li {
     font-size: 13px;
   }
+  .rb-plan-row {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .rb-plan-hora {
+    flex: 0 0 auto;
+  }
+  .rb-plan-altura {
+    flex: 0 0 auto;
+  }
+  .rb-plan-banda {
+    flex: 1 1 100%;
+    text-align: left;
+    padding-left: 3.2em;
+  }
+  .rb-plan-veredicto {
+    flex: 1 1 100%;
+    padding-left: 3.2em;
+  }
+  .rb-plan-verdicto-linea {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  .rb-plan-verdicto-linea strong {
+    flex: 1 1 auto;
+  }
+  .rb-muelle-detalle {
+    font-size: 13px;
+  }
 }
