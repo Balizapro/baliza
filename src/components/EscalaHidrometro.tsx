@@ -16,11 +16,6 @@ function formatearFecha(iso: string): string {
   return new Date(iso).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-function escalonColor(e: number): string {
-  const colores = ["#4C7A5E", "#6A9B7E", "#88B89E", "#A6D5BE", "#C99A3D", "#E8823A", "#C0442B"];
-  return colores[(e - 1) % colores.length];
-}
-
 export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, escalones, umbralEval, umbralNR, umbralBajAlarma, umbralBajEvac, alertaNivel }: Props) {
   const umbralMax = Math.max(umbralNR?.valor_m ?? 2.2, umbralEval?.valor_m ?? 2.0);
   const maxEscalon = escalones.length > 0 ? escalones[escalones.length - 1].nivel_max_m : umbralMax + 0.5;
@@ -29,27 +24,20 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
   const escalaPiso = Math.min(escalones.length > 0 ? escalones[0].nivel_min_m : 0, nivelActual - 0.2, bajanteMin - 0.2);
 
   const rango = Math.max(escalaTecho - escalaPiso, 1);
-
-  // Layout del gauge
-  const H = 380;
-  const padTop = 16;
-  const padBot = 22;
-  const tickX = 34; // fin de las etiquetas de la escala numérica
-  const barraX = 48; // borde izquierdo de la barra
-  const barraW = 34;
-  const barraRight = barraX + barraW;
-  const estX = barraRight + 10; // etiquetas e1..eN
-  const umbX = barraRight + 44; // pills de umbral
-  const gaugeW = 262;
+  const H = 360;
+  const barraX = 70;
+  const barraW = 40;
+  const labelX = barraX + barraW + 12;
+  const scalasX = barraX - 10;
+  const gaugeW = labelX + 110;
 
   function yPos(val: number): number {
-    return H - padBot - ((val - escalaPiso) / rango) * (H - padTop - padBot);
+    return H - ((val - escalaPiso) / rango) * (H - 20) - 10;
   }
 
-  // Escala numérica: ticks cada 0.5 m (y algunos 0.25 en líneas tenues)
-  const ticks = [] as number[];
-  for (let v = Math.ceil(escalaPiso * 2) / 2; v <= escalaTecho + 1e-9; v += 0.5) {
-    ticks.push(Math.round(v * 100) / 100);
+  function escalonColor(e: number): string {
+    const colores = ["#4C7A5E", "#6A9B7E", "#88B89E", "#A6D5BE", "#C99A3D", "#E8823A", "#C0442B"];
+    return colores[(e - 1) % colores.length];
   }
 
   const nivelColor =
@@ -57,29 +45,12 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
     : alertaNivel === "evacuacion" ? "var(--color-rojo-oscuro)"
     : alertaNivel === "amarilla" ? "var(--color-alerta)"
     : alertaNivel === "azul" ? "var(--color-bajante)"
-    : "#0E4749";
+    : "var(--chart-obs)";
   const alertaBg =
     alertaNivel === "roja" || alertaNivel === "evacuacion" ? "bg-rojo-alerta/10"
     : alertaNivel === "amarilla" ? "bg-alerta/10"
     : alertaNivel === "azul" ? "bg-bajante/10"
     : "bg-transparent";
-
-  const escalonActual = escalones.find((e) => nivelActual != null && nivelActual >= e.nivel_min_m && nivelActual < e.nivel_max_m) ?? null;
-
-  // Línea del umbral: punteada a lo ancho de la barra + pill de texto a la derecha
-  const umbral = (etiqueta: string, umbral: Umbral | null, color: string) => {
-    if (!umbral) return null;
-    const y = Math.min(Math.max(yPos(umbral.valor_m), padTop + 8), H - padBot - 8);
-    return (
-      <g key={etiqueta}>
-        <line x1={barraX} y1={y} x2={barraRight} y2={y} stroke={color} strokeWidth={1.5} strokeDasharray="5,4" />
-        <rect x={umbX} y={y - 9} width={72} height={18} rx={9} className="fill-fondo dark:fill-panel-dark" stroke={color} strokeWidth={1} />
-        <text x={umbX + 30} y={y + 3.5} fontSize="10" fill={color} textAnchor="middle" fontFamily="ui-monospace, monospace" fontWeight="600">
-          {etiqueta} {umbral.valor_m.toFixed(2)}m
-        </text>
-      </g>
-    );
-  };
 
   return (
     <section className={`relative ${alertaBg} rounded-xl p-4 sm:p-5`}>
@@ -91,112 +62,99 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
       </div>
 
       <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 items-start">
-        {/* Gauge vertical */}
-        <div className="relative flex-shrink-0 mx-auto sm:mx-0" style={{ width: gaugeW, height: H }}>
+        {/* Vertical gauge */}
+        <div className="relative flex-shrink-0" style={{ width: gaugeW, height: H }}>
           <svg width={gaugeW} height={H} className="overflow-visible">
-            {/* Escala numérica (ticks) */}
-            {ticks.map((t) => {
-              const y = yPos(t);
-              const esPrincipal = Math.abs((t * 100) % 50) < 1;
-              return (
-                <g key={t}>
-                  <line
-                    x1={tickX - 4}
-                    y1={y}
-                    x2={esPrincipal ? barraRight : barraX}
-                    y2={y}
-                    stroke="var(--chart-grid)"
-                    strokeWidth={esPrincipal ? 1 : 0.5}
-                    strokeDasharray={esPrincipal ? "none" : "2,3"}
-                  />
-                  <text x={tickX - 7} y={y + 3} fontSize="9" fill="var(--chart-axis)" textAnchor="end" fontFamily="ui-monospace, monospace">
-                    {t.toFixed(2)}
-                  </text>
-                </g>
-              );
-            })}
+            {/* Barra de fondo */}
+            <rect x={barraX} y={10} width={barraW} height={H - 20} rx={4} className="fill-gauge-bg dark:fill-border-dark" />
 
-            {/* Fondo de la barra */}
-            <rect x={barraX} y={padTop} width={barraW} height={H - padTop - padBot} rx={6} className="fill-gauge-bg dark:fill-border-dark" stroke="var(--chart-grid)" strokeWidth={1} />
+            {/* Zonas de color por escalón */}
+            {escalones.map((e) => (
+              <rect
+                key={e.escalon}
+                x={barraX}
+                y={yPos(e.nivel_max_m)}
+                width={barraW}
+                height={Math.max(yPos(e.nivel_min_m) - yPos(e.nivel_max_m), 2)}
+                rx={2}
+                fill={escalonColor(e.escalon)}
+                fillOpacity={0.35}
+              />
+            ))}
 
-            {/* Segmentos por escalón */}
-            {escalones.map((e) => {
-              const yMax = yPos(e.nivel_max_m);
-              const yMin = yPos(e.nivel_min_m);
-              const alto = Math.max(yMin - yMax, 4);
-              const color = escalonColor(e.escalon);
-              return (
-                <g key={e.escalon}>
-                  <rect
-                    x={barraX}
-                    y={yMax}
-                    width={barraW}
-                    height={alto}
-                    rx={3}
-                    fill={color}
-                    fillOpacity={e.escalon === escalonActual?.escalon ? 0.9 : 0.45}
-                    stroke={color}
-                    strokeWidth={1}
-                  />
-                  <text x={estX} y={(yMax + yMin) / 2 + 3} fontSize="10" fill={color} fontFamily="ui-monospace, monospace" fontWeight="600">
-                    e{e.escalon}
-                  </text>
-                </g>
-              );
-            })}
+            {/* Borde de la barra */}
+            <rect x={barraX} y={10} width={barraW} height={H - 20} rx={4} fill="none" stroke="var(--chart-obs)" strokeWidth={1} strokeOpacity={0.2} />
 
-            {/* Borde superior/inferior de la barra (tramo sin escalón) */}
-            <line x1={barraX} y1={padTop} x2={barraRight} y2={padTop} stroke="var(--chart-grid)" strokeWidth={0.5} />
-            <line x1={barraX} y1={H - padBot} x2={barraRight} y2={H - padBot} stroke="var(--chart-grid)" strokeWidth={0.5} />
+            {/* Línea umbral evaluación */}
+            {umbralEval && (
+              <g>
+                <line x1={barraX - 4} y1={yPos(umbralEval.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralEval.valor_m)} stroke="var(--color-atencion)" strokeWidth={1.5} strokeDasharray="4,3" />
+                <text x={labelX + 60} y={yPos(umbralEval.valor_m) + 3} fontSize="11" fill="var(--color-atencion)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralEval.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralEval.valor_m) + 3} fontSize="10" fill="var(--color-atencion)" textAnchor="start">eval</text>
+              </g>
+            )}
 
-            {/* Umbrales */}
-            {umbral("eval", umbralEval, "var(--color-atencion)")}
-            {umbral("NR", umbralNR, "var(--color-rojo-alerta)")}
-            {umbral("baj", umbralBajAlarma, "var(--color-bajante)")}
-            {umbral("evac", umbralBajEvac, "var(--color-rojo-oscuro)")}
+            {/* Línea umbral no retorno */}
+            {umbralNR && (
+              <g>
+                <line x1={barraX - 4} y1={yPos(umbralNR.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralNR.valor_m)} stroke="var(--color-rojo-alerta)" strokeWidth={1.5} strokeDasharray="4,3" />
+                <text x={labelX + 60} y={yPos(umbralNR.valor_m) + 3} fontSize="11" fill="var(--color-rojo-alerta)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralNR.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralNR.valor_m) + 3} fontSize="10" fill="var(--color-rojo-alerta)" textAnchor="start">NR</text>
+              </g>
+            )}
 
-            {/* Marcador de nivel actual (burbuja con valor + guía) */}
+            {/* Línea umbral bajante alarma */}
+            {umbralBajAlarma && (
+              <g>
+                <line x1={barraX - 4} y1={yPos(umbralBajAlarma.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralBajAlarma.valor_m)} stroke="var(--color-bajante)" strokeWidth={1.5} strokeDasharray="4,3" />
+                <text x={labelX + 60} y={yPos(umbralBajAlarma.valor_m) + 3} fontSize="11" fill="var(--color-bajante)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralBajAlarma.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralBajAlarma.valor_m) + 3} fontSize="10" fill="var(--color-bajante)" textAnchor="start">baj.</text>
+              </g>
+            )}
+
+            {/* Línea umbral bajante evacuación */}
+            {umbralBajEvac && (
+              <g>
+                <line x1={barraX - 4} y1={yPos(umbralBajEvac.valor_m)} x2={barraX + barraW + 4} y2={yPos(umbralBajEvac.valor_m)} stroke="var(--color-rojo-oscuro)" strokeWidth={1.5} strokeDasharray="4,3" />
+                <text x={labelX + 60} y={yPos(umbralBajEvac.valor_m) + 3} fontSize="11" fill="var(--color-rojo-oscuro)" fontFamily="ui-monospace, monospace" textAnchor="end">{umbralBajEvac.valor_m.toFixed(2)}m</text>
+                <text x={labelX + 62} y={yPos(umbralBajEvac.valor_m) + 3} fontSize="10" fill="var(--color-rojo-oscuro)" textAnchor="start">evac</text>
+              </g>
+            )}
+
+            {/* Marcas de escalón (en el lado izquierdo de la barra) */}
+            {escalones.map((e) => (
+              <g key={e.escalon}>
+                <text x={scalasX} y={yPos((e.nivel_min_m + e.nivel_max_m) / 2) + 3} fontSize="10" fill="var(--color-texto-sec)" textAnchor="end" fontFamily="ui-monospace, monospace">e{e.escalon}</text>
+                <line x1={barraX - 2} y1={yPos(e.nivel_min_m)} x2={barraX} y2={yPos(e.nivel_min_m)} stroke="var(--color-texto-sec)" strokeWidth={0.5} />
+                <line x1={barraX - 2} y1={yPos(e.nivel_max_m)} x2={barraX} y2={yPos(e.nivel_max_m)} stroke="var(--color-texto-sec)" strokeWidth={0.5} />
+              </g>
+            ))}
+
+            {/* Marcador de nivel actual */}
             {nivelActual != null && (
               <g>
-                {(() => {
-                  const y = Math.min(Math.max(yPos(nivelActual), padTop + 12), H - padBot - 12);
-                  return (
-                    <>
-                      {/* línea guía desde la barra hacia la burbuja */}
-                      <line x1={barraX} y1={y} x2={4} y2={y} stroke={nivelColor} strokeWidth={2} strokeOpacity={0.5} />
-                      {/* punta */}
-                      <polygon points={`${barraX - 1},${y - 6} ${barraX - 6},${y} ${barraX - 1},${y + 6}`} fill={nivelColor} />
-                      {/* burbuja */}
-                      <rect x={2} y={y - 11} width={46} height={22} rx={6} fill={nivelColor} />
-                      <text
-                        x={25}
-                        y={y + 4}
-                        fontSize="12"
-                        fontWeight="bold"
-                        fill="white"
-                        textAnchor="middle"
-                        fontFamily="ui-monospace, monospace"
-                      >
-                        {nivelActual.toFixed(2)}m
-                      </text>
-                    </>
-                  );
-                })()}
+                <polygon
+                  points={`${barraX - 2},${yPos(nivelActual)} ${barraX - 10},${yPos(nivelActual) - 5} ${barraX - 10},${yPos(nivelActual) + 5}`}
+                  fill={nivelColor}
+                />
+                <line x1={barraX} y1={yPos(nivelActual)} x2={barraX + barraW} y2={yPos(nivelActual)} stroke={nivelColor} strokeWidth={2.5} />
+                <circle cx={barraX + barraW / 2} cy={yPos(nivelActual)} r={5} fill={nivelColor} stroke="white" strokeWidth={2} />
+                <text x={labelX + 60} y={yPos(nivelActual) - 6} fontSize="12" fontWeight="bold" fill={nivelColor} fontFamily="ui-monospace, monospace" textAnchor="end">
+                  {nivelActual.toFixed(2)}m
+                </text>
               </g>
             )}
           </svg>
         </div>
 
-        {/* Panel informativo */}
+        {/* Info panel right side */}
         <div className="flex-1 min-w-0 pt-1">
           <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
             <div>
               <p className="text-xs text-texto-sec dark:text-gray-400 uppercase tracking-wide">Nivel actual</p>
               <p className="font-mono text-3xl sm:text-4xl font-bold text-baliza dark:text-marea-dark leading-tight">
                 {nivelActual != null ? `${nivelActual.toFixed(2)}m` : "--"}
-                <span className={`text-base sm:text-lg ml-2 font-sans ${tendencia === "↑" ? "text-rojo-alerta" : tendencia === "↓" ? "text-ok" : "text-texto-sec dark:text-gray-400"}`}>
-                  {tendencia}
-                </span>
+                <span className="text-base sm:text-lg ml-2 font-sans text-texto-sec dark:text-gray-400">{tendencia}</span>
               </p>
             </div>
 
@@ -204,28 +162,19 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
               {timestamp ? formatearFecha(timestamp) : "--"}
             </div>
 
-            {escalonActual && (
-              <div
-                className="text-sm rounded-lg px-3 py-1.5"
-                style={{ backgroundColor: escalonColor(escalonActual.escalon), opacity: 0.12 }}
-              >
-                <span className="font-bold text-baliza dark:text-white" style={{ opacity: 1 }}>
-                  Escalón e{escalonActual.escalon}
-                </span>
-                <span className="text-texto-sec dark:text-gray-300 ml-1">
-                  ({escalonActual.nivel_min_m.toFixed(1)}–{escalonActual.nivel_max_m.toFixed(1)}m)
-                </span>
-              </div>
-            )}
-            {!escalonActual && (
-              <div className="text-sm">
-                <span className="text-texto-sec dark:text-gray-400">
-                  {nivelActual != null && nivelActual < escalones[0]?.nivel_min_m
-                    ? "Debajo del escalón mínimo"
-                    : `Sobre escalón ${escalones[escalones.length - 1]?.escalon}`}
-                </span>
-              </div>
-            )}
+            <div className="text-sm">
+              {escalones.filter((e) => nivelActual >= e.nivel_min_m && nivelActual < e.nivel_max_m).map((e) => (
+                <p key={e.escalon}>
+                  <span className="font-bold text-baliza dark:text-marea-dark">Escalón e{e.escalon}</span>
+                  <span className="text-texto-sec dark:text-gray-400 ml-1">({e.nivel_min_m.toFixed(1)}–{e.nivel_max_m.toFixed(1)}m)</span>
+                </p>
+              ))}
+              {!escalones.some((e) => nivelActual >= e.nivel_min_m && nivelActual < e.nivel_max_m) && (
+                <p className="text-texto-sec dark:text-gray-400">
+                  {nivelActual < escalones[0]?.nivel_min_m ? "Debajo del escalón mínimo" : `Sobre escalón ${escalones[escalones.length - 1]?.escalon}`}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="mt-3 border-t border-borde dark:border-gray-700 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
