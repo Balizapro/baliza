@@ -190,3 +190,91 @@ test("regla 60 min: salida límite justo después de las 8 → NO CLASES", () =>
   assert.ok(v.salidaLimiteMin != null && v.salidaLimiteMin >= 8 * 60 && v.salidaLimiteMin < 9 * 60);
   assert.equal(v.estado, "no_clases");
 });
+
+test("crecida en camino: Bs As subiendo 0.42 m/h empuja la entrada por encima del límite", () => {
+  // INA main dice día normal (entrada 2.1, vuelta 2.0). Pero la estación vecina
+  // (Puerto de Buenos Aires) está subiendo fuerte (+0.42 m/h) en las últimas
+  // horas → la misma onda llega a SF: margen = 0.22 → entrada efectiva 2.32 →
+  // NO CLASES.
+  const pronos = dia("2026-08-18", {
+    7: 2.0,
+    8: 2.1,
+    9: 2.15,
+    10: 2.2,
+    11: 2.2,
+    12: 2.15,
+    13: 2.1,
+    14: 2.0,
+    15: 1.9,
+  }, { p25Offset: -0.05 });
+  const vecinas = [{
+    nombre: "Puerto de Buenos Aires",
+    // 12:00Z..17:00Z = 09:00..14:00 local: subiendo +0.42 m/h por lectura
+    lecturas: [
+      { timestamp: "2026-08-18T12:00:00Z", nivel_m: 1.6 },
+      { timestamp: "2026-08-18T13:00:00Z", nivel_m: 2.02 },
+      { timestamp: "2026-08-18T14:00:00Z", nivel_m: 2.44 },
+    ],
+  }];
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, [], { vecinas });
+  assert.ok(v.pendiente_m != null && v.pendiente_m >= 0.41);
+  assert.equal(v.pendiente_estacion, "Puerto de Buenos Aires");
+  // margen = min(0.25, 0.42-0.20) = 0.22 sobre el main de la entrada (2.10) → 2.32
+  assert.ok(v.entrada.efectivo_m != null && v.entrada.efectivo_m >= 2.3);
+  assert.equal(v.estado, "no_clases");
+});
+
+test("sin pendiente fuerte: un día accesible se mantiene NORMAL", () => {
+  const pronos = dia("2026-08-18", {
+    7: 1.7,
+    8: 1.8,
+    9: 1.9,
+    10: 2.0,
+    11: 2.05,
+    12: 2.05,
+    13: 2.0,
+    14: 1.9,
+    15: 1.8,
+  }, { p25Offset: -0.05 });
+  // La vecina sube despacio (0.12 m/h, marea normal) → margen 0.
+  const vecinas = [{
+    nombre: "La Plata",
+    lecturas: [
+      { timestamp: "2026-08-18T12:00:00Z", nivel_m: 1.9 },
+      { timestamp: "2026-08-18T13:00:00Z", nivel_m: 2.02 },
+      { timestamp: "2026-08-18T14:00:00Z", nivel_m: 2.14 },
+    ],
+  }];
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, [], { vecinas });
+  assert.equal(v.estado, "normal");
+  assert.ok(v.pendiente_m != null && v.pendiente_m < 0.35);
+  // El efectivo no debería superar lo que ya daba main/bandas (sin penalizar)
+  assert.ok(v.entrada.efectivo_m != null && v.entrada.efectivo_m <= 1.90);
+});
+
+test("el margen por crecida está acotado arriba (no dispara a lo absurdo)", () => {
+  const pronos = dia("2026-08-18", {
+    7: 1.8,
+    8: 1.9,
+    9: 2.0,
+    10: 2.1,
+    11: 2.15,
+    12: 2.1,
+    13: 2.0,
+    14: 1.9,
+    15: 1.8,
+  }, { p25Offset: -0.05 });
+  // Pendiente brutal (1.0 m/h): margen debe quedar en 0.25, no en 0.80.
+  const vecinas = [{
+    nombre: "Puerto de Buenos Aires",
+    lecturas: [
+      { timestamp: "2026-08-18T12:00:00Z", nivel_m: 1.6 },
+      { timestamp: "2026-08-18T13:00:00Z", nivel_m: 2.6 },
+      { timestamp: "2026-08-18T14:00:00Z", nivel_m: 3.6 },
+    ],
+  }];
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, [], { vecinas });
+  assert.ok(v.pendiente_m != null && v.pendiente_m >= 0.9);
+  // entrada main 1.9 + margen tope 0.25 = 2.15 (no 2.9)
+  assert.ok(v.entrada.efectivo_m != null && v.entrada.efectivo_m <= 2.2);
+});

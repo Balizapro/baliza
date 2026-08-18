@@ -485,12 +485,21 @@ export default function Dashboard() {
             .filter((l) => l.nivel_m != null)
             .map((l) => ({ timestamp: l.timestamp, nivel_m: l.nivel_m })),
           shnAlturas,
+          // Estaciones vecinas (Bs As, La Plata...) para anticipar crecidas por
+          // pendiente de subida: la marea entra por el estuario y llega a SF con
+          // desfase, así que una subida fuerte afuera anticipa la de SF.
+          vecinas: exterioresLecturas.map((e) => ({
+            nombre: e.nombre,
+            lecturas: e.lecturas
+              .filter((l) => l.nivel_m != null)
+              .map((l) => ({ timestamp: l.timestamp, nivel_m: l.nivel_m })),
+          })),
         });
       }
     }
 
     return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible, veredicto };
-  }, [sfObs, sfProno, nivelSeguroM, ahora, diasSinClases, curvaModelo, shnAlturas, historial]);
+  }, [sfObs, sfProno, nivelSeguroM, ahora, diasSinClases, curvaModelo, shnAlturas, historial, exterioresLecturas]);
 
   function hhmm(min: number | null): string {
     if (min == null) return "--";

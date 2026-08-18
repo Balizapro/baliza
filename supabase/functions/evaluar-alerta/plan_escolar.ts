@@ -53,13 +53,31 @@ export interface VeredictoDia {
   salidaLimiteMin: number | null;
   motivo: string;
   sesgo_m: number | null;
+  pendiente_m: number | null;
+  pendiente_estacion: string | null;
+}
+
+// Lecturas observadas de otra estación (misma estructura que PuntoModelo).
+export interface LecturasVecina {
+  nombre: string;
+  lecturas: PuntoModelo[];
 }
 
 export interface FuentesPlan {
   modelo?: PuntoModelo[];
   shnObservado?: PuntoModelo[];
   shnAlturas?: AlturaShn[];
+  vecinas?: LecturasVecina[];
 }
+
+// Pendiente de subida que indica crecida en camino. Una estación vecina
+// subiendo ≥ 0.35 m/h es señal anómala: la misma ola llega a SF más tarde.
+const UMBRAL_PENDIENTE_M_H = 0.35;
+// Subida de marea "normal" en el estuario (~0.1-0.2 m/h); solo el exceso sobre
+// esta base se penaliza como crecida.
+const PENDIENTE_BASE_M_H = 0.20;
+// Tope del margen de seguridad que se suma al nivel efectivo por el exceso.
+const MAX_PENDIENTE_MARGEN_M = 0.25;
 
 // Horarios escolares (minutos del día local).
 export const HORA_VEREDICTO = 7 * 60; // la hora a la que se decide el plan
@@ -169,6 +187,38 @@ function cruceSubida(serieMain: { min: number; valor_m: number }[], nivel: numbe
   return null;
 }
 
+// Máxima pendiente de subida (m/h) observada recientemente en las estaciones
+// vecinas. Solo cuenta subidas (Δ positivo) sobre el último tramo de lecturas.
+// Devuelve la mayor pendiente (y qué estación). Si ninguna sube fuerte, null.
+function pendienteSubidaReciente(vecinas: LecturasVecina[], maxLecturas = 6): { pendiente_m: number; estacion: string } | null {
+  let mejor: { pendiente_m: number; estacion: string } | null = null;
+  for (const v of vecinas) {
+    const serie = [...v.lecturas]
+      .filter((l) => l.nivel_m != null)
+      .map((l) => ({ t: new Date(l.timestamp).getTime(), v: l.nivel_m }))
+      .sort((a, b) => a.t - b.t)
+      .slice(-maxLecturas);
+    for (let i = 1; i < serie.length; i++) {
+      const a = serie[i - 1];
+      const b = serie[i];
+      const horas = (b.t - a.t) / 3600000;
+      if (horas <= 0) continue;
+      const pend = (b.v - a.v) / horas; // m/h
+      if (pend > 0 && (!mejor || pend > mejor.pendiente_m)) {
+        mejor = { pendiente_m: pend, estacion: v.nombre };
+      }
+    }
+  }
+  return mejor;
+}
+
+// Margen de seguridad por crecida en camino: el exceso de pendiente de subida
+// sobre la base de marea normal, con tope. Solo positivo (nunca baja el nivel).
+function margenPorPendiente(pendiente_m: number | null): number {
+  if (pendiente_m == null || pendiente_m < UMBRAL_PENDIENTE_M_H) return 0;
+  return Math.min(MAX_PENDIENTE_MARGEN_M, Math.max(0, pendiente_m - PENDIENTE_BASE_M_H));
+}
+
 // Sesgo "en vivo": observado - pronosticado INA interpolado en el MISMO minuto.
 // Las lecturas SHN horarias llegan cada hora a los :45; el pronóstico INA es
 // horario (:00). Se interpola INA con la escala de minutos de la observación
@@ -210,12 +260,13 @@ function sesgoEnVivo(pronos: PuntoProno[], observadas: PuntoModelo[]): number | 
 
 // Serie del nivel efectivo para todo el día: en cada punto horario se toma el
 // peor (más alto) entre INA main, INA p75, modelo propio, SHN (pleamar/bajamar
-// bracketed) y INA main + sesgo.
+// bracketed), INA main + sesgo y INA main + margen por crecida en camino.
 function serieEfectiva(
   s: Record<Qualifier, { min: number; valor_m: number }[]>,
   serieModelo: { min: number; valor_m: number }[],
   serieSHN: { min: number; valor_m: number }[],
-  sesgo: number | null
+  sesgo: number | null,
+  margenPendiente: number
 ): { min: number; valor_m: number }[] {
   const puntos = new Map<number, number[]>();
   const agrega = (min: number | null, v: number | null) => {
@@ -226,6 +277,7 @@ function serieEfectiva(
 
   for (const p of s.main) agrega(p.min, p.valor_m);
   for (const p of s.main) agrega(p.min, sesgo != null ? p.valor_m + Math.max(0, sesgo) : null);
+  for (const p of s.main) agrega(p.min, margenPendiente > 0 ? p.valor_m + margenPendiente : null);
   for (const p of s.p75) agrega(p.min, p.valor_m + (sesgo != null ? Math.max(0, sesgo) : 0));
   for (const p of serieModelo) agrega(p.min, p.valor_m + (sesgo != null ? Math.max(0, sesgo) : 0));
   for (const p of serieSHN) agrega(p.min, p.valor_m);
@@ -244,6 +296,7 @@ function valorEfectivo(
   serieModelo: { min: number; valor_m: number }[],
   serieSHN: { min: number; valor_m: number }[],
   sesgo: number | null,
+  margenPendiente: number,
   horaMin: number
 ): { main: number | null; modelo: number | null; efectivo: number | null; p75: number | null } {
   const main = valorEn(s.main, horaMin);
@@ -253,6 +306,7 @@ function valorEfectivo(
   const candidatos: number[] = [];
   if (main != null) candidatos.push(main);
   if (main != null && sesgo != null) candidatos.push(main + Math.max(0, sesgo));
+  if (main != null && margenPendiente > 0) candidatos.push(main + margenPendiente);
   if (modelo != null) candidatos.push(modelo);
   if (p75 != null) candidatos.push(p75);
   if (shnValor != null) candidatos.push(shnValor);
@@ -289,8 +343,13 @@ export function calcularVeredicto(
 
   const sesgo = sesgoEnVivo(pronos, fuentes.shnObservado ?? []);
 
+  // Señal de crecida en camino: ¿alguna estación vecina está subiendo fuerte en
+  // las últimas horas? La marea entra por el estuario y llega a SF con desfase.
+  const pendiente = pendienteSubidaReciente(fuentes.vecinas ?? []);
+  const margenPendiente = margenPorPendiente(pendiente?.pendiente_m ?? null);
+
   const horaEn = (horaMin: number): ValorHora => {
-    const e = valorEfectivo(s, serieModelo, serieSHN, sesgo, horaMin);
+    const e = valorEfectivo(s, serieModelo, serieSHN, sesgo, margenPendiente, horaMin);
     return {
       horaMin,
       main: e.main,
@@ -307,7 +366,7 @@ export function calcularVeredicto(
   const vuelta = horaEn(HORA_VUELTA);
   const hora7 = horaEn(HORA_VEREDICTO);
 
-  const serieEff = serieEfectiva(s, serieModelo, serieSHN, sesgo);
+  const serieEff = serieEfectiva(s, serieModelo, serieSHN, sesgo, margenPendiente);
   const salidaLimiteMin = cruceSubida(serieEff, nivelSeguroM);
 
   let estado: EstadoVeredicto = "sin_datos";
@@ -347,18 +406,27 @@ export function calcularVeredicto(
 
   const nivel = (h: ValorHora) => (h.efectivo_m != null ? h.efectivo_m : h.main);
   const sesgoNota = sesgo != null && sesgo > 0 ? ` (sesgo en vivo +${sesgo.toFixed(2)}m)` : "";
+  const pendienteNota =
+    margenPendiente > 0 && pendiente
+      ? ` — ${pendiente.estacion} subiendo a ${pendiente.pendiente_m.toFixed(2)} m/h: crecida en camino`
+      : "";
+
+  // ¿Por qué NO CLASES? Por la entrada cortada o por la regla de los 60 min.
+  const motivo60 = estado === "no_clases" && entrada.efectivo_m != null && entrada.efectivo_m <= nivelSeguroM;
 
   let motivo: string;
   switch (estado) {
     case "no_clases":
-      motivo = `A las 8 el agua estaría en ${nivel(entrada)?.toFixed(2)}m — sobre el nivel seguro (${nivelSeguroM.toFixed(2)}m): NO se puede cruzar en lancha.` + sesgoNota;
+      motivo = motivo60
+        ? `Se podría entrar a las 8 (${nivel(entrada)?.toFixed(2)}m), pero el muelle ya sube: la salida límite quedaría a las ${hhmm(salidaLimiteMin)} — solo ${Math.round((salidaLimiteMin ?? HORA_ENTRADA) - HORA_ENTRADA)} min después de entrar, margen insuficiente: NO CLASES.`
+        : `A las 8 el agua estaría en ${nivel(entrada)?.toFixed(2)}m — sobre el nivel seguro (${nivelSeguroM.toFixed(2)}m): NO se puede cruzar en lancha.` + sesgoNota + pendienteNota;
       break;
     case "salida_temprana":
       motivo = `Se puede entrar a las 8 (${nivel(entrada)?.toFixed(2)}m), pero a las 14:15 estaría en ${nivel(vuelta)?.toFixed(2)}m` +
-        (salidaLimiteMin != null ? ` — hay que irse antes de las ${hhmm(salidaLimiteMin)}.` : " — no se podría volver.") + sesgoNota;
+        (salidaLimiteMin != null ? ` — hay que irse antes de las ${hhmm(salidaLimiteMin)}.` : " — no se podría volver.") + sesgoNota + pendienteNota;
       break;
     case "normal":
-      motivo = `Agua accesible a las 8 (${nivel(entrada)?.toFixed(2)}m) y a las 14:15 (${nivel(vuelta)?.toFixed(2)}m) — rompe el día normal.` + sesgoNota;
+      motivo = `Agua accesible a las 8 (${nivel(entrada)?.toFixed(2)}m) y a las 14:15 (${nivel(vuelta)?.toFixed(2)}m) — rompe el día normal.` + sesgoNota + pendienteNota;
       break;
     case "sin_datos":
     default:
@@ -378,6 +446,8 @@ export function calcularVeredicto(
     salidaLimiteMin,
     motivo,
     sesgo_m: sesgo,
+    pendiente_m: pendiente?.pendiente_m ?? null,
+    pendiente_estacion: pendiente?.estacion ?? null,
   };
 }
 

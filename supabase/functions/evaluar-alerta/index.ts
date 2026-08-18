@@ -629,6 +629,36 @@ if (empeoro || recordProno) {
           nivel_m: Number(l.nivel_m),
         }));
 
+        // Señal de crecida en camino: últimas lecturas de estaciones vecinas
+        // (Bs As y La Plata). Si suben fuerte ahora, la misma ola llega a SF
+        // después → el veredicto suma un margen de seguridad.
+        const vecinas: { nombre: string; lecturas: { timestamp: string; nivel_m: number }[] }[] = [];
+        for (const nombre of ["Puerto de Buenos Aires", "La Plata"]) {
+          const { data: vecEst } = await supabase
+            .from("estaciones")
+            .select("id")
+            .eq("nombre", nombre)
+            .single();
+          if (vecEst) {
+            const { data: vecLect } = await supabase
+              .from("lecturas")
+              .select("timestamp, nivel_m")
+              .eq("estacion_id", vecEst.id)
+              .eq("tipo", "observado")
+              .order("timestamp", { ascending: true })
+              .limit(12);
+            if (vecLect && (vecLect as { timestamp: string; nivel_m: number }[]).length > 0) {
+              vecinas.push({
+                nombre,
+                lecturas: (vecLect as { timestamp: string; nivel_m: number }[]).map((l) => ({
+                  timestamp: l.timestamp,
+                  nivel_m: Number(l.nivel_m),
+                })),
+              });
+            }
+          }
+        }
+
         // Próximos días a evaluar: hoy y los siguientes 3 días
         const fechas: string[] = [];
         for (let i = 0; i < 4; i++) {
@@ -643,7 +673,7 @@ if (empeoro || recordProno) {
             fecha,
             nivelSeguroM,
             diasSinClases,
-            { shnObservado }
+            { shnObservado, vecinas }
           );
           if (!v.esDiaEscolar || v.estado === "normal" || v.estado === "sin_datos") continue;
 
