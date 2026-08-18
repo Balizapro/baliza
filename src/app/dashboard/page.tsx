@@ -12,30 +12,19 @@ import AdminPanel from "@/components/AdminPanel";
 import ThemeToggle from "@/components/ThemeToggle";
 import PropagacionLP from "@/components/PropagacionLP";
 import EscalaHidrometro from "@/components/EscalaHidrometro";
-import AlertaSmnCard from "@/components/AlertaSmnCard";
 import AvisoShnCard from "@/components/AvisoShnCard";
 import PushNotifications from "@/components/PushNotifications";
 import AlertaSonora from "@/components/AlertaSonora";
-import ComparacionModelo from "@/components/ComparacionModelo";
 import EstadoFuentes from "@/components/EstadoFuentes";
-import VerificacionPronostico from "@/components/VerificacionPronostico";
-import ValidacionModelo from "@/components/ValidacionModelo";
 import CompartirWhatsApp from "@/components/CompartirWhatsApp";
 import AvisoCrecidaCard from "@/components/AvisoCrecidaCard";
-import { analizarCiclo, predecirProximosExtremos } from "@/lib/ciclo";
 import { calcularVeredicto } from "@/lib/planEscolar";
 import { alturasSanFernando } from "@/lib/shn";
 import { proyectarCurva } from "@/lib/modelo";
 import { useAhora } from "@/lib/useAhora";
 import CurvaProyectada from "@/components/CurvaProyectada";
-import FaseMarea from "@/components/FaseMarea";
 import AnticipacionBajada from "@/components/AnticipacionBajada";
 import { ADMINS } from "@/lib/constants";
-
-function direccionCardinal(grados: number): string {
-  const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
-  return dirs[Math.round(grados / 22.5) % 16];
-}
 
 function formatearFechaHora(iso: string | null): string {
   if (!iso) return "--";
@@ -167,14 +156,8 @@ export default function Dashboard() {
       const oyId = estaciones.find((e) => e.nombre.includes("Oyarvide"))?.id;
       const atId = estaciones.find((e) => e.nombre.includes("Atalaya"))?.id;
       const baId = estaciones.find((e) => e.nombre.includes("Buenos Aires"))?.id;
-      const pnId = estaciones.find((e) => e.nombre.includes("Pilote Norden"))?.id;
-      const rosId = estaciones.find((e) => e.nombre === "Rosario")?.id;
-      const snId = estaciones.find((e) => e.nombre === "San Nicolás")?.id;
-      const zarId = estaciones.find((e) => e.nombre === "Zárate")?.id;
-      const campId = estaciones.find((e) => e.nombre === "Campana")?.id;
-      const escId = estaciones.find((e) => e.nombre === "Escobar")?.id;
 
-      const ids = [sfId, lpId, oyId, atId, baId, pnId, rosId, snId, zarId, campId, escId].filter(Boolean);
+      const ids = [sfId, lpId, oyId, atId, baId].filter(Boolean);
       const { data: lecturas } = await supabase
         .from("lecturas")
         .select("*")
@@ -323,23 +306,6 @@ export default function Dashboard() {
         sanFernando: {
           observado: obs(sfId),
           pronostico: (pronosticos as Pronostico[]) ?? [],
-        },
-        exteriores: {
-          laPlata: obs(lpId),
-          buenosAires: obs(baId),
-          piloteNorden: obs(pnId),
-        },
-        tendencias: {
-          laPlata: calcularTendencia(filtrarPorEstacion(lpId)),
-          buenosAires: calcularTendencia(filtrarPorEstacion(baId)),
-          piloteNorden: calcularTendencia(filtrarPorEstacion(pnId)),
-        },
-        parana: {
-          rosario: obs(rosId),
-          sanNicolas: obs(snId),
-          zarate: obs(zarId),
-          campana: obs(campId),
-          escobar: obs(escId),
         },
         viento: viento ?? null,
         umbrales: umbrales ?? [],
@@ -530,18 +496,6 @@ export default function Dashboard() {
     a.puerto.toUpperCase().includes("SAN FERNANDO")
   ) ?? null;
   const tipoSHN = avisoSHN?.tipo ?? "";
-
-  const ciclo = useMemo(
-    () => analizarCiclo(historial, lecturasLP.slice(0, 24), 2.5, ahora),
-    [historial, lecturasLP, ahora]
-  );
-
-  // Predicción de próximos extremos (pleamar/bajamar) a partir de la regularidad
-  // del ciclo observado en SF (~12.4h semidiurno). Recálculo periódico con `ahora`.
-  const prediccionExtremos = useMemo(
-    () => predecirProximosExtremos(historial, ahora),
-    [historial, ahora]
-  );
 
   if (cargando) {
     return (
@@ -855,41 +809,6 @@ export default function Dashboard() {
           <AvisoCrecidaCard aviso={datos.avisoCrecida} umbralNR={umbralNR?.valor_m ?? null} />
         )}
 
-        {/* Aviso de crecida pronosticada por INA (ventana 4 días) */}
-        {(() => {
-          const mainPronos = (sfProno ?? [])
-            .filter((p) => p.qualifier === "main")
-            .filter((p) => new Date(p.timestamp).getTime() >= ahora)
-            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-          const pico = mainPronos.length
-            ? mainPronos.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), mainPronos[0])
-            : null;
-          const umbralPro = umbralProno?.valor_m ?? 2.1;
-          if (!pico || pico.valor_m <= umbralPro) return null;
-          const picoFuturo = new Date(pico.timestamp).getTime() >= ahora;
-          return (
-            <section className={`dashboard-section ${pico.valor_m >= (umbralNR?.valor_m ?? 2.2) ? "shn-alerta" : ""}`}>
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <h2 className="seccion-titulo">
-                  Pronóstico INA — crecida pronosticada
-                </h2>
-              </div>
-              <div className="flex items-center gap-2 text-rojo-alerta dark:text-rojo-dark font-bold text-sm">
-                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current flex-shrink-0"><path d="M12 2 1 21h22L12 2zm1 14h-2v2h2v-2zm0-7h-2v5h2V9z"/></svg>
-                <span>
-                  INA pronostica un pico de {pico.valor_m.toFixed(2)}m{picoFuturo ? ` el ${formatearFechaHora(pico.timestamp)}` : ""} en San Fernando — supera el umbral de crecida ({umbralPro.toFixed(2)}m)
-                </span>
-              </div>
-              <p className="text-xs text-texto-sec dark:text-gray-400 mt-1">
-                Se avisará de nuevo solo si el pronóstico marca una altura aún mayor.
-              </p>
-              <p className="text-xs text-texto-sec dark:text-gray-400 mt-3">
-                Fuente: INA — pronóstico a 4 días (qualifier main)
-              </p>
-            </section>
-          );
-        })()}
-
         {/* Escala hidrométrica + estado San Fernando */}
         <section className="dashboard-section">
           <EscalaHidrometro
@@ -902,8 +821,6 @@ export default function Dashboard() {
             umbralBajAlarma={umbralBajAlarma}
             umbralBajEvac={umbralBajEvac}
             alertaNivel={alertaNivel}
-            ciclo={ciclo}
-            prediccion={prediccionExtremos}
           />
         </section>
 
@@ -917,15 +834,6 @@ export default function Dashboard() {
           umbralNR={umbralNR ?? null}
         />
 
-        {/* Fase de marea: veredicto de subida/bajada y pico pronosticado (SHN) */}
-        <FaseMarea
-          avisos={datos?.avisosShn ?? []}
-          nivelActual={sfObs?.nivel_m ?? null}
-          tendencia={tendenciaSF}
-          ahora={ahora}
-          proxPleamar={prediccionExtremos.pleamar}
-        />
-
         {/* Anticipación de la bajada: las exteriores pasaron su pico y SF bajará */}
         <AnticipacionBajada
           sf={historial}
@@ -934,92 +842,15 @@ export default function Dashboard() {
           ahora={ahora}
         />
 
-        {/* SHN + SMN en paralelo */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-          {/* Aviso del SHN (pronóstico mareológico) */}
+        {/* Aviso del SHN (pronóstico mareológico) */}
+        <section className="dashboard-section">
           <AvisoShnCard avisos={datos?.avisosShn ?? []} umbralNR={umbralNR?.valor_m ?? null} />
+        </section>
 
-          {/* Alerta meteorológica SMN */}
-          <AlertaSmnCard alertas={datos?.alertasSmn ?? []} />
-        </div>
-
-        {/* Viento + Propagación LP + Modelo INA vs propagación LP en paralelo */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
-          <div className="space-y-4">
-            <section className="dashboard-section">
-              <h2 className="seccion-titulo mb-1">
-                Viento
-              </h2>
-              {viento ? (
-                <>
-                  <p className="font-mono text-lg sm:text-xl font-bold text-baliza dark:text-marea-dark">
-                    {viento.velocidad_kmh}
-                    <span className="text-sm font-normal ml-1 font-sans text-texto-sec dark:text-gray-400">km/h</span>
-                  </p>
-                  <p className="text-sm text-texto-sec dark:text-gray-400 mt-0.5">
-                    {direccionCardinal(viento.direccion_grados)} ({viento.direccion_grados}°)
-                  </p>
-                  <p className="text-xs text-texto-sec dark:text-gray-400 mt-0.5 font-mono">{formatearFechaHora(viento.timestamp)}</p>
-                </>
-              ) : (
-                <p className="text-sm text-texto-sec dark:text-gray-400 italic">sin datos</p>
-              )}
-            </section>
-            <section className="dashboard-section">
-              <PropagacionLP lecturasLP={lecturasLP} lecturasLPHist={lecturasLPHist} lecturasSF={historial} nivelSF={sfObs?.nivel_m} />
-            </section>
-          </div>
-          <section className="dashboard-section">
-            <ComparacionModelo
-              pronostico={sfProno ?? []}
-              lecturasLP={lecturasLP}
-              nivelSF={sfObs?.nivel_m}
-            />
-          </section>
-        </div>
-
-        {/* Verificación de pronóstico */}
-        <VerificacionPronostico observaciones={historial} pronosticos={sfProno ?? []} />
-
-        {/* Validación del modelo propio */}
-        <ValidacionModelo observaciones={historial} vientoHistorico={vientoHistoricoModelo} />
-
-        {/* Estaciones exteriores — oculto temporalmente (no relevante para la vista principal) */}
-        {/* <section className="dashboard-section">
-          <h2 className="seccion-titulo mb-3">
-            Estaciones exteriores — preaviso temprano
-          </h2>
-          <div className="space-y-3">
-            {[
-              { nombre: "La Plata", obs: lpObs, tend: datos?.tendencias.laPlata ?? null, delay: "~2-3hs antes que SF" },
-              { nombre: "Puerto de Buenos Aires", obs: baObs, tend: datos?.tendencias.buenosAires ?? null, delay: "~1hs antes que SF" },
-              { nombre: "Pilote Norden", obs: pnObs, tend: datos?.tendencias.piloteNorden ?? null, delay: "" },
-            ].map((est) => (
-              <div key={est.nombre} className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-sm text-texto dark:text-gray-200">{est.nombre}</p>
-                  {est.delay && <p className="text-xs text-texto-sec dark:text-gray-400">{est.delay}</p>}
-                </div>
-                <div className="text-right flex-shrink-0 ml-2">
-                  <p className="font-mono text-base sm:text-lg font-bold text-baliza dark:text-marea-dark whitespace-nowrap">
-                    {est.obs ? `${est.obs.nivel_m.toFixed(2)}m` : <span className="text-xs font-normal italic text-texto-sec">sin datos disponibles</span>}
-                  </p>
-                  <p className={`text-xs ${est.tend?.direccion === "subiendo" ? "text-rojo-alerta" : est.tend?.direccion === "bajando" ? "text-ok" : "text-texto-sec"} dark:text-gray-400`}>
-                    {est.obs ? formatoTendencia(est.tend) : ""}
-                  </p>
-                  <p className="text-xs font-mono text-texto-sec dark:text-gray-400">
-                    {est.obs ? formatearHora(est.obs.timestamp) : ""}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section> */}
-
-        {/* Vista semanal Paraná — oculto temporalmente */}
-        {/* <section className="dashboard-section">
-          <VistaSemanal parana={datos?.parana ?? { rosario: null, sanNicolas: null, zarate: null, campana: null, escobar: null }} />
-        </section> */}
+        {/* Propagación La Plata → San Fernando */}
+        <section className="dashboard-section">
+          <PropagacionLP lecturasLP={lecturasLP} lecturasLPHist={lecturasLPHist} lecturasSF={historial} nivelSF={sfObs?.nivel_m} />
+        </section>
 
         {/* Pronóstico San Fernando */}
         {(() => {

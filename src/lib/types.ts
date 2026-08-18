@@ -131,23 +131,6 @@ export interface DatosAgregados {
     observado: Lectura | null;
     pronostico: Pronostico[];
   };
-  exteriores: {
-    laPlata: Lectura | null;
-    buenosAires: Lectura | null;
-    piloteNorden: Lectura | null;
-  };
-  tendencias: {
-    laPlata: Tendencia | null;
-    buenosAires: Tendencia | null;
-    piloteNorden: Tendencia | null;
-  };
-  parana: {
-    rosario: Lectura | null;
-    sanNicolas: Lectura | null;
-    zarate: Lectura | null;
-    campana: Lectura | null;
-    escobar: Lectura | null;
-  };
   viento: Viento | null;
   umbrales: Umbral[];
   config: Configuracion[];
