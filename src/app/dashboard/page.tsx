@@ -24,6 +24,8 @@ import CompartirWhatsApp from "@/components/CompartirWhatsApp";
 import AvisoCrecidaCard from "@/components/AvisoCrecidaCard";
 import { analizarCiclo, predecirProximosExtremos } from "@/lib/ciclo";
 import { calcularVeredicto } from "@/lib/planEscolar";
+import { alturasSanFernando } from "@/lib/shn";
+import { proyectarCurva } from "@/lib/modelo";
 import { useAhora } from "@/lib/useAhora";
 import CurvaProyectada from "@/components/CurvaProyectada";
 import FaseMarea from "@/components/FaseMarea";
@@ -421,6 +423,36 @@ export default function Dashboard() {
       : null;
   }, [sfProno, ahora]);
 
+  // Entrada del componente de curva: viento histórico y pronóstico como ms
+  const vientoHistoricoModelo = useMemo(
+    () => vientoHist.map((v) => ({ timestamp: new Date(v.timestamp).getTime(), velocidad_kmh: v.velocidad_kmh, direccion_grados: v.direccion_grados, presion_hpa: v.presion_hpa })),
+    [vientoHist]
+  );
+  const vientoPronosticoModelo = useMemo(
+    () => vientoProno.map((v) => ({ timestamp: new Date(v.timestamp).getTime(), velocidad_kmh: v.velocidad_kmh, direccion_grados: v.direccion_grados, presion_hpa: v.presion_hpa })),
+    [vientoProno]
+  );
+
+  // Proyección del modelo propio (armónico + viento + persistencia) como curva
+  // de puntos; se pasa al plan del día como fuente adicional (peor de ambos).
+  const curvaModelo = useMemo(() => {
+    if (historial.length === 0) return [];
+    const lecturas: { timestamp: string; nivel_m: number }[] = historial
+      .filter((l) => l.nivel_m != null)
+      .map((l) => ({ timestamp: l.timestamp, nivel_m: l.nivel_m }));
+    const vientos = [...vientoHistoricoModelo, ...vientoPronosticoModelo];
+    const proy = proyectarCurva(lecturas, vientos, ahora, 72, 15);
+    return proy.puntos.map((p) => ({ timestamp: new Date(p.timestamp).toISOString(), nivel_m: p.nivel_m }));
+  }, [historial, vientoHistoricoModelo, vientoPronosticoModelo, ahora]);
+
+  // Pleamares/bajamares del SHN para San Fernando, del aviso más reciente.
+  const shnAlturas = useMemo(() => {
+    const avisos = [...(datos?.avisosShn ?? [])].sort(
+      (a, b) => new Date(b.actualizado).getTime() - new Date(a.actualizado).getTime()
+    );
+    return avisos.length ? alturasSanFernando(avisos[0].texto) : [];
+  }, [datos?.avisosShn]);
+
   // Estado del muelle: NO accesible mientras SF supera el nivel seguro (2.25m).
   // Cuando hay un pico pronosticado que supera el límite dentro del horario
   // escolar de un día próximo, se arma un "plan del día" (veredicto: entrada
@@ -441,15 +473,24 @@ export default function Dashboard() {
     // Veredicto escolar del día del pico (lógica compartida, ver src/lib/planEscolar.ts).
     // Cubre 7:00 (hora de decisión), 8:00 (entrada) y 14:15 (vuelta), más la hora
     // límite de salida cuando la vuelta queda cortada y la confianza por bandas
-    // p25/p95 del pronóstico INA.
+    // p25/p95 del pronóstico INA. Usa el PEOR de INA main, INA p75, modelo propio
+    // y SHN (boletín), más el sesgo en vivo de las lecturas horarias SHN.
     let veredicto: ReturnType<typeof calcularVeredicto> | null = null;
     if (picoNoAccesible) {
       const dia = fechaDiaArgentina(picoNoAccesible.timestamp);
-      if (dia) veredicto = calcularVeredicto(sfProno ?? [], dia, nivelSeguroM, diasSinClases);
+      if (dia) {
+        veredicto = calcularVeredicto(sfProno ?? [], dia, nivelSeguroM, diasSinClases, {
+          modelo: curvaModelo,
+          shnObservado: historial
+            .filter((l) => l.nivel_m != null)
+            .map((l) => ({ timestamp: l.timestamp, nivel_m: l.nivel_m })),
+          shnAlturas,
+        });
+      }
     }
 
     return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible, veredicto };
-  }, [sfObs, sfProno, nivelSeguroM, ahora, diasSinClases]);
+  }, [sfObs, sfProno, nivelSeguroM, ahora, diasSinClases, curvaModelo, shnAlturas, historial]);
 
   function hhmm(min: number | null): string {
     if (min == null) return "--";
@@ -491,16 +532,6 @@ export default function Dashboard() {
   const prediccionExtremos = useMemo(
     () => predecirProximosExtremos(historial, ahora),
     [historial, ahora]
-  );
-
-  // Entrada del componente de curva: viento histórico y pronóstico como ms
-  const vientoHistoricoModelo = useMemo(
-    () => vientoHist.map((v) => ({ timestamp: new Date(v.timestamp).getTime(), velocidad_kmh: v.velocidad_kmh, direccion_grados: v.direccion_grados, presion_hpa: v.presion_hpa })),
-    [vientoHist]
-  );
-  const vientoPronosticoModelo = useMemo(
-    () => vientoProno.map((v) => ({ timestamp: new Date(v.timestamp).getTime(), velocidad_kmh: v.velocidad_kmh, direccion_grados: v.direccion_grados, presion_hpa: v.presion_hpa })),
-    [vientoProno]
   );
 
   if (cargando) {
@@ -604,12 +635,6 @@ export default function Dashboard() {
                     <div className="rb-plan">
                       {(() => {
                         const v = muelleAcceso.veredicto;
-                        const banda = (h: { main: number | null; p25: number | null; p95: number | null }) => {
-                          if (h.main == null) return "--";
-                          if (h.p25 != null && h.p95 != null) return `${h.p25.toFixed(2)}–${h.p95.toFixed(2)}`;
-                          if (h.p95 != null) return `hasta ${h.p95.toFixed(2)}`;
-                          return h.main.toFixed(2);
-                        };
                         const confianzaLabel = v.confianza === "alta" ? "alta" : v.confianza === "media" ? "media" : "baja";
                         return (
                           <>
@@ -621,31 +646,31 @@ export default function Dashboard() {
                                 confianza {confianzaLabel}
                               </span>
                             </div>
-                            <div className={`rb-plan-row ${(v.hora7.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
+                            <div className={`rb-plan-row ${(v.hora7.efectivo_m ?? v.hora7.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
                               <span className="rb-plan-hora">07:00</span>
-                              <span className="rb-plan-altura">{v.hora7.main != null ? `${v.hora7.main.toFixed(2)}m` : "--"}</span>
-                              <span className="rb-plan-banda">p25–p95: {banda(v.hora7)}</span>
+                              <span className="rb-plan-altura">{v.hora7.efectivo_m != null ? `${v.hora7.efectivo_m.toFixed(2)}m` : "--"}</span>
+                              <span className="rb-plan-banda">INA {v.hora7.main != null ? `${v.hora7.main.toFixed(2)}m` : "--"}{v.hora7.modelo_m != null ? ` · modelo ${v.hora7.modelo_m.toFixed(2)}m` : ""}</span>
                               <span className="rb-plan-veredicto">
-                                {(v.hora7.main ?? 0) > nivelSeguroM ? "ya no se puede" : "se decide el día"}
+                                {(v.hora7.efectivo_m ?? 0) > nivelSeguroM ? "ya no se puede" : "se decide el día"}
                               </span>
                             </div>
-                            <div className={`rb-plan-row ${(v.entrada.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
+                            <div className={`rb-plan-row ${(v.entrada.efectivo_m ?? v.entrada.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
                               <span className="rb-plan-hora">08:00</span>
-                              <span className="rb-plan-altura">{v.entrada.main != null ? `${v.entrada.main.toFixed(2)}m` : "--"}</span>
-                              <span className="rb-plan-banda">p25–p95: {banda(v.entrada)}</span>
+                              <span className="rb-plan-altura">{v.entrada.efectivo_m != null ? `${v.entrada.efectivo_m.toFixed(2)}m` : "--"}</span>
+                              <span className="rb-plan-banda">INA {v.entrada.main != null ? `${v.entrada.main.toFixed(2)}m` : "--"}{v.entrada.modelo_m != null ? ` · modelo ${v.entrada.modelo_m.toFixed(2)}m` : ""}</span>
                               <span className="rb-plan-veredicto">
-                                {(v.entrada.main ?? 0) > nivelSeguroM ? "NO se puede embarcar" : "sí se puede embarcar"}
+                                {(v.entrada.efectivo_m ?? 0) > nivelSeguroM ? "NO se puede embarcar" : "sí se puede embarcar"}
                               </span>
                             </div>
-                            <div className={`rb-plan-row ${(v.vuelta.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
+                            <div className={`rb-plan-row ${(v.vuelta.efectivo_m ?? v.vuelta.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
                               <span className="rb-plan-hora">14:15</span>
-                              <span className="rb-plan-altura">{v.vuelta.main != null ? `${v.vuelta.main.toFixed(2)}m` : "--"}</span>
-                              <span className="rb-plan-banda">p25–p95: {banda(v.vuelta)}</span>
+                              <span className="rb-plan-altura">{v.vuelta.efectivo_m != null ? `${v.vuelta.efectivo_m.toFixed(2)}m` : "--"}</span>
+                              <span className="rb-plan-banda">INA {v.vuelta.main != null ? `${v.vuelta.main.toFixed(2)}m` : "--"}{v.vuelta.modelo_m != null ? ` · modelo ${v.vuelta.modelo_m.toFixed(2)}m` : ""}</span>
                               <span className="rb-plan-veredicto">
-                                {(v.vuelta.main ?? 0) > nivelSeguroM ? "NO se puede volver" : "sí se puede volver"}
+                                {(v.vuelta.efectivo_m ?? 0) > nivelSeguroM ? "NO se puede volver" : "sí se puede volver"}
                               </span>
                             </div>
-                            {v.estado === "salida_temprana" && v.salidaLimiteMin != null && v.salidaLimiteMin < 15 * 60 + 30 && (
+                            {(v.estado === "salida_temprana" && v.salidaLimiteMin != null) && (
                               <div className="rb-plan-limit">
                                 ⏱ Se entra a las 8, pero hay que irse antes de las{" "}
                                 <strong>{hhmm(v.salidaLimiteMin)}</strong>

@@ -3,6 +3,9 @@
 // (NO CLASES / SALIDA TEMPRANA / NORMAL) a partir del pronóstico INA
 // (qualifiers main/p05/p25/p75/p95) y del nivel seguro del muelle.
 
+// Se importa por tipo para no arrastrar dependencias: shn.ts no importa nada.
+import type { AlturaSanFernando } from "./shn";
+
 export type Qualifier = "main" | "p05" | "p25" | "p75" | "p95";
 
 export interface PuntoProno {
@@ -15,6 +18,11 @@ export type EstadoVeredicto = "normal" | "salida_temprana" | "no_clases" | "sin_
 
 export type Confianza = "alta" | "media" | "baja";
 
+export interface PuntoModelo {
+  timestamp: string;
+  nivel_m: number;
+}
+
 export interface ValorHora {
   horaMin: number;
   main: number | null;
@@ -22,6 +30,10 @@ export interface ValorHora {
   p25: number | null;
   p75: number | null;
   p95: number | null;
+  // Modelo propio (armónico + viento + persistencia) y el peor de ambos:
+  // la decisión usa el nivel más alto entre INA y modelo.
+  modelo_m: number | null;
+  efectivo_m: number | null;
 }
 
 export interface VeredictoDia {
@@ -35,6 +47,18 @@ export interface VeredictoDia {
   hora7: ValorHora;
   salidaLimiteMin: number | null;
   motivo: string;
+  // Sesgo estimado en vivo: observado - INA main (últimas horas). Solo aplica
+  // cuando es positivo (INA subestima), que es el caso de riesgo.
+  sesgo_m: number | null;
+}
+
+// Fuentes adicionales para el veredicto: modelo propio (armónico + viento +
+// persistencia), lecturas observadas recientes (para corregir el sesgo en vivo)
+// y pleamares/bajamares del SHN (boletín mareológico).
+export interface FuentesPlan {
+  modelo?: PuntoModelo[];
+  shnObservado?: PuntoModelo[];
+  shnAlturas?: AlturaSanFernando[];
 }
 
 // Horarios escolares (minutos del día local).
@@ -145,11 +169,108 @@ function cruceSubida(serieMain: { min: number; valor_m: number }[], nivel: numbe
   return null;
 }
 
+// Sesgo "en vivo": observado - pronosticado INA interpolado en el MISMO minuto.
+// Las lecturas SHN horarias llegan cada hora a los :45; el pronóstico INA es
+// horario (:00). Comparar obs(:45) contra INA(:00) inflaría el sesgo con el
+// avance real de la marea en esos 45 min, así que se interpola INA con
+// la escala de minutos de la observación. Solo se usa cuando es positivo
+// (INA subestima), que es el caso de riesgo.
+function sesgoEnVivo(pronos: PuntoProno[], observadas: PuntoModelo[]): number | null {
+  const pronoMain = pronos
+    .filter((p) => p.qualifier === "main")
+    .map((p) => ({ t: new Date(p.timestamp).getTime(), v: p.valor_m }))
+    .sort((a, b) => a.t - b.t);
+  if (pronoMain.length === 0) return null;
+
+  const interp = (t: number): number | null => {
+    let antes: { t: number; v: number } | null = null;
+    let despues: { t: number; v: number } | null = null;
+    for (const p of pronoMain) {
+      if (p.t <= t) antes = p;
+      else { despues = p; break; }
+    }
+    if (antes && despues) {
+      const frac = (t - antes.t) / (despues.t - antes.t || 1);
+      return antes.v + (despues.v - antes.v) * frac;
+    }
+    return antes ? antes.v : despues ? despues.v : null;
+  };
+
+  const diffs: number[] = [];
+  const obs = [...observadas]
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  for (const o of obs.slice(-6)) {
+    const tO = new Date(o.timestamp).getTime();
+    const pv = interp(tO);
+    if (pv != null) diffs.push(o.nivel_m - pv);
+  }
+  if (diffs.length === 0) return null;
+  diffs.sort((a, b) => a - b);
+  return diffs[Math.floor(diffs.length / 2)];
+}
+
+// Serie del nivel efectivo para todo el día: en cada punto horario se toma el
+// peor (más alto) entre INA main, INA p75, modelo propio, SHN (pleamar/bajamar
+// bracketed) y INA main + sesgo.
+function serieEfectiva(
+  s: Record<Qualifier, { min: number; valor_m: number }[]>,
+  serieModelo: { min: number; valor_m: number }[],
+  serieSHN: { min: number; valor_m: number }[],
+  sesgo: number | null
+): { min: number; valor_m: number }[] {
+  const puntos = new Map<number, number[]>();
+  const agrega = (min: number | null, v: number | null) => {
+    if (min == null || v == null) return;
+    if (!puntos.has(min)) puntos.set(min, []);
+    puntos.get(min)!.push(v);
+  };
+
+  for (const p of s.main) agrega(p.min, p.valor_m);
+  for (const p of s.main) agrega(p.min, sesgo != null ? p.valor_m + Math.max(0, sesgo) : null);
+  for (const p of s.p75) agrega(p.min, p.valor_m + (sesgo != null ? Math.max(0, sesgo) : 0));
+  for (const p of serieModelo) agrega(p.min, p.valor_m + (sesgo != null ? Math.max(0, sesgo) : 0));
+  // SHN bracketed: cada extremo se interpola en la serie de suma, los puntos
+  // intermedios quedan cubiertos por la interpolación de cruceSubida.
+  for (const p of serieSHN) agrega(p.min, p.valor_m);
+
+  const serie: { min: number; valor_m: number }[] = [];
+  for (const [min, vs] of puntos) {
+    serie.push({ min, valor_m: Math.max(...vs) });
+  }
+  serie.sort((a, b) => a.min - b.min);
+  return serie;
+}
+
+// Valor efectivo (peor fuente) en una hora exacta: max(INA main, INA p75,
+// modelo, SHN interpolado, INA main + sesgo). Si hay sesgo positivo se penaliza
+// hacia arriba. La SHN solo aporta si hay dos extremos que acoten la hora.
+function valorEfectivo(
+  s: Record<Qualifier, { min: number; valor_m: number }[]>,
+  serieModelo: { min: number; valor_m: number }[],
+  serieSHN: { min: number; valor_m: number }[],
+  sesgo: number | null,
+  horaMin: number
+): { main: number | null; modelo: number | null; efectivo: number | null; p75: number | null } {
+  const main = valorEn(s.main, horaMin);
+  const p75 = valorEn(s.p75, horaMin);
+  const modelo = valorEn(serieModelo, horaMin);
+  const shnValor = valorEn(serieSHN, horaMin);
+  const candidatos: number[] = [];
+  if (main != null) candidatos.push(main);
+  if (main != null && sesgo != null) candidatos.push(main + Math.max(0, sesgo));
+  if (modelo != null) candidatos.push(modelo);
+  if (p75 != null) candidatos.push(p75);
+  if (shnValor != null) candidatos.push(shnValor);
+  const efectivo = candidatos.length ? Math.max(...candidatos) : null;
+  return { main, modelo, efectivo, p75 };
+}
+
 export function calcularVeredicto(
   pronos: PuntoProno[],
   fecha: string,
   nivelSeguroM: number,
-  diasSinClases: string[] = []
+  diasSinClases: string[] = [],
+  fuentes: FuentesPlan = {}
 ): VeredictoDia {
   const fechaA = fechaDiaArgentina(fecha + "T12:00:00");
   const weekday = weekdayArgentina(fecha + "T12:00:00");
@@ -157,31 +278,68 @@ export function calcularVeredicto(
 
   const s = serieDia(pronos, fecha);
 
-  const horaEn = (horaMin: number): ValorHora => ({
-    horaMin,
-    main: valorEn(s.main, horaMin),
-    p05: valorEn(s.p05, horaMin),
-    p25: valorEn(s.p25, horaMin),
-    p75: valorEn(s.p75, horaMin),
-    p95: valorEn(s.p95, horaMin),
-  });
+  // Serie del modelo propio para el día (solo puntos dentro de `fecha`)
+  const serieModelo: { min: number; valor_m: number }[] = (fuentes.modelo ?? [])
+    .filter((p) => fechaDiaArgentina(p.timestamp) === fecha)
+    .map((p) => ({ min: minutosDiaArgentina(p.timestamp)!, valor_m: p.nivel_m }))
+    .filter((p) => p.min != null)
+    .sort((a, b) => a.min - b.min);
+
+  // Serie del SHN (boletín mareológico): pleamar/bajamar del día. Solo se anima
+  // niveles bracketed (entre dos extremos correlativos) para no extrapolar mal.
+  const serieSHN: { min: number; valor_m: number }[] = (fuentes.shnAlturas ?? [])
+    .filter((a) => a.fecha.split("/").reverse().join("-") === fecha)
+    .map((a) => {
+      const [hh, mm] = a.hora.split(":").map(Number);
+      return { min: hh * 60 + mm, valor_m: a.altura };
+    })
+    .sort((a, b) => a.min - b.min);
+
+  const sesgo = sesgoEnVivo(pronos, fuentes.shnObservado ?? []);
+
+  const horaEn = (horaMin: number): ValorHora => {
+    const e = valorEfectivo(s, serieModelo, serieSHN, sesgo, horaMin);
+    return {
+      horaMin,
+      main: e.main,
+      p05: valorEn(s.p05, horaMin),
+      p25: valorEn(s.p25, horaMin),
+      p75: e.p75,
+      p95: valorEn(s.p95, horaMin),
+      modelo_m: e.modelo,
+      efectivo_m: e.efectivo,
+    };
+  };
 
   const entrada = horaEn(HORA_ENTRADA);
   const vuelta = horaEn(HORA_VUELTA);
   const hora7 = horaEn(HORA_VEREDICTO);
-  const salidaLimiteMin = cruceSubida(s.main, nivelSeguroM);
 
+  const serieEff = serieEfectiva(s, serieModelo, serieSHN, sesgo);
+  const salidaLimiteMin = cruceSubida(serieEff, nivelSeguroM);
+
+  // La decisión se toma con el nivel efectivo (peor fuente), no con main solo.
   let estado: EstadoVeredicto = "sin_datos";
   if (!esDia) {
     estado = "normal";
-  } else if (entrada.main == null || vuelta.main == null) {
+  } else if (entrada.efectivo_m == null || vuelta.efectivo_m == null) {
     estado = "sin_datos";
-  } else if (entrada.main > nivelSeguroM) {
+  } else if (entrada.efectivo_m > nivelSeguroM) {
     estado = "no_clases";
-  } else if (vuelta.main > nivelSeguroM) {
+  } else if (vuelta.efectivo_m > nivelSeguroM) {
     estado = "salida_temprana";
   } else {
     estado = "normal";
+  }
+
+  // Regla de seguridad: si hay que irse a menos de 60 min de entrar, no tiene
+  // sentido mandar a los chicos (margen de escape insuficiente) → NO CLASES.
+  if (
+    estado === "salida_temprana" &&
+    salidaLimiteMin != null &&
+    salidaLimiteMin - HORA_ENTRADA < 60
+  ) {
+    estado = "no_clases";
   }
 
   let confianza: Confianza = "baja";
@@ -197,17 +355,25 @@ export function calcularVeredicto(
     confianza = cIn === "alta" && cV === "alta" ? "alta" : cIn === "baja" || cV === "baja" ? "baja" : "media";
   }
 
+  const nivel = (h: ValorHora) => (h.efectivo_m != null ? h.efectivo_m : h.main);
+  const sesgoNota = sesgo != null && sesgo > 0 ? ` (sesgo en vivo +${sesgo.toFixed(2)}m)` : "";
+
+  // ¿Por qué NO CLASES? Por la entrada cortada o por la regla de los 60 min.
+  const motivo60 = estado === "no_clases" && entrada.efectivo_m != null && entrada.efectivo_m <= nivelSeguroM;
+
   let motivo: string;
   switch (estado) {
     case "no_clases":
-      motivo = `A las 8 el agua estaría en ${entrada.main?.toFixed(2)}m — sobre el nivel seguro (${nivelSeguroM.toFixed(2)}m): NO se puede cruzar en lancha.`;
+      motivo = motivo60
+        ? `Se podría entrar a las 8 (${nivel(entrada)?.toFixed(2)}m), pero el muelle ya sube: la salida límite quedaría a las ${hhmm(salidaLimiteMin)} — solo ${Math.round((salidaLimiteMin ?? HORA_ENTRADA) - HORA_ENTRADA)} min después de entrar, margen insuficiente: NO CLASES.`
+        : `A las 8 el agua estaría en ${nivel(entrada)?.toFixed(2)}m — sobre el nivel seguro (${nivelSeguroM.toFixed(2)}m): NO se puede cruzar en lancha.` + sesgoNota;
       break;
     case "salida_temprana":
-      motivo = `Se puede entrar a las 8 (${entrada.main?.toFixed(2)}m), pero a las 14:15 estaría en ${vuelta.main?.toFixed(2)}m` +
-        (salidaLimiteMin != null ? ` — hay que irse antes de las ${hhmm(salidaLimiteMin)}.` : " — no se podría volver.");
+      motivo = `Se puede entrar a las 8 (${nivel(entrada)?.toFixed(2)}m), pero a las 14:15 estaría en ${nivel(vuelta)?.toFixed(2)}m` +
+        (salidaLimiteMin != null ? ` — hay que irse antes de las ${hhmm(salidaLimiteMin)}.` : " — no se podría volver.") + sesgoNota;
       break;
     case "normal":
-      motivo = `Agua accesible a las 8 (${entrada.main?.toFixed(2)}m) y a las 14:15 (${vuelta.main?.toFixed(2)}m) — rompe el día normal.`;
+      motivo = `Agua accesible a las 8 (${nivel(entrada)?.toFixed(2)}m) y a las 14:15 (${nivel(vuelta)?.toFixed(2)}m) — rompe el día normal.` + sesgoNota;
       break;
     case "sin_datos":
     default:
@@ -215,7 +381,19 @@ export function calcularVeredicto(
       break;
   }
 
-  return { fecha, esDiaEscolar: esDia, estado, confianza, nivelSeguroM, entrada, vuelta, hora7, salidaLimiteMin, motivo };
+  return {
+    fecha,
+    esDiaEscolar: esDia,
+    estado,
+    confianza,
+    nivelSeguroM,
+    entrada,
+    vuelta,
+    hora7,
+    salidaLimiteMin,
+    motivo,
+    sesgo_m: sesgo,
+  };
 }
 
 export function hhmm(min: number | null): string {

@@ -123,3 +123,70 @@ test("hhmm formatea minutos del día", () => {
   assert.equal(hhmm(9 * 60 + 23), "09:23");
   assert.equal(hhmm(null), "--");
 });
+
+test("modelo propio más alto que INA: decisión usa el peor (modelo)", () => {
+  // INA main dice accesible todo el día, pero el modelo propio pronostica una
+  // sudestada que deja el muelle cortado a la tarde → SALIDA TEMPRANA.
+  const pronos = dia("2026-08-18", {
+    7: 1.7,
+    8: 1.8,
+    9: 1.9,
+    10: 2.0,
+    11: 2.05,
+    12: 2.05,
+    13: 2.0,
+    14: 1.9,
+    15: 1.8,
+  }, { p25Offset: -0.05 });
+  const modelo = [
+    { timestamp: "2026-08-18T14:00:00Z", nivel_m: 2.0 }, // local 11:00
+    { timestamp: "2026-08-18T16:00:00Z", nivel_m: 2.3 }, // local 13:00
+    { timestamp: "2026-08-18T17:30:00Z", nivel_m: 2.6 }, // local 14:30 pico modelo
+    { timestamp: "2026-08-18T19:00:00Z", nivel_m: 2.1 }, // local 16:00
+  ];
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, [], { modelo });
+  assert.equal(v.estado, "salida_temprana");
+  assert.ok(v.vuelta.modelo_m != null && v.vuelta.modelo_m > 2.25);
+  assert.ok(v.vuelta.efectivo_m != null && v.vuelta.efectivo_m >= v.vuelta.modelo_m);
+});
+
+test("sesgo en vivo positivo: sube el nivel efectivo por encima del main INA", () => {
+  // INA main en 8:00 = 2.0 (dice accesible), pero las observaciones de las
+  // últimas horas vienen ~+0.3m por encima del pronóstico INA → el efectivo
+  // queda > 2.25 y cambia a NO CLASES.
+  const pronos = dia("2026-08-18", {
+    7: 1.94,
+    8: 2.0,
+    9: 2.18,
+    10: 2.36,
+    11: 2.52,
+    12: 2.65,
+  }, { p25Offset: -0.05, p95Offset: 0.1 });
+  // 10:00Z = 07:00 hora local (prono main 1.94), 11:00Z = 08:00 local (prono 2.0)
+  const observadas = [
+    { timestamp: "2026-08-18T10:00:00Z", nivel_m: 2.24 },
+    { timestamp: "2026-08-18T11:00:00Z", nivel_m: 2.3 },
+  ];
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, [], { shnObservado: observadas });
+  assert.ok(v.sesgo_m != null && v.sesgo_m > 0.25);
+  assert.ok(v.entrada.efectivo_m != null && v.entrada.efectivo_m > 2.25);
+  assert.equal(v.estado, "no_clases");
+});
+
+test("regla 60 min: salida límite justo después de las 8 → NO CLASES", () => {
+  // Entra a las 8 (accesible) pero la salida límite es ~8:42 (< 60 min) → no
+  // tiene sentido mandar a los chicos: el veredicto debe ser NO CLASES.
+  const pronos = dia("2026-08-18", {
+    7: 1.94,
+    8: 2.01,
+    9: 2.35,
+    10: 2.5,
+    11: 2.55,
+    12: 2.5,
+    14: 2.36,
+    15: 2.18,
+  }, { p25Offset: -0.05 });
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, []);
+  assert.ok(v.salidaLimiteMin != null && v.salidaLimiteMin >= 8 * 60 && v.salidaLimiteMin < 9 * 60);
+  assert.equal(v.estado, "no_clases");
+});

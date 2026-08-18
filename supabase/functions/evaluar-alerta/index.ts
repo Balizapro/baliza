@@ -8,7 +8,7 @@ import {
   mismoEpisodioPreaviso,
   type NivelAlerta,
 } from "./logica.ts";
-import { calcularVeredicto, fechaDiaArgentina, hhmm as hhmmPlan, type PuntoProno } from "./plan_escolar.ts";
+import { calcularVeredicto, hhmm as hhmmPlan, type PuntoProno } from "./plan_escolar.ts";
 
 interface UmbralRow {
   nombre: string;
@@ -524,7 +524,7 @@ if (empeoro || recordProno) {
       : null;
 
     if (nivelActual > umbralEval && !sfGiro) {
-      let girados: { nombre: string; picoTs: number }[] = [];
+      const girados: { nombre: string; picoTs: number }[] = [];
       for (const nombre of EXTERIORES_GIRO) {
         const { data: extEst } = await supabase
           .from("estaciones")
@@ -614,6 +614,21 @@ if (empeoro || recordProno) {
         .lte("timestamp", new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString());
 
       if (pronosTodos && (pronosTodos as PuntoProno[]).length > 0) {
+        // Lecturas observadas recientes de SF para corregir el sesgo en vivo
+        // (el SHN horario se actualiza cada hora a las .45; si viene por encima
+        // del INA, el veredicto se ajusta hacia arriba de inmediato).
+        const { data: obsRaw } = await supabase
+          .from("lecturas")
+          .select("timestamp, nivel_m")
+          .eq("estacion_id", estaciones.id)
+          .eq("tipo", "observado")
+          .order("timestamp", { ascending: true })
+          .limit(12);
+        const shnObservado = ((obsRaw as { timestamp: string; nivel_m: number }[] | null) ?? []).map((l) => ({
+          timestamp: l.timestamp,
+          nivel_m: Number(l.nivel_m),
+        }));
+
         // Próximos días a evaluar: hoy y los siguientes 3 días
         const fechas: string[] = [];
         for (let i = 0; i < 4; i++) {
@@ -623,7 +638,13 @@ if (empeoro || recordProno) {
         }
 
         for (const fecha of fechas) {
-          const v = calcularVeredicto(pronosTodos as PuntoProno[], fecha, nivelSeguroM, diasSinClases);
+          const v = calcularVeredicto(
+            pronosTodos as PuntoProno[],
+            fecha,
+            nivelSeguroM,
+            diasSinClases,
+            { shnObservado }
+          );
           if (!v.esDiaEscolar || v.estado === "normal" || v.estado === "sin_datos") continue;
 
           const claveVeredicto = `veredicto_escolar_${v.fecha}_${v.estado}`;
