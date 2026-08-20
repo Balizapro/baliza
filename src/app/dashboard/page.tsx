@@ -142,10 +142,10 @@ function calcularTendencia(lecturas: Lectura[] | undefined | null): Tendencia | 
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [modoPlan, setModoPlan] = useState<"estricto" | "suave">(() => {
+  const [modoPlan, setModoPlan] = useState<"estricto" | "suave" | "modelo">(() => {
     if (typeof window === "undefined") return "estricto";
     const guardado = window.localStorage.getItem("baliza_modo_plan");
-    return guardado === "suave" ? "suave" : "estricto";
+    return guardado === "suave" || guardado === "modelo" ? guardado : "estricto";
   });
   const [datos, setDatos] = useState<DatosAgregados | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -483,12 +483,15 @@ export default function Dashboard() {
     // Veredicto escolar del día del pico (lógica compartida, ver src/lib/planEscolar.ts).
     // Cubre 7:00 (hora de decisión), 8:00 (entrada) y 14:15 (vuelta), más la hora
     // límite de salida cuando la vuelta queda cortada y la confianza por bandas
-    // p25/p95 del pronóstico INA. Se calcula en dos modos: "estricto" (peor fuente
-    // con bandas p75, sesgo en vivo y margen por crecida) y "suave" (pronóstico
-    // central: INA main, modelo y SHN, sin penalizaciones), para ver la sensibilidad
-    // del veredicto y elegir con cuál manejarse.
+    // p25/p95 del pronóstico INA. Se calcula en tres modos para ver la sensibilidad
+    // del veredicto y elegir con cuál manejarse:
+    //  - "estricto": peor fuente con bandas p75, sesgo en vivo y margen por crecida.
+    //  - "suave": pronóstico central (INA main, modelo y SHN), sin penalizaciones.
+    //  - "modelo": EL PROPIO MODELO solo (la curva armónico+viento como main), sin
+    //    INA ni bandas ni sesgo; útil cuando INA y modelo no coinciden en la tarde.
     let veredicto: ReturnType<typeof calcularVeredicto> | null = null;
     let veredictoSuave: ReturnType<typeof calcularVeredicto> | null = null;
+    let veredictoModelo: ReturnType<typeof calcularVeredicto> | null = null;
     if (picoNoAccesible) {
       const dia = fechaDiaArgentina(picoNoAccesible.timestamp);
       if (dia) {
@@ -510,10 +513,19 @@ export default function Dashboard() {
         };
         veredicto = calcularVeredicto(sfProno ?? [], dia, nivelSeguroM, diasSinClases, fuentesPlan, "estricto");
         veredictoSuave = calcularVeredicto(sfProno ?? [], dia, nivelSeguroM, diasSinClases, fuentesPlan, "suave");
+        // Modelo solo: la curva propia como único pronóstico (main), sin INA/sesgo.
+        if (curvaModelo.length > 0) {
+          const pronosModelo: Parameters<typeof calcularVeredicto>[0] = curvaModelo.map((p) => ({
+            timestamp: p.timestamp,
+            valor_m: p.nivel_m,
+            qualifier: "main" as const,
+          }));
+          veredictoModelo = calcularVeredicto(pronosModelo, dia, nivelSeguroM, diasSinClases, {}, "suave");
+        }
       }
     }
 
-    return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible, veredicto, veredictoSuave };
+    return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible, veredicto, veredictoSuave, veredictoModelo };
   }, [sfObs, sfProno, nivelSeguroM, ahora, diasSinClases, curvaModelo, shnAlturas, historial, exterioresLecturas]);
 
   function hhmm(min: number | null): string {
@@ -661,9 +673,16 @@ export default function Dashboard() {
                       {(() => {
                         const vEstricto = muelleAcceso.veredicto!;
                         const vSuave = muelleAcceso.veredictoSuave!;
-                        const v = modoPlan === "suave" ? vSuave : vEstricto;
-                        const vOtro = modoPlan === "suave" ? vEstricto : vSuave;
+                        const vModelo = muelleAcceso.veredictoModelo ?? null;
+                        const v = modoPlan === "modelo" && vModelo ? vModelo : modoPlan === "suave" ? vSuave : vEstricto;
                         const confianzaLabel = v.confianza === "alta" ? "alta" : v.confianza === "media" ? "media" : "baja";
+                        const estadoLabel = (e: string) =>
+                          e === "no_clases" ? "No ir" : e === "salida_temprana" ? "Salida temp." : e === "sin_datos" ? "Sin datos" : "Normal";
+                        const estadoDe = (m: "estricto" | "suave" | "modelo") =>
+                          m === "suave" ? vSuave.estado : m === "modelo" ? (vModelo?.estado ?? vEstricto.estado) : vEstricto.estado;
+                        const otrosDifieren = (["estricto", "suave", "modelo"] as const)
+                          .filter((m) => m !== modoPlan)
+                          .filter((m) => (m === "modelo" && !vModelo ? false : estadoDe(m) !== v.estado));
                         return (
                           <>
                             <div className="rb-plan-modo" role="group" aria-label="Modelo del veredicto">
@@ -673,7 +692,7 @@ export default function Dashboard() {
                                 onClick={() => setModoPlan("estricto")}
                               >
                                 Estricto
-                                <span className="rb-plan-modo-estado">{vEstricto.estado.replace("_", " ")}</span>
+                                <span className="rb-plan-modo-estado">{estadoLabel(vEstricto.estado)}</span>
                               </button>
                               <button
                                 type="button"
@@ -681,43 +700,57 @@ export default function Dashboard() {
                                 onClick={() => setModoPlan("suave")}
                               >
                                 Suave
-                                <span className="rb-plan-modo-estado">{vSuave.estado.replace("_", " ")}</span>
+                                <span className="rb-plan-modo-estado">{estadoLabel(vSuave.estado)}</span>
+                              </button>
+                              <button
+                                type="button"
+                                className={`rb-plan-modo-btn ${modoPlan === "modelo" ? "activo" : ""}`}
+                                onClick={() => setModoPlan("modelo")}
+                              >
+                                Modelo
+                                <span className="rb-plan-modo-estado">{vModelo ? estadoLabel(vModelo.estado) : "sin curva"}</span>
                               </button>
                             </div>
                             <div className="rb-plan-verdicto-linea">
                               <strong>
                                 {v.estado === "no_clases" ? "No ir a la escuela" : v.estado === "salida_temprana" ? "Salida temprana" : v.estado === "sin_datos" ? "Sin datos" : "Día normal"}
                               </strong>
-                              <span className={`rb-confianza rb-confianza-${v.confianza}`} title={`Confianza del veredicto (bandas p25–p95 del pronóstico)`}>
+                              <span className={`rb-confianza rb-confianza-${v.confianza}`} title={modoPlan === "modelo" ? `Confianza estimada (el modelo propio no expone bandas p25–p95)` : `Confianza del veredicto (bandas p25–p95 del pronóstico)`}>
                                 confianza {confianzaLabel}
                               </span>
                             </div>
-                            {vOtro.estado !== v.estado && (
+                            {otrosDifieren.length > 0 && (
                               <p className="rb-plan-modo-alt">
-                                Con el modelo {modoPlan === "suave" ? "estricto" : "suave"} el veredicto sería:{" "}
-                                {vOtro.estado === "no_clases" ? "No ir" : vOtro.estado === "salida_temprana" ? "Salida temprana" : "Día normal"}
+                                Los otros modelos ven:{" "}
+                                {otrosDifieren.map((m, i) => (
+                                  <span key={m}>
+                                    {i > 0 && " · "}
+                                    <strong>{m === "estricto" ? "Estricto" : m === "suave" ? "Suave" : "Modelo"}:{" "}
+                                      {estadoLabel(estadoDe(m))}</strong>
+                                  </span>
+                                ))}
                               </p>
                             )}
-                            <div className={`rb-plan-row ${((modoPlan === "suave" ? vSuave : vEstricto).hora7.efectivo_m ?? (modoPlan === "suave" ? vSuave : vEstricto).hora7.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
+                            <div className={`rb-plan-row ${(v.hora7.efectivo_m ?? v.hora7.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
                               <span className="rb-plan-hora">07:00</span>
                               <span className="rb-plan-altura">{v.hora7.efectivo_m != null ? `${v.hora7.efectivo_m.toFixed(2)}m` : "--"}</span>
-                              <span className="rb-plan-banda">INA {v.hora7.main != null ? `${v.hora7.main.toFixed(2)}m` : "--"}{v.hora7.modelo_m != null ? ` · modelo ${v.hora7.modelo_m.toFixed(2)}m` : ""}</span>
+                              <span className="rb-plan-banda">{modoPlan === "modelo" ? `Modelo ${v.hora7.main != null ? `${v.hora7.main.toFixed(2)}m` : "--"}` : `INA ${v.hora7.main != null ? `${v.hora7.main.toFixed(2)}m` : "--"}`}{modoPlan !== "modelo" && v.hora7.modelo_m != null ? ` · modelo ${v.hora7.modelo_m.toFixed(2)}m` : ""}</span>
                               <span className="rb-plan-veredicto">
                                 {(v.hora7.efectivo_m ?? 0) > nivelSeguroM ? "ya no se puede" : "se decide el día"}
                               </span>
                             </div>
-                            <div className={`rb-plan-row ${((modoPlan === "suave" ? vSuave : vEstricto).entrada.efectivo_m ?? (modoPlan === "suave" ? vSuave : vEstricto).entrada.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
+                            <div className={`rb-plan-row ${(v.entrada.efectivo_m ?? v.entrada.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
                               <span className="rb-plan-hora">08:00</span>
                               <span className="rb-plan-altura">{v.entrada.efectivo_m != null ? `${v.entrada.efectivo_m.toFixed(2)}m` : "--"}</span>
-                              <span className="rb-plan-banda">INA {v.entrada.main != null ? `${v.entrada.main.toFixed(2)}m` : "--"}{v.entrada.modelo_m != null ? ` · modelo ${v.entrada.modelo_m.toFixed(2)}m` : ""}</span>
+                              <span className="rb-plan-banda">{modoPlan === "modelo" ? `Modelo ${v.entrada.main != null ? `${v.entrada.main.toFixed(2)}m` : "--"}` : `INA ${v.entrada.main != null ? `${v.entrada.main.toFixed(2)}m` : "--"}`}{modoPlan !== "modelo" && v.entrada.modelo_m != null ? ` · modelo ${v.entrada.modelo_m.toFixed(2)}m` : ""}</span>
                               <span className="rb-plan-veredicto">
                                 {(v.entrada.efectivo_m ?? 0) > nivelSeguroM ? "NO se puede embarcar" : "sí se puede embarcar"}
                               </span>
                             </div>
-                            <div className={`rb-plan-row ${((modoPlan === "suave" ? vSuave : vEstricto).vuelta.efectivo_m ?? (modoPlan === "suave" ? vSuave : vEstricto).vuelta.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
+                            <div className={`rb-plan-row ${(v.vuelta.efectivo_m ?? v.vuelta.main ?? nivelSeguroM) > nivelSeguroM ? "mal" : "ok"}`}>
                               <span className="rb-plan-hora">14:15</span>
                               <span className="rb-plan-altura">{v.vuelta.efectivo_m != null ? `${v.vuelta.efectivo_m.toFixed(2)}m` : "--"}</span>
-                              <span className="rb-plan-banda">INA {v.vuelta.main != null ? `${v.vuelta.main.toFixed(2)}m` : "--"}{v.vuelta.modelo_m != null ? ` · modelo ${v.vuelta.modelo_m.toFixed(2)}m` : ""}</span>
+                              <span className="rb-plan-banda">{modoPlan === "modelo" ? `Modelo ${v.vuelta.main != null ? `${v.vuelta.main.toFixed(2)}m` : "--"}` : `INA ${v.vuelta.main != null ? `${v.vuelta.main.toFixed(2)}m` : "--"}`}{modoPlan !== "modelo" && v.vuelta.modelo_m != null ? ` · modelo ${v.vuelta.modelo_m.toFixed(2)}m` : ""}</span>
                               <span className="rb-plan-veredicto">
                                 {(v.vuelta.efectivo_m ?? 0) > nivelSeguroM ? "NO se puede volver" : "sí se puede volver"}
                               </span>
