@@ -16,6 +16,13 @@ export type EstadoVeredicto = "normal" | "salida_temprana" | "no_clases" | "sin_
 
 export type Confianza = "alta" | "media" | "baja";
 
+// Modo de cálculo del nivel efectivo:
+//  - "estricto": peor fuente con todas las penalizaciones (es el valor actual).
+//  - "suave": pronóstico central (INA main, modelo y SHN), sin bandas p75 ni
+//    sesgo en vivo ni margen por crecida; menos conservador, para comparar la
+//    sensibilidad del veredicto a las penalizaciones.
+export type ModoPlan = "estricto" | "suave";
+
 export interface PuntoModelo {
   timestamp: string;
   nivel_m: number;
@@ -44,6 +51,7 @@ export interface ValorHora {
 export interface VeredictoDia {
   fecha: string;
   esDiaEscolar: boolean;
+  modo: ModoPlan;
   estado: EstadoVeredicto;
   confianza: Confianza;
   nivelSeguroM: number;
@@ -266,7 +274,8 @@ function serieEfectiva(
   serieModelo: { min: number; valor_m: number }[],
   serieSHN: { min: number; valor_m: number }[],
   sesgo: number | null,
-  margenPendiente: number
+  margenPendiente: number,
+  modo: ModoPlan
 ): { min: number; valor_m: number }[] {
   const puntos = new Map<number, number[]>();
   const agrega = (min: number | null, v: number | null) => {
@@ -276,10 +285,14 @@ function serieEfectiva(
   };
 
   for (const p of s.main) agrega(p.min, p.valor_m);
-  for (const p of s.main) agrega(p.min, sesgo != null ? p.valor_m + Math.max(0, sesgo) : null);
-  for (const p of s.main) agrega(p.min, margenPendiente > 0 ? p.valor_m + margenPendiente : null);
-  for (const p of s.p75) agrega(p.min, p.valor_m + (sesgo != null ? Math.max(0, sesgo) : 0));
-  for (const p of serieModelo) agrega(p.min, p.valor_m + (sesgo != null ? Math.max(0, sesgo) : 0));
+  if (modo === "estricto") {
+    for (const p of s.main) agrega(p.min, sesgo != null ? p.valor_m + Math.max(0, sesgo) : null);
+    for (const p of s.main) agrega(p.min, margenPendiente > 0 ? p.valor_m + margenPendiente : null);
+    for (const p of s.p75) agrega(p.min, p.valor_m + (sesgo != null ? Math.max(0, sesgo) : 0));
+    for (const p of serieModelo) agrega(p.min, p.valor_m + (sesgo != null ? Math.max(0, sesgo) : 0));
+  } else {
+    for (const p of serieModelo) agrega(p.min, p.valor_m);
+  }
   for (const p of serieSHN) agrega(p.min, p.valor_m);
 
   const serie: { min: number; valor_m: number }[] = [];
@@ -290,14 +303,16 @@ function serieEfectiva(
   return serie;
 }
 
-// Valor efectivo (peor fuente) en una hora exacta.
+// Valor efectivo en una hora exacta. En modo estricto es el peor fuente con todas
+// las penalizaciones; en modo suave, el pronóstico central (INA main, modelo y SHN).
 function valorEfectivo(
   s: Record<Qualifier, { min: number; valor_m: number }[]>,
   serieModelo: { min: number; valor_m: number }[],
   serieSHN: { min: number; valor_m: number }[],
   sesgo: number | null,
   margenPendiente: number,
-  horaMin: number
+  horaMin: number,
+  modo: ModoPlan
 ): { main: number | null; modelo: number | null; efectivo: number | null; p75: number | null } {
   const main = valorEn(s.main, horaMin);
   const p75 = valorEn(s.p75, horaMin);
@@ -305,10 +320,14 @@ function valorEfectivo(
   const shnValor = valorEn(serieSHN, horaMin);
   const candidatos: number[] = [];
   if (main != null) candidatos.push(main);
-  if (main != null && sesgo != null) candidatos.push(main + Math.max(0, sesgo));
-  if (main != null && margenPendiente > 0) candidatos.push(main + margenPendiente);
-  if (modelo != null) candidatos.push(modelo);
-  if (p75 != null) candidatos.push(p75);
+  if (modo === "estricto") {
+    if (main != null && sesgo != null) candidatos.push(main + Math.max(0, sesgo));
+    if (main != null && margenPendiente > 0) candidatos.push(main + margenPendiente);
+    if (modelo != null) candidatos.push(modelo);
+    if (p75 != null) candidatos.push(p75);
+  } else {
+    if (modelo != null) candidatos.push(modelo);
+  }
   if (shnValor != null) candidatos.push(shnValor);
   const efectivo = candidatos.length ? Math.max(...candidatos) : null;
   return { main, modelo, efectivo, p75 };
@@ -319,7 +338,8 @@ export function calcularVeredicto(
   fecha: string,
   nivelSeguroM: number,
   diasSinClases: string[] = [],
-  fuentes: FuentesPlan = {}
+  fuentes: FuentesPlan = {},
+  modo: ModoPlan = "estricto"
 ): VeredictoDia {
   const fechaA = fechaDiaArgentina(fecha + "T12:00:00");
   const weekday = weekdayArgentina(fecha + "T12:00:00");
@@ -349,7 +369,7 @@ export function calcularVeredicto(
   const margenPendiente = margenPorPendiente(pendiente?.pendiente_m ?? null);
 
   const horaEn = (horaMin: number): ValorHora => {
-    const e = valorEfectivo(s, serieModelo, serieSHN, sesgo, margenPendiente, horaMin);
+    const e = valorEfectivo(s, serieModelo, serieSHN, sesgo, margenPendiente, horaMin, modo);
     return {
       horaMin,
       main: e.main,
@@ -366,7 +386,7 @@ export function calcularVeredicto(
   const vuelta = horaEn(HORA_VUELTA);
   const hora7 = horaEn(HORA_VEREDICTO);
 
-  const serieEff = serieEfectiva(s, serieModelo, serieSHN, sesgo, margenPendiente);
+  const serieEff = serieEfectiva(s, serieModelo, serieSHN, sesgo, margenPendiente, modo);
   const salidaLimiteMin = cruceSubida(serieEff, nivelSeguroM);
 
   let estado: EstadoVeredicto = "sin_datos";
@@ -437,6 +457,7 @@ export function calcularVeredicto(
   return {
     fecha,
     esDiaEscolar: esDia,
+    modo,
     estado,
     confianza,
     nivelSeguroM,

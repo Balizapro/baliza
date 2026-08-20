@@ -278,3 +278,61 @@ test("el margen por crecida está acotado arriba (no dispara a lo absurdo)", () 
   // entrada main 1.9 + margen tope 0.25 = 2.15 (no 2.9)
   assert.ok(v.entrada.efectivo_m != null && v.entrada.efectivo_m <= 2.2);
 });
+
+test("modos estricto y suave: suave no puede ser más alto que estricto", () => {
+  const pronos = dia("2026-08-18", {
+    7: 1.94,
+    8: 2.01,
+    9: 2.18,
+    10: 2.36,
+    11: 2.52,
+    12: 2.65,
+    13: 2.52,
+    14: 2.36,
+    15: 2.18,
+  }, { p25Offset: -0.04 });
+  const vecinas = [{
+    nombre: "Puerto de Buenos Aires",
+    lecturas: [
+      { timestamp: "2026-08-18T12:00:00Z", nivel_m: 1.6 },
+      { timestamp: "2026-08-18T13:00:00Z", nivel_m: 2.6 },
+      { timestamp: "2026-08-18T14:00:00Z", nivel_m: 3.6 },
+    ],
+  }];
+  const observadas = [
+    { timestamp: "2026-08-18T12:00:00Z", nivel_m: 2.2 },
+    { timestamp: "2026-08-18T13:00:00Z", nivel_m: 2.75 },
+    { timestamp: "2026-08-18T14:00:00Z", nivel_m: 2.9 },
+  ];
+  const fuentes = { vecinas, shnObservado: observadas };
+  const estricto = calcularVeredicto(pronos, "2026-08-18", 2.25, [], fuentes, "estricto");
+  const suave = calcularVeredicto(pronos, "2026-08-18", 2.25, [], fuentes, "suave");
+  assert.equal(estricto.modo, "estricto");
+  assert.equal(suave.modo, "suave");
+  // El modo suave excluye bandas/sesgo/margen: nunca supera al estricto.
+  assert.ok(suave.entrada.efectivo_m !== null && estricto.entrada.efectivo_m !== null);
+  assert.ok(suave.entrada.efectivo_m <= estricto.entrada.efectivo_m);
+  assert.ok(suave.vuelta.efectivo_m !== null && estricto.vuelta.efectivo_m !== null);
+  assert.ok(suave.vuelta.efectivo_m <= estricto.vuelta.efectivo_m);
+  assert.ok(suave.hora7.efectivo_m !== null && estricto.hora7.efectivo_m !== null);
+  assert.ok(suave.hora7.efectivo_m <= estricto.hora7.efectivo_m);
+});
+
+test("modo suave sin penalizaciones: coincide con el nivel central INA main", () => {
+  // Sin observaciones ni vecinas ni modelo: suave debe ser igual al main.
+  const pronos = dia("2026-08-18", {
+    7: 1.5,
+    8: 1.6,
+    9: 1.7,
+    10: 1.8,
+    11: 1.9,
+    12: 2.0,
+    13: 1.9,
+    14: 1.8,
+    15: 1.7,
+  });
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, [], {}, "suave");
+  assert.equal(v.estado, "normal");
+  assert.ok(v.entrada.efectivo_m !== null && v.entrada.main !== null);
+  assert.equal(v.entrada.efectivo_m, v.entrada.main);
+});
