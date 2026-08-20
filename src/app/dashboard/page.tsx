@@ -691,7 +691,7 @@ export default function Dashboard() {
                                 className={`rb-plan-modo-btn ${modoPlan === "estricto" ? "activo" : ""}`}
                                 onClick={() => setModoPlan("estricto")}
                               >
-                                Estricto
+                                Conservador
                                 <span className="rb-plan-modo-estado">{estadoLabel(vEstricto.estado)}</span>
                               </button>
                               <button
@@ -699,7 +699,7 @@ export default function Dashboard() {
                                 className={`rb-plan-modo-btn ${modoPlan === "suave" ? "activo" : ""}`}
                                 onClick={() => setModoPlan("suave")}
                               >
-                                Suave
+                                Central
                                 <span className="rb-plan-modo-estado">{estadoLabel(vSuave.estado)}</span>
                               </button>
                               <button
@@ -725,7 +725,7 @@ export default function Dashboard() {
                                 {otrosDifieren.map((m, i) => (
                                   <span key={m}>
                                     {i > 0 && " · "}
-                                    <strong>{m === "estricto" ? "Estricto" : m === "suave" ? "Suave" : "Modelo"}:{" "}
+                                    <strong>{m === "estricto" ? "Conservador" : m === "suave" ? "Central" : "Modelo"}:{" "}
                                       {estadoLabel(estadoDe(m))}</strong>
                                   </span>
                                 ))}
