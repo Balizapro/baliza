@@ -95,6 +95,23 @@ export function calcularVentana(
     };
   }
 
+  // Nivel por encima del umbral de evaluación pero sin subir (estable/bajando):
+  // no es "salir ahora", pero la alerta NO puede ser verde (el muelle ya no es
+  // accesible). El banner siempre lo muestra: acá lo refleja el backend para
+  // que sirena y notificaciones se activen igual al superar la evaluación.
+  if (nivelActual >= u.evaluacion) {
+    return {
+      alerta: "amarilla",
+      ventanaInicio: null,
+      ventanaFin: null,
+      mensaje: reemplazar(mensajes.recomendacion_amarilla ?? "Atención — nivel {{nivel}}m sobre la evaluación", {
+        nivel: nivelActual.toFixed(2),
+        umbral_eval: u.evaluacion.toFixed(1),
+        hora_revision: "pronto",
+      }),
+    };
+  }
+
   if (tendencia === "subiendo" && nivelActual < u.evaluacion && nivelActual >= u.evaluacion - MARGEN_AMARILLA_M) {
     const diff = u.evaluacion - nivelActual;
     const horasEstimadas = Math.max(1, diff / 0.05);

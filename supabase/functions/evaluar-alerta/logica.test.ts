@@ -59,6 +59,16 @@ test("estable bajo evaluacion => verde", () => {
   assert.equal(r.alerta, "verde");
 });
 
+test("estable sobre evaluacion (sin subir) => amarilla, no verde", () => {
+  const r = calcularVentana(2.05, "estable", U, traslado, MSG);
+  assert.equal(r.alerta, "amarilla");
+});
+
+test("bajando pero todavia sobre evaluacion => amarilla, no verde", () => {
+  const r = calcularVentana(2.1, "bajando", U, traslado, MSG);
+  assert.equal(r.alerta, "amarilla");
+});
+
 test("bajando bajo evaluacion => verde", () => {
   const r = calcularVentana(1.5, "bajando", U, traslado, MSG);
   assert.equal(r.alerta, "verde");

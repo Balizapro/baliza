@@ -590,7 +590,12 @@ export default function Dashboard() {
           la señal antes de la crecida
         </p>
         <div className="ml-auto flex items-center gap-2">
-          <AlertaSonora nivel={alertaNivel} />
+          <AlertaSonora
+            nivel={alertaNivel}
+            nivelM={sfObs?.nivel_m ?? null}
+            umbralEvalM={umbralEval?.valor_m ?? 2.0}
+            umbralNRM={umbralNR?.valor_m ?? 2.2}
+          />
           <PushNotifications />
           <ThemeToggle />
           {user ? (
