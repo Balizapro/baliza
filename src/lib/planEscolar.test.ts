@@ -241,6 +241,33 @@ test("NaN en una fuente no rompe el veredicto", () => {
   assert.ok(v.entrada.efectivo_m != null && Number.isFinite(v.entrada.efectivo_m));
 });
 
+test("la pleamar SHN de la tarde no se estira hacia la mañana", () => {
+  // El boletín SHN con solo PLEAMAR 16:00 2.60 / BAJAMAR 22:00 1.70 NO debe
+  // aplicar 2.60 a las 8:00 (antes el fallback del interpolador devolvía el
+  // próximo extremo para horas fuera del rango). A las 14:15, tampoco está
+  // acotada (entre 16:00 y 22:00 no cae), así que el SHN no aporta ahí.
+  const pronos = dia("2026-08-18", {
+    7: 1.7,
+    8: 1.8,
+    9: 1.9,
+    10: 2.0,
+    11: 2.05,
+    12: 2.05,
+    13: 2.0,
+    14: 1.9,
+    15: 1.8,
+  });
+  const shnAlturas = [
+    { estado: "PLEAMAR" as const, fecha: "18/08/2026", hora: "16:00", altura: 2.6 },
+    { estado: "BAJAMAR" as const, fecha: "18/08/2026", hora: "22:00", altura: 1.7 },
+  ];
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, [], { shnAlturas }, "estricto");
+  assert.equal(v.estado, "normal");
+  assert.ok(v.entrada.efectivo_m != null && v.entrada.efectivo_m < 2.25);
+  // El efectivo no puede ser el 2.60 de la pleamar vespertina.
+  assert.ok(v.entrada.efectivo_m! < 2.4);
+});
+
 test("crecida en camino: Bs As subiendo 0.42 m/h empuja la entrada por encima del límite", () => {
   // INA main dice día normal (entrada 2.1, vuelta 2.0). Pero la estación vecina
   // (Puerto de Buenos Aires) está subiendo fuerte (+0.42 m/h) en las últimas

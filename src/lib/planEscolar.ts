@@ -163,7 +163,11 @@ function serieDia(pronos: PuntoProno[], fecha: string): Record<Qualifier, { min:
   return s;
 }
 
-function valorEn(serie: { min: number; valor_m: number }[], targetMin: number): number | null {
+function valorEn(
+  serie: { min: number; valor_m: number }[],
+  targetMin: number,
+  opts?: { soloBracketed?: boolean }
+): number | null {
   if (serie.length === 0) return null;
   const exact = serie.find((p) => p.min === targetMin);
   if (exact) return exact.valor_m;
@@ -177,6 +181,11 @@ function valorEn(serie: { min: number; valor_m: number }[], targetMin: number): 
     const frac = (targetMin - antes.min) / (despues.min - antes.min || 1);
     return antes.valor_m + (despues.valor_m - antes.valor_m) * frac;
   }
+  // La serie SHN (pleamares/bajamares dispersas) SOLO aporta si el target está
+  // acotado entre dos extremos: estirar la pleamar de las 16:00 sobre las 8:00
+  // metía valores falsos en la mañana. Las series densas (INA/modelo) mantienen
+  // el comportamiento de borde de siempre.
+  if (opts?.soloBracketed) return null;
   if (antes) return antes.valor_m;
   if (despues) return despues.valor_m;
   return null;
@@ -338,7 +347,7 @@ function valorEfectivo(
   const main = valorEn(s.main, horaMin);
   const p75 = valorEn(s.p75, horaMin);
   const modelo = valorEn(serieModelo, horaMin);
-  const shnValor = valorEn(serieSHN, horaMin);
+  const shnValor = valorEn(serieSHN, horaMin, { soloBracketed: true });
   const candidatos: number[] = [];
   if (esNum(main)) candidatos.push(main);
   if (modo === "estricto") {

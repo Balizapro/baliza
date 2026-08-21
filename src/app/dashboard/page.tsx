@@ -455,12 +455,18 @@ export default function Dashboard() {
     return proy.puntos.map((p) => ({ timestamp: new Date(p.timestamp).toISOString(), nivel_m: p.nivel_m }));
   }, [historial, vientoHistoricoModelo, vientoPronosticoModelo, ahora]);
 
-  // Pleamares/bajamares del SHN para San Fernando, del aviso más reciente.
+  // Pleamares/bajamares del SHN para San Fernando: se toma el radioaviso más
+  // reciente QUE CONTENGA la tabla mareológica (los avisos de navegación sin
+  // alturas no deben tapar el último boletín válido).
   const shnAlturas = useMemo(() => {
     const avisos = [...(datos?.avisosShn ?? [])].sort(
       (a, b) => new Date(b.actualizado).getTime() - new Date(a.actualizado).getTime()
     );
-    return avisos.length ? alturasSanFernando(avisos[0].texto) : [];
+    for (const a of avisos) {
+      const alturas = alturasSanFernando(a.texto);
+      if (alturas.length > 0) return alturas;
+    }
+    return [];
   }, [datos?.avisosShn]);
 
   // Estado del muelle: NO accesible mientras SF supera el nivel seguro (2.25m).
