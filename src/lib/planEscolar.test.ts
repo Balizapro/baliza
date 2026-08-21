@@ -191,6 +191,56 @@ test("regla 60 min: salida límite justo después de las 8 → NO CLASES", () =>
   assert.equal(v.estado, "no_clases");
 });
 
+test("cruce nocturno: la salida límite ignora cruces anteriores a la entrada", () => {
+  // El agua está sobre el límite de madrugada (cruce hacia arriba ~4:30), baja
+  // antes de las 8 y vuelve a subir a media mañana. El cruce de las 4:30 NO es
+  // la salida límite relevante: debe reportarse el cruce posterior a las 8.
+  const pronos = dia("2026-08-18", {
+    4: 2.0,
+    5: 2.4,
+    6: 2.3,
+    7: 2.0,
+    8: 1.95,
+    9: 2.1,
+    10: 2.35,
+    11: 2.5,
+    12: 2.55,
+    13: 2.5,
+    14: 2.4,
+    15: 2.2,
+  }, { p25Offset: -0.05 });
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, []);
+  // Entra bien (1.95) pero a la tarde no vuelve → SALIDA TEMPRANA (no NO CLASES
+  // por un cruce de madrugada con minutos negativos).
+  assert.equal(v.estado, "salida_temprana");
+  assert.ok(v.salidaLimiteMin != null && v.salidaLimiteMin >= 8 * 60);
+});
+
+test("NaN en una fuente no rompe el veredicto", () => {
+  // Un punto NaN en el pronóstico y otro en la curva del modelo no deben
+  // propagarse al efectivo (NaN != null es false y antes se colaba en Math.max).
+  const pronos = dia("2026-08-18", {
+    7: 1.7,
+    8: 1.8,
+    9: 1.9,
+    10: 2.0,
+    11: 2.05,
+    12: 2.05,
+    13: 2.0,
+    14: 1.9,
+    15: 1.8,
+  });
+  const iso16 = new Date("2026-08-18T16:00:00").toISOString();
+  pronos.push({ timestamp: iso16, valor_m: NaN, qualifier: "main" });
+  const modelo = [
+    { timestamp: new Date("2026-08-18T08:00:00").toISOString(), nivel_m: 1.7 },
+    { timestamp: new Date("2026-08-18T14:15:00").toISOString(), nivel_m: NaN },
+  ];
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, [], { modelo }, "estricto");
+  assert.equal(v.estado, "normal");
+  assert.ok(v.entrada.efectivo_m != null && Number.isFinite(v.entrada.efectivo_m));
+});
+
 test("crecida en camino: Bs As subiendo 0.42 m/h empuja la entrada por encima del límite", () => {
   // INA main dice día normal (entrada 2.1, vuelta 2.0). Pero la estación vecina
   // (Puerto de Buenos Aires) está subiendo fuerte (+0.42 m/h) en las últimas

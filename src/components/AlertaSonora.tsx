@@ -86,7 +86,6 @@ export default function AlertaSonora({
     }
     const umbralDisparo = activo ? umbralEvalM : umbralNRM;
     const dispara = nivelM != null && nivelM >= umbralDisparo;
-    const primero = prevNivel.current === null;
     // Gravedad calculada del nivel real (independiente del registro de BD, que
     // puede tener lag de la corrida del cron): 2 = evaluación, 3 = no retorno.
     const gravedadLocal = nivelM == null ? 0 : nivelM >= umbralNRM ? 3 : nivelM >= umbralEvalM ? 2 : 0;

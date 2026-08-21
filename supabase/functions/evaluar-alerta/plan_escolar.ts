@@ -131,12 +131,19 @@ export function esDiaEscolar(fecha: string | null, weekday: string | null, diasS
   return !(weekday === "Sat" || weekday === "Sun");
 }
 
+// Número utilizable: descarta null/undefined/NaN (un NaN en una fuente no debe
+// propagarse al veredicto; NaN != null es false y se cuela en los guards).
+function esNum(v: number | null | undefined): v is number {
+  return v != null && Number.isFinite(v);
+}
+
 // Interpola el valor del pronóstico (de cada qualifier) a una hora exacta del día
 // (en minutos locales). Devuelve celdas por qualifier.
 function serieDia(pronos: PuntoProno[], fecha: string): Record<Qualifier, { min: number; valor_m: number }[]> {
   const s: Record<Qualifier, { min: number; valor_m: number }[]> = { main: [], p05: [], p25: [], p75: [], p95: [] };
   for (const p of pronos) {
     if (fechaDiaArgentina(p.timestamp) !== fecha) continue;
+    if (!esNum(p.valor_m)) continue;
     const min = minutosDiaArgentina(p.timestamp);
     if (min == null || min < 0) continue;
     const q = (["main", "p05", "p25", "p75", "p95"] as Qualifier[]).includes(p.qualifier as Qualifier)
@@ -182,14 +189,17 @@ function confianzaDeNivel(h: ValorHora, nivel: number): Confianza {
 }
 
 // Cruces del nivel seguro: primer minuto donde el main sube por encima del límite
-// (de ≤ a >), dentro del día. Es la hora límite de salida para no quedar varados.
-function cruceSubida(serieMain: { min: number; valor_m: number }[], nivel: number): number | null {
+// (de ≤ a >), dentro del día y a partir de `desdeMin` (la hora de entrada: un
+// cruce nocturno/madrugada no es la salida límite relevante). Es la hora límite
+// de salida para no quedar varados.
+function cruceSubida(serieMain: { min: number; valor_m: number }[], nivel: number, desdeMin = 0): number | null {
   for (let i = 0; i < serieMain.length - 1; i++) {
     const a = serieMain[i];
     const b = serieMain[i + 1];
     if (a.valor_m <= nivel && b.valor_m > nivel) {
       const frac = (nivel - a.valor_m) / ((b.valor_m - a.valor_m) || 1);
-      return a.min + frac * (b.min - a.min);
+      const minCruce = a.min + frac * (b.min - a.min);
+      if (minCruce >= desdeMin) return minCruce;
     }
   }
   return null;
@@ -279,7 +289,7 @@ function serieEfectiva(
 ): { min: number; valor_m: number }[] {
   const puntos = new Map<number, number[]>();
   const agrega = (min: number | null, v: number | null) => {
-    if (min == null || v == null) return;
+    if (!esNum(min) || !esNum(v)) return;
     if (!puntos.has(min)) puntos.set(min, []);
     puntos.get(min)!.push(v);
   };
@@ -319,16 +329,16 @@ function valorEfectivo(
   const modelo = valorEn(serieModelo, horaMin);
   const shnValor = valorEn(serieSHN, horaMin);
   const candidatos: number[] = [];
-  if (main != null) candidatos.push(main);
+  if (esNum(main)) candidatos.push(main);
   if (modo === "estricto") {
-    if (main != null && sesgo != null) candidatos.push(main + Math.max(0, sesgo));
-    if (main != null && margenPendiente > 0) candidatos.push(main + margenPendiente);
-    if (modelo != null) candidatos.push(modelo);
-    if (p75 != null) candidatos.push(p75);
+    if (esNum(main) && sesgo != null) candidatos.push(main + Math.max(0, sesgo));
+    if (esNum(main) && margenPendiente > 0) candidatos.push(main + margenPendiente);
+    if (esNum(modelo)) candidatos.push(modelo);
+    if (esNum(p75)) candidatos.push(p75);
   } else {
-    if (modelo != null) candidatos.push(modelo);
+    if (esNum(modelo)) candidatos.push(modelo);
   }
-  if (shnValor != null) candidatos.push(shnValor);
+  if (esNum(shnValor)) candidatos.push(shnValor);
   const efectivo = candidatos.length ? Math.max(...candidatos) : null;
   return { main, modelo, efectivo, p75 };
 }
@@ -348,13 +358,13 @@ export function calcularVeredicto(
   const s = serieDia(pronos, fecha);
 
   const serieModelo: { min: number; valor_m: number }[] = (fuentes.modelo ?? [])
-    .filter((p) => fechaDiaArgentina(p.timestamp) === fecha)
+    .filter((p) => fechaDiaArgentina(p.timestamp) === fecha && esNum(p.nivel_m))
     .map((p) => ({ min: minutosDiaArgentina(p.timestamp)!, valor_m: p.nivel_m }))
     .filter((p) => p.min != null)
     .sort((a, b) => a.min - b.min);
 
   const serieSHN: { min: number; valor_m: number }[] = (fuentes.shnAlturas ?? [])
-    .filter((a) => a.fecha.split("/").reverse().join("-") === fecha)
+    .filter((a) => a.fecha.split("/").reverse().join("-") === fecha && esNum(a.altura))
     .map((a) => {
       const [hh, mm] = a.hora.split(":").map(Number);
       return { min: hh * 60 + mm, valor_m: a.altura };
@@ -387,12 +397,12 @@ export function calcularVeredicto(
   const hora7 = horaEn(HORA_VEREDICTO);
 
   const serieEff = serieEfectiva(s, serieModelo, serieSHN, sesgo, margenPendiente, modo);
-  const salidaLimiteMin = cruceSubida(serieEff, nivelSeguroM);
+  const salidaLimiteMin = cruceSubida(serieEff, nivelSeguroM, HORA_ENTRADA);
 
   let estado: EstadoVeredicto = "sin_datos";
   if (!esDia) {
     estado = "normal";
-  } else if (entrada.efectivo_m == null || vuelta.efectivo_m == null) {
+  } else if (!esNum(entrada.efectivo_m) || !esNum(vuelta.efectivo_m)) {
     estado = "sin_datos";
   } else if (entrada.efectivo_m > nivelSeguroM) {
     estado = "no_clases";
@@ -438,7 +448,7 @@ export function calcularVeredicto(
   switch (estado) {
     case "no_clases":
       motivo = motivo60
-        ? `Se podría entrar a las 8 (${nivel(entrada)?.toFixed(2)}m), pero el muelle ya sube: la salida límite quedaría a las ${hhmm(salidaLimiteMin)} — solo ${Math.round((salidaLimiteMin ?? HORA_ENTRADA) - HORA_ENTRADA)} min después de entrar, margen insuficiente: NO CLASES.`
+        ? `Se podría entrar a las 8 (${nivel(entrada)?.toFixed(2)}m), pero el muelle ya sube: la salida límite quedaría a las ${hhmm(salidaLimiteMin)} — solo ${Math.max(0, Math.round((salidaLimiteMin ?? HORA_ENTRADA) - HORA_ENTRADA))} min después de entrar, margen insuficiente: NO CLASES.`
         : `A las 8 el agua estaría en ${nivel(entrada)?.toFixed(2)}m — sobre el nivel seguro (${nivelSeguroM.toFixed(2)}m): NO se puede cruzar en lancha.` + sesgoNota + pendienteNota;
       break;
     case "salida_temprana":
