@@ -958,6 +958,24 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* CTA para visitantes: invitar a loguearse para ver datos completos */}
+        {!user && (
+          <div className="text-center py-4">
+            <a
+              href="/auth/login"
+              className="inline-flex items-center gap-2 text-sm text-baliza/80 hover:text-baliza font-medium transition-colors"
+            >
+              Ingresar para ver datos completos
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
+                <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L10.23 5.29a.75.75 0 1 1 1.04-1.08l5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 1 1-1.04-1.08l4.158-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
+              </svg>
+            </a>
+          </div>
+        )}
+
+        {/* --- Contenido detallado: solo para usuarios logueados --- */}
+        {user && (
+          <>
         {/* Aviso oficial de crecida del SHN (el más importante) */}
         {datos?.avisoCrecida && (
           <AvisoCrecidaCard aviso={datos.avisoCrecida} umbralNR={umbralNR?.valor_m ?? null} />
@@ -1361,6 +1379,9 @@ export default function Dashboard() {
           avisosShn={datos?.avisosShn ?? []}
           alertasSmn={datos?.alertasSmn ?? []}
         />
+          </>
+        )}
+        {/* --- Fin contenido detallado --- */}
 
         {/* Bitácora y configuración — solo admin */}
         {user && esAdmin && (
