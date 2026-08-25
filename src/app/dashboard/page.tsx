@@ -158,6 +158,7 @@ export default function Dashboard() {
   const [vientoProno, setVientoProno] = useState<{ timestamp: string; velocidad_kmh: number; direccion_grados: number; presion_hpa?: number | null }[]>([]);
   const [diasSinClases, setDiasSinClases] = useState<string[]>([]);
   const [bitacora, setBitacora] = useState<BitacoraType[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -362,6 +363,7 @@ export default function Dashboard() {
       };
 
       setDatos(d);
+      setLastUpdated(new Date());
       setCargando(false);
     }
 
@@ -632,6 +634,25 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-5xl mx-auto px-3 sm:px-6 py-4 space-y-4 sm:space-y-5">
+        {lastUpdated && (() => {
+          const diffMin = Math.max(0, Math.floor((ahora - lastUpdated.getTime()) / 60000));
+          const hhmm = lastUpdated.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Argentina/Buenos_Aires" });
+          const esAlerta = alertaNivel === "roja" || alertaNivel === "amarilla";
+          return (
+            <p
+              className={`text-center text-xs tracking-wide rounded-md px-3 py-1.5 ${
+                esAlerta
+                  ? diffMin > 5 ? "text-amber-300 bg-amber-900/40" : "text-white/70 bg-white/5"
+                  : diffMin > 10 ? "text-white/60 bg-white/5" : "text-white/40"
+              }`}
+              aria-live="polite"
+            >
+              Actualizado: {hhmm}
+              {diffMin > 0 && ` · hace ${diffMin} min`}
+              {diffMin > 10 && esAlerta && " — datos demorados"}
+            </p>
+          );
+        })()}
         {/* Alerta / Recomendación */}
         <div className="recomendacion-banner-wrapper">
           {avisoSHN && (
