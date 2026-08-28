@@ -973,8 +973,8 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* --- Contenido detallado: solo para usuarios logueados --- */}
-        {user && (
+        {/* --- Contenido técnico: solo administradores --- */}
+        {user && esAdmin && (
           <>
         {/* Aviso oficial de crecida del SHN (el más importante) */}
         {datos?.avisoCrecida && (
@@ -1059,7 +1059,13 @@ export default function Dashboard() {
           nivelSeguroM={nivelSeguroM}
           ahora={ahora}
         />
+          </>
+        )}
+        {/* --- Fin contenido técnico (solo admin) --- */}
 
+        {/* Avisos oficiales SHN + SMN: visibles para todo usuario logueado */}
+        {user && (
+          <>
         {/* SHN + SMN en paralelo */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Aviso del SHN (pronóstico mareológico) */}
@@ -1068,7 +1074,13 @@ export default function Dashboard() {
           {/* Alerta meteorológica SMN */}
           <AlertaSmnCard alertas={datos?.alertasSmn ?? []} />
         </div>
+          </>
+        )}
+        {/* --- Fin avisos SHN/SMN --- */}
 
+        {/* --- Viento, propagación, validación, pronóstico: solo admin --- */}
+        {user && esAdmin && (
+          <>
         {/* Viento + Propagación LP + Modelo INA vs propagación LP en paralelo */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
           <div className="space-y-4">
@@ -1371,7 +1383,13 @@ export default function Dashboard() {
           );
         })()}
 
-        {/* Salud de fuentes */}
+        {/* --- Fin contenido técnico (solo admin) --- */}
+          </>
+        )}
+
+        {/* Salud de fuentes: visible para todo usuario logueado */}
+        {user && (
+          <>
         <EstadoFuentes
           observadoSF={sfObs}
           pronosticos={sfProno ?? []}
