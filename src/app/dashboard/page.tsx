@@ -60,6 +60,15 @@ function minutosDiaArgentina(iso: string | null): number | null {
   return hora * 60 + m;
 }
 
+// Minutos restantes (redondeados) desde `ahoraMs` hasta un hito dado como
+// minutos-desde-medianoche local (p. ej. salidaLimiteMin = 570 → 09:30) hoy.
+// Devuelve null si el hito ya pasó hoy o si no se puede resolver.
+function minutosAlHitoDia(minutosMedianoche: number, ahoraMs: number): number | null {
+  const minAhora = minutosDiaArgentina(new Date(ahoraMs).toISOString());
+  if (minAhora == null) return null;
+  return minutosMedianoche - minAhora;
+}
+
 // Feriados sin clases (fechas locales AAAA-MM-DD). Mantener al día.
 // El equipo puede sumar/editar más días desde AdminPanel (tabla dias_sin_clases).
 const FERIADOS_SIN_CLASES = new Set([
@@ -787,12 +796,36 @@ export default function Dashboard() {
                                 {(v.vuelta.efectivo_m ?? 0) > nivelSeguroM ? "NO se puede volver" : "sí se puede volver"}
                               </span>
                             </div>
-                            {(v.estado === "salida_temprana" && v.salidaLimiteMin != null) && (
-                              <div className="rb-plan-limit">
-                                ⏱ Se entra a las 8, pero hay que irse antes de las{" "}
-                                <strong>{hhmm(v.salidaLimiteMin)}</strong>
-                              </div>
-                            )}
+                            {(() => {
+                              const limMin = v.salidaLimiteMin;
+                              if (v.estado !== "salida_temprana" || limMin == null) return null;
+                              // Cuenta regresiva hasta la hora límite de salida (zona escolar)
+                              const minutosHay = minutosAlHitoDia(limMin, ahora);
+                              const restante = minutosHay == null ? null : Math.max(0, Math.round(minutosHay));
+                              const restanteLabel = restante == null
+                                ? "--"
+                                : restante < 60
+                                  ? `${restante} min`
+                                  : `${Math.floor(restante / 60)}h ${restante % 60}min`;
+                              const critico = restante != null && restante <= 15;
+                              return (
+                                <div className={`rb-plan-limit rb-plan-limit-hora ${critico ? "critico" : ""}`}>
+                                  <div className="rb-plan-limit-hora-cabecera">
+                                    <span className="rb-plan-limit-hora-ico">⏱</span>
+                                    <span>Se entra a las 8, pero hay que irse antes de las{" "}
+                                      <strong>{hhmm(limMin)}</strong>
+                                    </span>
+                                  </div>
+                                  {restanteLabel !== "--" && (
+                                    <div className="rb-plan-limit-cuenta">
+                                      <span className="rb-plan-limit-cuenta-texto">Quedan</span>
+                                      <span className="rb-plan-limit-cuenta-valor">{restanteLabel}</span>
+                                      {critico && <span className="rb-plan-limit-cuenta-urgencia">¡apuráte!</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                             {v.estado === "no_clases" && (
                               <div className="rb-plan-limit">
                                 🚫 El muelle no vuelve a bajar de {nivelSeguroM.toFixed(2)}m ese día a la tarde

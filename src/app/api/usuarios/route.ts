@@ -1,22 +1,11 @@
 import { NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase-server";
 import { createClient } from "@supabase/supabase-js";
-import { ADMINS } from "@/lib/constants";
+import { requireAdmin } from "@/lib/admin-auth";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-
-async function requireAdmin() {
-  const supabase = await createServerSupabase();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return { error: "No autorizado" as const };
-  if (!user.email || !(ADMINS as readonly string[]).includes(user.email)) {
-    return { error: "Solo administradores" as const };
-  }
-  return { user };
-}
 
 export async function GET() {
   const auth = await requireAdmin();

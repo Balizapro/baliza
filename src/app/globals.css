@@ -574,6 +574,73 @@ html {
   font-weight: 800;
 }
 
+.rb-plan-limit-hora {
+  margin-top: 8px;
+  border: 1px solid rgba(255, 217, 102, 0.5);
+  border-radius: 10px;
+  background: rgba(255, 196, 0, 0.12);
+  padding: 8px 12px;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #ffe9b8;
+}
+
+.rb-plan-limit-hora.critico {
+  border-color: rgba(255, 120, 90, 0.7);
+  background: rgba(255, 79, 40, 0.22);
+}
+
+.rb-plan-limit-hora-cabecera {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.rb-plan-limit-hora-ico {
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.rb-plan-limit-hora strong {
+  color: #fff;
+  font-weight: 800;
+}
+
+.rb-plan-limit-cuenta {
+  margin-top: 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.rb-plan-limit-cuenta-texto {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  color: rgba(255, 233, 184, 0.8);
+}
+
+.rb-plan-limit-cuenta-valor {
+  font-family: ui-monospace, monospace;
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.rb-plan-limit-hora.critico .rb-plan-limit-cuenta-valor {
+  color: #ffd0c4;
+}
+
+.rb-plan-limit-cuenta-urgencia {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ff9c88;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .rb-plan-verdicto-linea {
   display: flex;
   align-items: center;
