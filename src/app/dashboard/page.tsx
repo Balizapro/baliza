@@ -697,7 +697,18 @@ export default function Dashboard() {
               </h1>
               <p className="recomendacion-subtexto">
                 {sfObs?.nivel_m != null
-                  ? `Nivel actual: ${sfObs.nivel_m.toFixed(2)}m ${tendenciaSF?.direccion === "subiendo" ? "subiendo" : tendenciaSF?.direccion === "bajando" ? "bajando" : "estable"}`
+                  ? (() => {
+                      const datoMs = new Date(sfObs.timestamp).getTime();
+                      const esfuerzo = Math.max(0, Math.round((ahora - datoMs) / 60000));
+                      const horaDato = new Date(sfObs.timestamp).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Argentina/Buenos_Aires" });
+                      const esViejo = esfuerzo > 60;
+                      return (
+                        <span>
+                          {`Nivel actual: ${sfObs.nivel_m.toFixed(2)}m (${horaDato}) ${tendenciaSF?.direccion === "subiendo" ? "subiendo" : tendenciaSF?.direccion === "bajando" ? "bajando" : "estable"}`}
+                          {esViejo && <span className="font-semibold"> — dato de hace {esfuerzo} min</span>}
+                        </span>
+                      );
+                    })()
                   : "Esperando primera ingesta de datos"}
               </p>
               {muelleAcceso.picoNoAccesible && !muelleAcceso.noAccesible && (
