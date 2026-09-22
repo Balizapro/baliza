@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn, AvisoCrecida, NivelAlerta, Bitacora as BitacoraType } from "@/lib/types";
 import Bitacora from "@/components/Bitacora";
+import HistorialAlertas from "@/components/HistorialAlertas";
 import { useAuth } from "@/components/AuthProvider";
 import AdminPanel from "@/components/AdminPanel";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -1458,6 +1459,10 @@ export default function Dashboard() {
                 umbralEval={umbralEval?.valor_m}
                 umbralNR={umbralNR?.valor_m}
               />
+            </section>
+
+            <section className="dashboard-section">
+              <HistorialAlertas />
             </section>
 
             <section className="dashboard-section">
