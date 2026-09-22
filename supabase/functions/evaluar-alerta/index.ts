@@ -6,6 +6,7 @@ import {
   detectarGiro,
   esPicoInminente,
   mismoEpisodioPreaviso,
+  subeSostenido,
   type NivelAlerta,
 } from "./logica.ts";
 import { calcularVeredicto, hhmm as hhmmPlan, type PuntoProno } from "./plan_escolar.ts";
@@ -33,6 +34,11 @@ interface PronosticoRow {
 const PROPAGACION_LP_A_SF = 2.5;
 const PROPAGACION_BA_A_SF = 1.0;
 const EXTERIORES_GIRO = ["La Plata", "Oyarvide", "Atalaya", "Puerto de Buenos Aires"];
+// "Preparar salida" (roja anticipada) exige subida sostenida, no una sola lectura
+// ruidosa: 4 lecturas seguidas subiendo (ingesta cada 20min => ~60min nominales),
+// con un piso de 40min por si la cadencia real fue más rápida.
+const SUBIDA_SOSTENIDA_MIN_LECTURAS = 4;
+const SUBIDA_SOSTENIDA_MIN_MINUTOS = 40;
 const PICO_MAX_EDAD_HS = 6;
 const PENDIENTE_MIN_M_H = 0.005;
 const GIRO_MIN_ESTACIONES = 2;
@@ -160,7 +166,7 @@ serve(async (req) => {
       .eq("estacion_id", estaciones.id)
       .eq("tipo", "observado")
       .order("timestamp", { ascending: false })
-      .limit(3);
+      .limit(6);
 
     if (!lecturas || lecturas.length === 0) {
       return new Response(
@@ -177,6 +183,12 @@ serve(async (req) => {
       if (diff > 0.01) tendencia = "subiendo";
       else if (diff < -0.01) tendencia = "bajando";
     }
+
+    const subiendoSostenido = subeSostenido(
+      lecturas as LecturaRow[],
+      SUBIDA_SOSTENIDA_MIN_LECTURAS,
+      SUBIDA_SOSTENIDA_MIN_MINUTOS
+    );
 
     // Preaviso por pronóstico INA de San Fernando (qualifier main, próximo horizonte)
     // Va primero: es el dato clave — cuándo llega el pico a San Fernando.
@@ -295,20 +307,33 @@ serve(async (req) => {
     }
 
     const { alerta, ventanaInicio, ventanaFin, mensaje } = calcularVentana(
-      nivelActual, tendencia,
+      nivelActual, tendencia, subiendoSostenido,
       { evaluacion: umbralEval, noRetorno: umbralNR, bajanteAlarma, bajanteEvacuacion },
       trasladoMin, mensajes
     );
 
-    // Elevar verde→amarilla si el pronóstico anticipa un cruce severo (no retorno o evacuación por bajante)
-    const elevadoPorPronostico = alerta === "verde" && preavisosProno.severo;
-    const alertaFinal: NivelAlerta = elevadoPorPronostico ? "amarilla" : alerta;
+    // Fuente única de verdad para el dashboard: el nivel/mensaje que persistimos acá
+    // es lo que banner, sirena y push van a mostrar tal cual, así que el pronóstico
+    // (hoy solo consultado en el frontend para pintar el banner) también se decide acá.
+    //
+    // Prioridad (de mayor a menor, ya resuelta por calcularVentana salvo lo agregado):
+    // evacuación/azul por bajante > roja por no-retorno o subida sostenida > roja por
+    // pronóstico > amarilla por preaviso severo (bajante) > lo que devolvió calcularVentana.
+    const elevablePorPronostico = alerta === "verde" || alerta === "amarilla";
+    const rojaPorPronostico = elevablePorPronostico && picoProno != null && picoProno.valor_m > umbralProno;
+    const elevadoPorPronostico = !rojaPorPronostico && alerta === "verde" && preavisosProno.severo;
 
-    // Si se elevó por el pronóstico, el mensaje principal no debe decir "Todo normal":
-    // el estado de atención es por la crecida pronosticada, no por el nivel actual.
-    const mensajeBase = elevadoPorPronostico
-      ? `Atención — crecida pronosticada en San Fernando (nivel actual ${nivelActual.toFixed(2)}m)`
-      : mensaje;
+    let alertaFinal: NivelAlerta = alerta;
+    let mensajeBase = mensaje;
+    if (rojaPorPronostico) {
+      alertaFinal = "roja";
+      mensajeBase = `Preparar salida — pronóstico anticipa ${picoProno!.valor_m.toFixed(2)}m en San Fernando (supera ${umbralProno.toFixed(2)}m)`;
+    } else if (elevadoPorPronostico) {
+      alertaFinal = "amarilla";
+      // Si se elevó por el pronóstico, el mensaje principal no debe decir "Todo normal":
+      // el estado de atención es por la crecida pronosticada, no por el nivel actual.
+      mensajeBase = `Atención — crecida pronosticada en San Fernando (nivel actual ${nivelActual.toFixed(2)}m)`;
+    }
 
     const mensajeCompleto = preavisos.length
       ? `${mensajeBase} | Preaviso: ${preavisos.join("; ")}`

@@ -6,6 +6,7 @@ import {
   detectarGiro,
   esPicoInminente,
   mismoEpisodioPreaviso,
+  subeSostenido,
   MARGEN_AMARILLA_M,
 } from "./logica.ts";
 
@@ -20,67 +21,72 @@ const MSG = {};
 const traslado = 10;
 
 test("subiendo con nivel muy por debajo del umbral => verde", () => {
-  const r = calcularVentana(0.84, "subiendo", U, traslado, MSG);
+  const r = calcularVentana(0.84, "subiendo", true, U, traslado, MSG);
   assert.equal(r.alerta, "verde");
   assert.match(r.mensaje, /Todo normal/);
 });
 
 test("subiendo dentro del margen (>= eval - margen) => amarilla", () => {
   const nivel = U.evaluacion - MARGEN_AMARILLA_M + 0.01; // 1.01m, subiendo
-  const r = calcularVentana(nivel, "subiendo", U, traslado, MSG);
+  const r = calcularVentana(nivel, "subiendo", true, U, traslado, MSG);
   assert.equal(r.alerta, "amarilla");
 });
 
 test("justo en el limite inferior del margen (eval - margen) => amarilla", () => {
   const nivel = U.evaluacion - MARGEN_AMARILLA_M; // 1.00m
-  const r = calcularVentana(nivel, "subiendo", U, traslado, MSG);
+  const r = calcularVentana(nivel, "subiendo", true, U, traslado, MSG);
   assert.equal(r.alerta, "amarilla");
 });
 
 test("subiendo justo debajo del margen => verde", () => {
   const nivel = U.evaluacion - MARGEN_AMARILLA_M - 0.01; // 0.99m
-  const r = calcularVentana(nivel, "subiendo", U, traslado, MSG);
+  const r = calcularVentana(nivel, "subiendo", true, U, traslado, MSG);
   assert.equal(r.alerta, "verde");
 });
 
-test("subiendo por encima del umbral de evaluacion => roja (preparar salida)", () => {
-  const r = calcularVentana(2.05, "subiendo", U, traslado, MSG);
+test("subiendo de forma sostenida por encima del umbral de evaluacion => roja (preparar salida)", () => {
+  const r = calcularVentana(2.05, "subiendo", true, U, traslado, MSG);
   assert.equal(r.alerta, "roja");
   assert.ok(r.ventanaFin != null);
 });
 
-test("nivel critico >= no retorno => roja (salir ahora)", () => {
-  const r = calcularVentana(2.3, "estable", U, traslado, MSG);
+test("subiendo pero SIN sostener (lectura ruidosa) por encima del umbral => amarilla, no roja", () => {
+  const r = calcularVentana(2.05, "subiendo", false, U, traslado, MSG);
+  assert.equal(r.alerta, "amarilla");
+});
+
+test("nivel critico >= no retorno => roja (salir ahora), aunque no este sostenido", () => {
+  const r = calcularVentana(2.3, "estable", false, U, traslado, MSG);
   assert.equal(r.alerta, "roja");
 });
 
 test("estable bajo evaluacion => verde", () => {
-  const r = calcularVentana(1.5, "estable", U, traslado, MSG);
+  const r = calcularVentana(1.5, "estable", false, U, traslado, MSG);
   assert.equal(r.alerta, "verde");
 });
 
 test("estable sobre evaluacion (sin subir) => amarilla, no verde", () => {
-  const r = calcularVentana(2.05, "estable", U, traslado, MSG);
+  const r = calcularVentana(2.05, "estable", false, U, traslado, MSG);
   assert.equal(r.alerta, "amarilla");
 });
 
 test("bajando pero todavia sobre evaluacion => amarilla, no verde", () => {
-  const r = calcularVentana(2.1, "bajando", U, traslado, MSG);
+  const r = calcularVentana(2.1, "bajando", false, U, traslado, MSG);
   assert.equal(r.alerta, "amarilla");
 });
 
 test("bajando bajo evaluacion => verde", () => {
-  const r = calcularVentana(1.5, "bajando", U, traslado, MSG);
+  const r = calcularVentana(1.5, "bajando", false, U, traslado, MSG);
   assert.equal(r.alerta, "verde");
 });
 
 test("bajante alarma => azul", () => {
-  const r = calcularVentana(0, "estable", U, traslado, MSG);
+  const r = calcularVentana(0, "estable", false, U, traslado, MSG);
   assert.equal(r.alerta, "azul");
 });
 
 test("bajante evacuacion => evacuacion", () => {
-  const r = calcularVentana(-0.4, "estable", U, traslado, MSG);
+  const r = calcularVentana(-0.4, "estable", false, U, traslado, MSG);
   assert.equal(r.alerta, "evacuacion");
 });
 
@@ -102,6 +108,34 @@ test("aviso no-cese nunca se descarta por expiracion", () => {
   const ahora = Date.now();
   assert.equal(ceseExpirado(new Date(ahora - 24 * 3600 * 1000).toISOString()), true);
   assert.equal(ceseExpirado(new Date(ahora).toISOString()), false);
+});
+
+// ── subeSostenido (subida sostenida, no una lectura ruidosa) ────────────────
+
+function lecturasDesc(niveles: number[], pasoMin = 20, desde = "2026-08-10T00:00:00Z"): { timestamp: string; nivel_m: number }[] {
+  const t0 = new Date(desde).getTime();
+  return niveles.map((nivel_m, i) => ({ timestamp: new Date(t0 + i * pasoMin * 60000).toISOString(), nivel_m }))
+    .reverse(); // más reciente primero, como llega de la consulta ordenada desc
+}
+
+test("subeSostenido: 4 lecturas cada una mayor a la anterior, 60min => true", () => {
+  const l = lecturasDesc([1.9, 1.95, 2.0, 2.05]); // asc en el tiempo: sube todo el tramo
+  assert.equal(subeSostenido(l, 4, 40), true);
+});
+
+test("subeSostenido: una lectura intermedia no sube (ruido) => false", () => {
+  const l = lecturasDesc([1.9, 1.95, 1.94, 2.05]); // el tercer paso no sube
+  assert.equal(subeSostenido(l, 4, 40), false);
+});
+
+test("subeSostenido: sube en todas pero el tramo no llega al minimo de minutos => false", () => {
+  const l = lecturasDesc([1.9, 1.95, 2.0, 2.05], 5); // 4 lecturas mas juntas: 15min de tramo
+  assert.equal(subeSostenido(l, 4, 40), false);
+});
+
+test("subeSostenido: menos lecturas de las pedidas => false (nunca escala sin datos)", () => {
+  const l = lecturasDesc([1.9, 1.95, 2.0]);
+  assert.equal(subeSostenido(l, 4, 40), false);
 });
 
 // ── detectarGiro (giro de exteriores, 1 lectura posterior) ──────────────────

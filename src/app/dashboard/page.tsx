@@ -433,18 +433,6 @@ export default function Dashboard() {
     return d > 0 ? `${d}d ${h}h ${m}m` : h > 0 ? `${h}h ${m}m` : `${m}m`;
   }, [sfProno, ahora]);
 
-  // Pico del pronóstico oficial (qualifier main) hacia adelante, usado para el color
-  // del banner: rojo si el pico supera el umbral de pronóstico (2.10m).
-  const picoMain = useMemo(() => {
-    const futuros = (sfProno ?? [])
-      .filter((p) => p.qualifier === "main")
-      .filter((p) => new Date(p.timestamp).getTime() >= ahora)
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-    return futuros.length > 0
-      ? futuros.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futuros[0])
-      : null;
-  }, [sfProno, ahora]);
-
   // Entrada del componente de curva: viento histórico y pronóstico como ms
   const vientoHistoricoModelo = useMemo(
     () => vientoHist.map((v) => ({ timestamp: new Date(v.timestamp).getTime(), velocidad_kmh: v.velocidad_kmh, direccion_grados: v.direccion_grados, presion_hpa: v.presion_hpa })),
@@ -554,20 +542,11 @@ export default function Dashboard() {
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   }
 
-  // Color del primer banner, independiente del job: el río puede subir y el banner
-  // seguir verde si no hay crecidas a la vista; naranja cuando la crecida se observa
-  // (nivel sobre evaluación o pico pronosticado alcanzando evaluación); rojo solo si
-  // el nivel supera el no retorno o el pronóstico supera el umbral (2.10m).
-  const bannerColor: string = useMemo(() => {
-    const nivel = sfObs?.nivel_m ?? null;
-    if (umbralBajEvac && nivel !== null && nivel <= umbralBajEvac.valor_m) return "evacuacion";
-    if (umbralBajAlarma && nivel !== null && nivel <= umbralBajAlarma.valor_m) return "azul";
-    if (umbralNR && nivel !== null && nivel >= umbralNR.valor_m) return "roja";
-    if (umbralProno && picoMain && picoMain.valor_m > umbralProno.valor_m) return "roja";
-    if (umbralEval && nivel !== null && nivel >= umbralEval.valor_m) return "amarilla";
-    if (umbralEval && picoMain && picoMain.valor_m >= umbralEval.valor_m) return "amarilla";
-    return "verde";
-  }, [sfObs, umbralBajEvac, umbralBajAlarma, umbralNR, umbralProno, umbralEval, picoMain]);
+  // Color del banner: viene directo de `alertaNivel` (el `nivel` que persiste la
+  // Edge Function evaluar-alerta), no se recalcula acá. Antes el frontend tenía su
+  // propia lógica de umbrales independiente del backend, y podía mostrar un color
+  // distinto al mensaje/sirena/push, que sí usan el nivel del backend. Fuente única
+  // de verdad: lo que decide el backend es lo único que se muestra.
 
   // Aviso SHN vigente: es el más autoritativo (SHN oficial). El pronóstico INA se
   // considera mientras no haya aviso SHN; cuando este sale, es desplazado en el banner.
@@ -676,7 +655,7 @@ export default function Dashboard() {
               )}
             </div>
           )}
-          <div className={`recomendacion-banner ${bannerColor}`}>
+          <div className={`recomendacion-banner ${alertaNivel}`}>
             <div className={`rb-flecha ${tendenciaSF?.direccion === "subiendo" ? "subiendo" : tendenciaSF?.direccion === "bajando" ? "bajando" : "estable"}`}>
               {tendenciaSF?.direccion === "subiendo" ? (
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -691,7 +670,7 @@ export default function Dashboard() {
             </div>
             <div className="rb-cuerpo">
               <p className="rb-etiqueta">
-                {bannerColor === "roja" ? "Alerta roja" : bannerColor === "evacuacion" ? "Evacuación" : bannerColor === "amarilla" ? "Atención" : bannerColor === "azul" ? "Bajante" : "Normal"}
+                {alertaNivel === "roja" ? "Alerta roja" : alertaNivel === "evacuacion" ? "Evacuación" : alertaNivel === "amarilla" ? "Atención" : alertaNivel === "azul" ? "Bajante" : "Normal"}
               </p>
               <h1 className="recomendacion-titulo">
                 {alerta?.mensaje?.split("| Preaviso:")[0]?.trim() ?? "Sin datos — esperando primera ingesta"}
@@ -941,20 +920,20 @@ export default function Dashboard() {
                 }
                 return null;
               })()}
-              {bannerColor !== "verde" && (
+              {alertaNivel !== "verde" && (
                 <div className="rb-accion">
                   <span>
-                    {bannerColor === "evacuacion"
+                    {alertaNivel === "evacuacion"
                       ? "Evacuar ahora — alejarse de la zona de riesgo"
-                      : bannerColor === "roja"
+                      : alertaNivel === "roja"
                         ? "Preparar salida — no esperar a último momento"
-                        : bannerColor === "amarilla"
+                        : alertaNivel === "amarilla"
                           ? "Vigilar de cerca — crecida a la vista"
                           : "Cuidado con la bajante"}
                   </span>
                 </div>
               )}
-              {(cuentaRegresiva && bannerColor === "roja") && (() => {
+              {(cuentaRegresiva && alertaNivel === "roja") && (() => {
                 const enHorarioNR = enHorarioEscolar(datos?.alerta?.ventana_fin ?? null, diasSinClases);
                 return (
                   <div className="rb-cuenta-regresiva">
@@ -984,10 +963,10 @@ export default function Dashboard() {
                   ? futuros.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futuros[0])
                   : null;
                 const etiquetaNivel =
-                  bannerColor === "roja" ? "ALERTA ROJA" :
-                  bannerColor === "evacuacion" ? "EVACUACIÓN" :
-                  bannerColor === "amarilla" ? "ATENCIÓN" :
-                  bannerColor === "azul" ? "BAJANTE" : "NIVEL NORMAL";
+                  alertaNivel === "roja" ? "ALERTA ROJA" :
+                  alertaNivel === "evacuacion" ? "EVACUACIÓN" :
+                  alertaNivel === "amarilla" ? "ATENCIÓN" :
+                  alertaNivel === "azul" ? "BAJANTE" : "NIVEL NORMAL";
                 const partes = [
                   `🔴 Baliza — ${etiquetaNivel}`,
                   sfObs?.nivel_m != null ? `Nivel actual en San Fernando: ${sfObs.nivel_m.toFixed(2)}m (${tendenciaSF?.direccion ?? "estable"})` : null,

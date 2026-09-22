@@ -24,6 +24,7 @@ export function reemplazar(template: string, vars: Record<string, string>): stri
 export function calcularVentana(
   nivelActual: number,
   tendencia: "subiendo" | "bajando" | "estable",
+  subiendoSostenido: boolean,
   u: Umbrales,
   trasladoMin: number,
   mensajes: Record<string, string>
@@ -73,7 +74,7 @@ export function calcularVentana(
     };
   }
 
-  if (tendencia === "subiendo" && nivelActual >= u.evaluacion) {
+  if (tendencia === "subiendo" && subiendoSostenido && nivelActual >= u.evaluacion) {
     const ahora = new Date();
     const diff = u.noRetorno - nivelActual;
     const horasEstimadas = Math.max(0.5, diff / 0.05);
@@ -135,6 +136,29 @@ export function calcularVentana(
     ventanaFin: null,
     mensaje: mensajes.recomendacion_verde_default ?? "Todo normal",
   };
+}
+
+// Sube de forma sostenida: exige que cada lectura de la ventana sea mayor que
+// la anterior (no solo el neto) y que el tramo cubra al menos `minMinutos`.
+// Evita declarar "roja" (preparar salida) por una sola lectura ruidosa o el
+// vaivén normal de la marea; con menos lecturas de las pedidas, nunca es true.
+export function subeSostenido(
+  lecturas: Lectura[],
+  minLecturas: number,
+  minMinutos: number,
+  margenM = 0.01
+): boolean {
+  if (lecturas.length < minLecturas) return false;
+  // `lecturas` viene desc (más reciente primero); tomar las últimas `minLecturas` y ordenar asc.
+  const ventana = [...lecturas.slice(0, minLecturas)].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+  for (let i = 1; i < ventana.length; i++) {
+    if (ventana[i].nivel_m - ventana[i - 1].nivel_m <= margenM) return false;
+  }
+  const minutos =
+    (new Date(ventana[ventana.length - 1].timestamp).getTime() - new Date(ventana[0].timestamp).getTime()) / 60000;
+  return minutos >= minMinutos;
 }
 
 // Un CESE de aviso solo informa durante `horasVigencia`; pasado ese tiempo se descarta.
