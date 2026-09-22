@@ -355,6 +355,7 @@ serve(async (req) => {
         tendencia_shn: tendenciaSHN,
         pico_pronostico_m: picoProno?.valor_m ?? null,
         record_pronostico: recordProno,
+        roja_por_pronostico: rojaPorPronostico,
         preavisos,
       },
     };
@@ -389,7 +390,11 @@ serve(async (req) => {
       }
     }
 
-if (empeoro || recordProno) {
+// La escalada a roja por pronóstico es nueva (antes solo pintaba el banner en el
+// frontend): todavía no mandamos push por este camino hasta ver en producción que
+// no da falsos positivos. El resto de las rojas (crítico, subida sostenida) sí
+// notifican, igual que antes.
+if ((empeoro || recordProno) && !rojaPorPronostico) {
       const titulo =
         alertaFinal === "evacuacion"
           ? "Baliza — EVACUACIÓN"
