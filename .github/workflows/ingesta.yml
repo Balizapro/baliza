@@ -2,21 +2,14 @@ name: Ingesta de datos (backup)
 
 on:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "0 * * * *"
   workflow_dispatch:
 
 jobs:
   ingest:
     runs-on: ubuntu-latest
     steps:
-      - name: Ingesta INA
-        run: curl -s -f -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-ina"
-
-      - name: Ingesta viento
-        run: curl -s -f -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-viento"
-
-      - name: Ingesta SHN
-        run: curl -s -f -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-shn"
-
-      - name: Ingesta pronóstico INA
-        run: curl -s -f -X POST "https://baliza-ashy.vercel.app/api/cron/ingest-pronostico"
+      - name: Ingesta (las 8 fuentes)
+        run: |
+          curl -s -f -X GET "https://baliza-ashy.vercel.app/api/cron/ingest-all" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

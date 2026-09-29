@@ -39,5 +39,5 @@ export async function GET(request: NextRequest) {
   );
 
   const allOk = results.every((r) => r.ok);
-  return NextResponse.json({ ok: allOk, results });
+  return NextResponse.json({ ok: allOk, results }, { status: allOk ? 200 : 500 });
 }
