@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import type { DatosAgregados, Lectura, Pronostico, EquivalenciaEscalon, Tendencia, AvisoShn, AvisoCrecida, NivelAlerta, Bitacora as BitacoraType } from "@/lib/types";
 import Bitacora from "@/components/Bitacora";
+import PlanDelDia from "@/components/PlanDelDia";
 import HistorialAlertas from "@/components/HistorialAlertas";
 import { useAuth } from "@/components/AuthProvider";
 import AdminPanel from "@/components/AdminPanel";
@@ -495,28 +496,29 @@ export default function Dashboard() {
     //  - "suave": pronóstico central (INA main, modelo y SHN), sin penalizaciones.
     //  - "modelo": EL PROPIO MODELO solo (la curva armónico+viento como main), sin
     //    INA ni bandas ni sesgo; útil cuando INA y modelo no coinciden en la tarde.
+    const fuentesPlan = {
+      modelo: curvaModelo,
+      shnObservado: historial
+        .filter((l) => l.nivel_m != null)
+        .map((l) => ({ timestamp: l.timestamp, nivel_m: l.nivel_m })),
+      shnAlturas,
+      // Estaciones vecinas (Bs As, La Plata...) para anticipar crecidas por
+      // pendiente de subida: la marea entra por el estuario y llega a SF con
+      // desfase, así que una subida fuerte afuera anticipa la de SF.
+      vecinas: exterioresLecturas.map((e) => ({
+        nombre: e.nombre,
+        lecturas: e.lecturas
+          .filter((l) => l.nivel_m != null)
+          .map((l) => ({ timestamp: l.timestamp, nivel_m: l.nivel_m })),
+      })),
+    };
+
     let veredicto: ReturnType<typeof calcularVeredicto> | null = null;
     let veredictoSuave: ReturnType<typeof calcularVeredicto> | null = null;
     let veredictoModelo: ReturnType<typeof calcularVeredicto> | null = null;
     if (picoNoAccesible) {
       const dia = fechaDiaArgentina(picoNoAccesible.timestamp);
       if (dia) {
-        const fuentesPlan = {
-          modelo: curvaModelo,
-          shnObservado: historial
-            .filter((l) => l.nivel_m != null)
-            .map((l) => ({ timestamp: l.timestamp, nivel_m: l.nivel_m })),
-          shnAlturas,
-          // Estaciones vecinas (Bs As, La Plata...) para anticipar crecidas por
-          // pendiente de subida: la marea entra por el estuario y llega a SF con
-          // desfase, así que una subida fuerte afuera anticipa la de SF.
-          vecinas: exterioresLecturas.map((e) => ({
-            nombre: e.nombre,
-            lecturas: e.lecturas
-              .filter((l) => l.nivel_m != null)
-              .map((l) => ({ timestamp: l.timestamp, nivel_m: l.nivel_m })),
-          })),
-        };
         veredicto = calcularVeredicto(sfProno ?? [], dia, nivelSeguroM, diasSinClases, fuentesPlan, "estricto");
         veredictoSuave = calcularVeredicto(sfProno ?? [], dia, nivelSeguroM, diasSinClases, fuentesPlan, "suave");
         // Modelo solo: la curva propia como único pronóstico (main), sin INA/sesgo.
@@ -531,7 +533,16 @@ export default function Dashboard() {
       }
     }
 
-    return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible, veredicto, veredictoSuave, veredictoModelo };
+    // Veredicto de HOY, siempre calculado (no solo cuando hay riesgo detectado
+    // más adelante). Es la base del bloque fijo "Plan de hoy" que se muestra
+    // siempre arriba, para que revisarlo sea un hábito diario y no algo que
+    // solo aparece el día que ya hay un problema.
+    const hoyStr = fechaDiaArgentina(new Date().toISOString());
+    const veredictoHoy = hoyStr
+      ? calcularVeredicto(sfProno ?? [], hoyStr, nivelSeguroM, diasSinClases, fuentesPlan, "estricto")
+      : null;
+
+    return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible, veredicto, veredictoSuave, veredictoModelo, veredictoHoy };
   }, [sfObs, sfProno, nivelSeguroM, ahora, diasSinClases, curvaModelo, shnAlturas, historial, exterioresLecturas]);
 
   function hhmm(min: number | null): string {
@@ -692,7 +703,7 @@ export default function Dashboard() {
                   : "Esperando primera ingesta de datos"}
               </p>
               {muelleAcceso.picoNoAccesible && !muelleAcceso.noAccesible && (
-                <div className="rb-muelle-no-accesible rb-muelle-preaviso">
+                <div id="plan-detallado" className="rb-muelle-no-accesible rb-muelle-preaviso">
                   <p className="rb-muelle-titulo">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 shrink-0" aria-hidden="true"><path d="M12 9v4M12 17.5h.01M10.3 4.7 2.6 18a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 4.7a1.8 1.8 0 0 0-3 0Z"/></svg>
                     Precaución — muelle NO accesible estimado
@@ -981,6 +992,17 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+        {/* Plan de hoy: bloque fijo, siempre visible (con o sin riesgo
+            detectado), un solo veredicto conservador. El panel técnico de
+            arriba (con los 3 modelos) sigue existiendo para quien quiera
+            profundizar — este es el chequeo rápido de todos los días. */}
+        <PlanDelDia
+          veredicto={muelleAcceso.veredictoHoy}
+          nivelSeguroM={nivelSeguroM}
+          hayDetalleTecnico={muelleAcceso.picoNoAccesible != null}
+          onVerDetalle={() => document.getElementById("plan-detallado")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+        />
 
         {/* CTA para visitantes: invitar a loguearse para ver datos completos */}
         {!user && (

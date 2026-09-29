@@ -790,3 +790,73 @@ html {
     font-size: 13px;
   }
 }
+
+/* --- Plan de hoy: bloque fijo siempre visible, un solo veredicto --- */
+.pdh {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid;
+  margin: 12px 0;
+}
+.pdh-icono {
+  font-size: 1.5rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.pdh-cuerpo {
+  flex: 1;
+  min-width: 0;
+}
+.pdh-etiqueta {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin: 0 0 2px;
+}
+.pdh-titulo {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0;
+}
+.pdh-confianza {
+  font-size: 12px;
+  opacity: 0.8;
+  margin: 4px 0 0;
+}
+.pdh-ver-mas {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+}
+.pdh-normal {
+  background: color-mix(in srgb, var(--color-ok) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-ok) 40%, transparent);
+  color: var(--color-ok);
+}
+.pdh-atencion {
+  background: color-mix(in srgb, var(--color-atencion) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-atencion) 40%, transparent);
+  color: var(--color-atencion);
+}
+.pdh-critico {
+  background: color-mix(in srgb, var(--color-rojo-alerta) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-rojo-alerta) 40%, transparent);
+  color: var(--color-rojo-alerta);
+}
+.pdh-sindatos {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  border-color: color-mix(in srgb, currentColor 25%, transparent);
+  color: var(--texto-sec, #6b7280);
+}
