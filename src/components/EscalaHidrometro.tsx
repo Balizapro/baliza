@@ -67,7 +67,10 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
   return (
     <section className={`relative ${alertaBg} rounded-xl p-4 sm:p-5`}>
       <div className="flex items-center gap-2 mb-4">
-        <span className={`w-2.5 h-2.5 rounded-full ${alertaNivel === "roja" || alertaNivel === "evacuacion" ? "bg-rojo-alerta" : alertaNivel === "amarilla" ? "bg-alerta" : alertaNivel === "azul" ? "bg-bajante" : "bg-ok"}`} />
+        <span className={`w-2.5 h-2.5 rounded-full ${alertaNivel === "roja" || alertaNivel === "evacuacion" ? "bg-rojo-alerta" : alertaNivel === "amarilla" ? "bg-alerta" : alertaNivel === "azul" ? "bg-bajante" : "bg-ok"}`} aria-hidden="true" />
+        <span className="sr-only">
+          {alertaNivel === "roja" ? "Estado: alerta roja. " : alertaNivel === "evacuacion" ? "Estado: evacuación. " : alertaNivel === "amarilla" ? "Estado: atención. " : alertaNivel === "azul" ? "Estado: bajante. " : "Estado: normal. "}
+        </span>
         <p className="font-serif text-sm uppercase tracking-widest text-texto-sec dark:text-gray-400">
           San Fernando — brazo Luján
         </p>
@@ -76,7 +79,13 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
       <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 items-start">
         {/* Vertical gauge */}
         <div className="relative flex-shrink-0" style={{ width: gaugeW, height: H }}>
-          <svg width={gaugeW} height={H} className="overflow-visible">
+          <svg
+            width={gaugeW}
+            height={H}
+            className="overflow-visible"
+            role="img"
+            aria-label={`Escala de nivel del río. Nivel actual ${nivelActual != null ? nivelActual.toFixed(2) + " metros" : "sin datos"}, tendencia ${tendencia}. Umbral de evaluación ${umbralEval?.valor_m.toFixed(2) ?? "no configurado"} metros, punto de no retorno ${umbralNR?.valor_m.toFixed(2) ?? "no configurado"} metros.`}
+          >
             {/* Barra de fondo */}
             <rect x={barraX} y={10} width={barraW} height={H - 20} rx={4} className="fill-gauge-bg dark:fill-border-dark" />
 
