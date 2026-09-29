@@ -11,12 +11,20 @@ interface Props {
   alertasSmn: AlertaSmn[];
 }
 
+interface EstadoItem {
+  nombre: string;
+  ok: boolean;
+  detalle: string;
+  manual?: boolean;
+  link?: string;
+}
+
 function estadoFuente(
   nombre: string,
   ts: number | null,
   toleranciaHs: number,
   hoy = Date.now()
-): { nombre: string; ok: boolean; detalle: string } {
+): EstadoItem {
   if (!ts) return { nombre, ok: false, detalle: "sin datos" };
   const hs = (hoy - ts) / 3600000;
   const ok = hs <= toleranciaHs && hs >= 0;
@@ -46,15 +54,23 @@ export default function EstadoFuentes({ observadoSF, pronosticos, viento, avisos
       }, new Date(alertasSmn[0].actualizado).getTime())
     : null;
 
-  const fuentes = [
+  // El SMN activó protección anti-bot (Cloudflare) en su página pública el
+  // 29-sep-2026, y la ingesta automática ya no puede pasarla (ver investigación
+  // de esa fecha). Se sigue intentando solo — si el SMN levanta el bloqueo,
+  // este indicador vuelve a ponerse verde sin tocar código. Mientras tanto no
+  // cuenta como "falla del sistema" en el cartel de arriba (nadie puede
+  // arreglarlo hoy) y se ofrece un link directo para chequearlo a mano.
+  const smn = { ...estadoFuente("SMN — alertas", smnTs, 36, hoy), manual: true, link: "https://www.smn.gob.ar/alertas" };
+
+  const fuentes: EstadoItem[] = [
     estadoFuente("INA — observado", obsTs, 6, hoy),
     estadoFuente("INA — pronóstico", pronoTs, 30, hoy),
-    estadoFuente("SMN — alertas", smnTs, 36, hoy),
+    smn,
     estadoFuente("SHN — avisos", shnTs, 48, hoy),
     estadoFuente("Viento", vientoTs, 12, hoy),
   ];
 
-  const fallos = fuentes.filter((f) => !f.ok);
+  const fallos = fuentes.filter((f) => !f.ok && !f.manual);
 
   return (
     <section className="dashboard-section">
@@ -79,10 +95,22 @@ export default function EstadoFuentes({ observadoSF, pronosticos, viento, avisos
         {fuentes.map((f) => (
           <div key={f.nombre} className="flex items-center justify-between text-sm">
             <span className="text-texto-sec dark:text-gray-400">{f.nombre}</span>
-            <span className={`flex items-center gap-1.5 ${f.ok ? "text-ok" : "text-rojo-alerta font-medium"}`}>
-              <span className={`inline-block w-2 h-2 rounded-full ${f.ok ? "bg-ok" : "bg-rojo-alerta"}`} />
-              {f.detalle}
-            </span>
+            {f.manual && !f.ok ? (
+              <a
+                href={f.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 underline underline-offset-2"
+              >
+                <span className="inline-block w-2 h-2 rounded-full bg-amber-500" />
+                Chequear a mano →
+              </a>
+            ) : (
+              <span className={`flex items-center gap-1.5 ${f.ok ? "text-ok" : "text-rojo-alerta font-medium"}`}>
+                <span className={`inline-block w-2 h-2 rounded-full ${f.ok ? "bg-ok" : "bg-rojo-alerta"}`} />
+                {f.detalle}
+              </span>
+            )}
           </div>
         ))}
       </div>

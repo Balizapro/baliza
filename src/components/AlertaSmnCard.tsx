@@ -49,6 +49,20 @@ export default function AlertaSmnCard({ alertas }: { alertas: AlertaSmn[] }) {
 
   const principal = deHoy ?? ordenadas[0];
 
+  // Si no hay fila de hoy, `principal` cae a la más vieja de la tabla (ver
+  // sort arriba) — puede ser de hace días si la ingesta del SMN está caída
+  // (ver bloqueo Cloudflare, 29-sep-2026). Avisar explícitamente en vez de
+  // mostrar "Nivel verde" como si fuera el estado actual.
+  const diasAtraso = principal
+    ? Math.round(
+        (new Date(`${hoy}T00:00:00Z`).getTime() - new Date(`${principal.fecha}T00:00:00Z`).getTime()) / 86400000
+      )
+    : 0;
+  const desactualizado = principal != null && diasAtraso > 0;
+  const avisoDesactualizado = desactualizado
+    ? `(dato de hace ${diasAtraso === 1 ? "1 día" : `${diasAtraso} días`}, puede estar desactualizado)`
+    : null;
+
   return (
     <section className="dashboard-section">
       <h2 className="seccion-titulo mb-2">
@@ -58,6 +72,9 @@ export default function AlertaSmnCard({ alertas }: { alertas: AlertaSmn[] }) {
       {!principal || principal.max_level < 3 ? (
         <p className="text-sm text-texto-sec dark:text-gray-400">
           Sin alertas vigentes para la zona. Nivel {principal ? "verde" : "sin datos"}.
+          {avisoDesactualizado && (
+            <span className="block font-semibold text-amber-600 dark:text-amber-400">{avisoDesactualizado}</span>
+          )}
         </p>
       ) : (
         <div className="space-y-3">
@@ -69,6 +86,9 @@ export default function AlertaSmnCard({ alertas }: { alertas: AlertaSmn[] }) {
               <p className="text-xs text-texto-sec dark:text-gray-400">
                 {formatearFecha(principal.fecha)}
               </p>
+              {avisoDesactualizado && (
+                <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">{avisoDesactualizado}</p>
+              )}
             </div>
             <div className="text-right">
               {eventosRelevantes(principal).map((e) => (
