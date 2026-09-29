@@ -1019,6 +1019,25 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Salud de fuentes e historial de alertas: visibles para todo usuario
+            logueado (no solo admin) — es la info que evita la confusión del
+            banner cuando pasan dos eventos seguidos, y quien decide el plan
+            del día necesita verla sin ser administrador del sistema. */}
+        {user && (
+          <>
+            <EstadoFuentes
+              observadoSF={sfObs}
+              pronosticos={sfProno ?? []}
+              viento={viento}
+              avisosShn={datos?.avisosShn ?? []}
+              alertasSmn={datos?.alertasSmn ?? []}
+            />
+            <section className="dashboard-section">
+              <HistorialAlertas />
+            </section>
+          </>
+        )}
+
         {/* --- Contenido técnico: solo administradores --- */}
         {user && esAdmin && (
           <>
@@ -1433,20 +1452,6 @@ export default function Dashboard() {
           </>
         )}
 
-        {/* Salud de fuentes: visible para todo usuario logueado */}
-        {user && (
-          <>
-        <EstadoFuentes
-          observadoSF={sfObs}
-          pronosticos={sfProno ?? []}
-          viento={viento}
-          avisosShn={datos?.avisosShn ?? []}
-          alertasSmn={datos?.alertasSmn ?? []}
-        />
-          </>
-        )}
-        {/* --- Fin contenido detallado --- */}
-
         {/* Bitácora y configuración — solo admin */}
         {user && esAdmin && (
           <>
@@ -1460,10 +1465,6 @@ export default function Dashboard() {
                 umbralEval={umbralEval?.valor_m}
                 umbralNR={umbralNR?.valor_m}
               />
-            </section>
-
-            <section className="dashboard-section">
-              <HistorialAlertas />
             </section>
 
             <section className="dashboard-section">
