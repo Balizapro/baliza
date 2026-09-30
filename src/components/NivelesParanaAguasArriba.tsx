@@ -11,7 +11,7 @@ function tendencia(a: Lectura | null, b: Lectura | null): string {
   return d > 0.01 ? "↑" : d < -0.01 ? "↓" : "→";
 }
 
-export default function VistaSemanal({ parana }: { parana: Record<string, Lectura | null> }) {
+export default function NivelesParanaAguasArriba({ parana }: { parana: Record<string, Lectura | null> }) {
   const estaciones = [
     { key: "rosario", nombre: "Rosario" },
     { key: "sanNicolas", nombre: "San Nicolás" },

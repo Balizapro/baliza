@@ -699,9 +699,9 @@ export default function Dashboard() {
           </div>
         </section> */}
 
-        {/* Vista semanal Paraná — oculto temporalmente */}
+        {/* Niveles Paraná aguas arriba — oculto temporalmente */}
         {/* <section className="dashboard-section">
-          <VistaSemanal parana={datos?.parana ?? { rosario: null, sanNicolas: null, zarate: null, campana: null, escobar: null }} />
+          <NivelesParanaAguasArriba parana={datos?.parana ?? { rosario: null, sanNicolas: null, zarate: null, campana: null, escobar: null }} />
         </section> */}
 
         {/* Pronóstico San Fernando */}
