@@ -10,6 +10,7 @@ import {
   type NivelAlerta,
 } from "./logica.ts";
 import { calcularVeredicto, hhmm as hhmmPlan, type PuntoProno } from "./plan_escolar.ts";
+import { anticiparSubida } from "./anticipacion.ts";
 
 interface UmbralRow {
   nombre: string;
@@ -32,7 +33,6 @@ interface PronosticoRow {
 }
 
 const PROPAGACION_LP_A_SF = 2.5;
-const PROPAGACION_BA_A_SF = 1.0;
 const EXTERIORES_GIRO = ["La Plata", "Oyarvide", "Atalaya", "Puerto de Buenos Aires"];
 // "Preparar salida" (roja anticipada) exige subida sostenida, no una sola lectura
 // ruidosa: 4 lecturas seguidas subiendo (ingesta cada 20min => ~60min nominales),
@@ -232,32 +232,48 @@ serve(async (req) => {
       }
     }
 
-    // Preaviso por estaciones exteriores (señales tempranas)
-    const nombresExternas = ["La Plata", "Puerto de Buenos Aires"];
+    // Preaviso por estaciones exteriores (señal temprana de subida): giro real al
+    // alza (no 2 lecturas sueltas) + lag de propagación aprendido por regresión, en
+    // vez del heurístico anterior (2 lecturas + lag hardcodeado por estación).
+    // Reemplazo validado empíricamente (29-sep-2026) contra la crecida real del
+    // 07/08: el lag aprendido en la subida salió idéntico al de la bajada para cada
+    // estación (La Plata 3h, Oyarvide 5h, Atalaya 5h, Bs. Aires 1h), con r² fuerte
+    // en ambas direcciones (0.81–0.98) — ver anticipacion.ts. Solo informativo:
+    // alimenta `preavisos`, no dispara push ni afecta `alertaFinal`.
+    const { data: sfParaSubida } = await supabase
+      .from("lecturas")
+      .select("timestamp, nivel_m")
+      .eq("estacion_id", estaciones.id)
+      .eq("tipo", "observado")
+      .order("timestamp", { ascending: false })
+      .limit(48);
 
-    for (const nombre of nombresExternas) {
-      const { data: extEst } = await supabase
-        .from("estaciones")
-        .select("id")
-        .eq("nombre", nombre)
-        .single();
-
-      if (extEst) {
+    if (sfParaSubida && sfParaSubida.length >= 15) {
+      const exterioresSubida: { nombre: string; lecturas: LecturaRow[] }[] = [];
+      for (const nombre of EXTERIORES_GIRO) {
+        const { data: extEst } = await supabase
+          .from("estaciones")
+          .select("id")
+          .eq("nombre", nombre)
+          .single();
+        if (!extEst) continue;
         const { data: extLect } = await supabase
           .from("lecturas")
           .select("timestamp, nivel_m")
           .eq("estacion_id", extEst.id)
           .eq("tipo", "observado")
           .order("timestamp", { ascending: false })
-          .limit(2);
-
-        if (extLect && extLect.length >= 2) {
-          const diff = (extLect as LecturaRow[])[0].nivel_m - (extLect as LecturaRow[])[1].nivel_m;
-          if (diff > 0.01) {
-            const horas = nombre.includes("Plata") ? PROPAGACION_LP_A_SF : PROPAGACION_BA_A_SF;
-            preavisos.push(`${nombre} viene subiendo — señal temprana, el agua tardaría ~${Math.round(horas)}hs en llegar a San Fernando`);
-          }
+          .limit(48);
+        if (extLect && extLect.length >= 4) {
+          exterioresSubida.push({ nombre, lecturas: extLect as LecturaRow[] });
         }
+      }
+
+      const subida = anticiparSubida(exterioresSubida, sfParaSubida as LecturaRow[], umbralEval);
+      if (subida.giraron && subida.metodo === "exterior") {
+        const r2s = subida.exteriores.filter((e) => e.giro && e.r2 != null).map((e) => e.r2!);
+        const confianzaPct = r2s.length ? Math.round(Math.max(...r2s) * 100) : null;
+        preavisos.push(`${subida.mensaje}${confianzaPct != null ? ` (confianza ${confianzaPct}%)` : ""}`);
       }
     }
 
