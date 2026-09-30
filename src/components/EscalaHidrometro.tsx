@@ -47,9 +47,35 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
     return H - ((val - escalaPiso) / rango) * (H - 20) - 10;
   }
 
-  function escalonColor(e: number): string {
-    const colores = ["#4C7A5E", "#6A9B7E", "#88B89E", "#A6D5BE", "#C99A3D", "#E8823A", "#C0442B"];
-    return colores[(e - 1) % colores.length];
+  function escalonColor(nivelMin: number, nivelMax: number): string {
+    // Antes: color por índice de escalón (e % 7), lo que hacía que el
+    // escalón 8 repitiera el color del escalón 1 aunque estuviera mucho
+    // más cerca de la crecida. Ahora: color por NIVEL REAL, interpolando
+    // rojo (peligro) → ámbar (precaución) → verde (seguro) → ámbar → rojo,
+    // anclado a los umbrales reales — así la progresión de color siempre
+    // refleja el riesgo real, sin importar cuántos escalones haya.
+    const ROJO: [number, number, number] = [169, 50, 29]; // --color-rojo-alerta
+    const AMBAR: [number, number, number] = [139, 78, 10]; // --color-atencion
+    const VERDE: [number, number, number] = [63, 107, 81]; // --color-ok
+    const mezclar = (a: [number, number, number], b: [number, number, number], t: number) => {
+      const tc = Math.max(0, Math.min(1, t));
+      const [r1, g1, b1] = a;
+      const [r2, g2, b2] = b;
+      return `rgb(${Math.round(r1 + (r2 - r1) * tc)}, ${Math.round(g1 + (g2 - g1) * tc)}, ${Math.round(b1 + (b2 - b1) * tc)})`;
+    };
+    const nivelM = (nivelMin + nivelMax) / 2;
+    const bajEvac = umbralBajEvac?.valor_m ?? escalaPiso;
+    const bajAlarma = Math.max(umbralBajAlarma?.valor_m ?? bajEvac + 0.2, bajEvac + 0.01);
+    const evalM = umbralEval?.valor_m ?? umbralMax - 0.2;
+    const noRetorno = Math.max(umbralNR?.valor_m ?? umbralMax, evalM + 0.01);
+    const medioSeguro = (bajAlarma + evalM) / 2;
+
+    if (nivelM <= bajEvac) return mezclar(ROJO, ROJO, 0);
+    if (nivelM <= bajAlarma) return mezclar(ROJO, AMBAR, (nivelM - bajEvac) / (bajAlarma - bajEvac));
+    if (nivelM <= medioSeguro) return mezclar(AMBAR, VERDE, (nivelM - bajAlarma) / Math.max(medioSeguro - bajAlarma, 0.01));
+    if (nivelM <= evalM) return mezclar(VERDE, AMBAR, (nivelM - medioSeguro) / Math.max(evalM - medioSeguro, 0.01));
+    if (nivelM <= noRetorno) return mezclar(AMBAR, ROJO, (nivelM - evalM) / (noRetorno - evalM));
+    return mezclar(ROJO, ROJO, 0);
   }
 
   const nivelColor =
@@ -98,7 +124,7 @@ export default function EscalaHidrometro({ nivelActual, tendencia, timestamp, es
                 width={barraW}
                 height={Math.max(yPos(e.nivel_min_m) - yPos(e.nivel_max_m), 2)}
                 rx={2}
-                fill={escalonColor(e.escalon)}
+                fill={escalonColor(e.nivel_min_m, e.nivel_max_m)}
                 fillOpacity={0.35}
               />
             ))}
