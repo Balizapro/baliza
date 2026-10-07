@@ -124,3 +124,18 @@ export function hhmm(min: number | null): string {
   const m = total % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
+
+// "jue 8" para una fecha YYYY-MM-DD. Se fija a mediodía de Argentina para que el huso
+// horario del navegador no corra el día.
+export function etiquetaDiaSemana(fecha: string): string {
+  return new Date(`${fecha}T12:00:00-03:00`)
+    .toLocaleDateString("es-AR", { weekday: "short", day: "numeric", timeZone: "America/Argentina/Buenos_Aires" })
+    .replace(/[.,]/g, "");
+}
+
+// "hoy", "mañana" o "vie 9" para una fecha YYYY-MM-DD.
+export function etiquetaDiaCorta(fecha: string, ahoraMs: number): string {
+  if (fecha === fechaDiaArgentina(new Date(ahoraMs).toISOString())) return "hoy";
+  if (fecha === fechaDiaArgentina(new Date(ahoraMs + 24 * 3600000).toISOString())) return "mañana";
+  return etiquetaDiaSemana(fecha);
+}

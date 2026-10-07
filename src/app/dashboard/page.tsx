@@ -31,6 +31,7 @@ import {
   fechaDiaArgentina,
   enHorarioEscolar,
   calcularTendencia,
+  etiquetaDiaCorta,
   hhmm,
 } from "@/lib/dashboardHelpers";
 import { useDatosBaliza } from "@/lib/useDatosBaliza";
@@ -85,6 +86,16 @@ export default function Dashboard() {
   // (propagación ~2.5hs) para estimar cuánto resta de la subida/bajada actual.
   // `ahora` fuerza recálculo periódico para que las horas se actualicen solas.
   const ahora = useAhora();
+
+  // Alerta roja por el plan escolar de un día futuro: el backend dice cuál (plan_dia_afectado).
+  // Si no es hoy, el banner lo aclara ("Alerta para vie 9") en vez de decir "Alerta roja /
+  // Preparar salida", que se leía como una orden para hoy (7-oct-2026).
+  const planDiaAfectado =
+    typeof alerta?.disparadores_json?.plan_dia_afectado === "string" ? alerta.disparadores_json.plan_dia_afectado : null;
+  const planFuturo =
+    alertaNivel === "roja" && planDiaAfectado && planDiaAfectado !== fechaDiaArgentina(new Date(ahora).toISOString())
+      ? etiquetaDiaCorta(planDiaAfectado, ahora)
+      : null;
 
   const {
     cuentaRegresiva,
@@ -225,7 +236,7 @@ export default function Dashboard() {
             </div>
             <div className="rb-cuerpo">
               <p className="rb-etiqueta">
-                {alertaNivel === "roja" ? "Alerta roja" : alertaNivel === "evacuacion" ? "Evacuación" : alertaNivel === "amarilla" ? "Atención" : alertaNivel === "azul" ? "Bajante" : "Normal"}
+                {alertaNivel === "roja" ? (planFuturo ? `Alerta para ${planFuturo}` : "Alerta roja") : alertaNivel === "evacuacion" ? "Evacuación" : alertaNivel === "amarilla" ? "Atención" : alertaNivel === "azul" ? "Bajante" : "Normal"}
               </p>
               <h1 className="recomendacion-titulo">
                 {alerta?.mensaje?.split("| Preaviso:")[0]?.trim() ?? "Sin datos — esperando primera ingesta"}
@@ -481,7 +492,9 @@ export default function Dashboard() {
                     {alertaNivel === "evacuacion"
                       ? "Evacuar ahora — alejarse de la zona de riesgo"
                       : alertaNivel === "roja"
-                        ? "Preparar salida — no esperar a último momento"
+                        ? planFuturo
+                          ? `Hoy el plan sigue normal — preparate para ${planFuturo} (mirá "Próximos días")`
+                          : "Preparar salida — no esperar a último momento"
                         : alertaNivel === "amarilla"
                           ? "Vigilar de cerca — crecida a la vista"
                           : "Cuidado con la bajante"}
@@ -518,7 +531,7 @@ export default function Dashboard() {
                   ? futuros.reduce((m, p) => (p.valor_m > m.valor_m ? p : m), futuros[0])
                   : null;
                 const etiquetaNivel =
-                  alertaNivel === "roja" ? "ALERTA ROJA" :
+                  alertaNivel === "roja" ? (planFuturo ? `ALERTA PARA ${planFuturo.toUpperCase()}` : "ALERTA ROJA") :
                   alertaNivel === "evacuacion" ? "EVACUACIÓN" :
                   alertaNivel === "amarilla" ? "ATENCIÓN" :
                   alertaNivel === "azul" ? "BAJANTE" : "NIVEL NORMAL";
@@ -543,6 +556,7 @@ export default function Dashboard() {
             profundizar — este es el chequeo rápido de todos los días. */}
         <PlanDelDia
           veredicto={muelleAcceso.veredictoHoy}
+          proximos={muelleAcceso.veredictosProximos}
           nivelSeguroM={nivelSeguroM}
           hayDetalleTecnico={muelleAcceso.picoNoAccesible != null}
           onVerDetalle={() => document.getElementById("plan-detallado")?.scrollIntoView({ behavior: "smooth", block: "start" })}

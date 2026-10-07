@@ -9,7 +9,8 @@ import {
   subeSostenido,
   type NivelAlerta,
 } from "./logica.ts";
-import { calcularVeredicto, hhmm as hhmmPlan, type PuntoProno } from "./plan_escolar.ts";
+import { calcularVeredicto, hhmm as hhmmPlan, type PuntoProno, type VeredictoDia } from "./plan_escolar.ts";
+import { decidirEscaladaPronostico } from "./pronostico_banner.ts";
 import { anticiparSubida } from "./anticipacion.ts";
 
 interface UmbralRow {
@@ -93,6 +94,91 @@ function preavisosPronostico(
   }
 
   return { preavisos, severo };
+}
+
+// Datos que necesita calcularVeredicto. Se cargan UNA vez por corrida y los comparten el
+// banner (escalada por pronóstico) y los avisos push del veredicto escolar, así no
+// pueden contradecirse entre sí.
+interface ContextoVeredicto {
+  diasSinClases: string[];
+  nivelSeguroM: number;
+  pronosTodos: PuntoProno[];
+  shnObservado: { timestamp: string; nivel_m: number }[];
+  vecinas: { nombre: string; lecturas: { timestamp: string; nivel_m: number }[] }[];
+}
+
+// deno-lint-ignore no-explicit-any
+async function cargarContextoVeredicto(supabase: any, estacionId: string): Promise<ContextoVeredicto | null> {
+  const { data: diasRaw } = await supabase.from("dias_sin_clases").select("fecha");
+  const diasSinClases = ((diasRaw as { fecha: string }[] | null) ?? []).map((d) => d.fecha);
+
+  const { data: cfgSeguro } = await supabase
+    .from("configuracion")
+    .select("valor")
+    .eq("clave", "poseidon_acceso_seco_m")
+    .maybeSingle();
+  const nivelSeguroM = cfgSeguro ? parseFloat((cfgSeguro as ConfigRow).valor) || 2.25 : 2.25;
+
+  // Todos los qualifiers (main + bandas) para los próximos 4 días
+  const { data: pronosTodos } = await supabase
+    .from("pronosticos")
+    .select("timestamp, valor_m, qualifier")
+    .eq("estacion_id", estacionId)
+    .gte("timestamp", new Date(Date.now()).toISOString())
+    .lte("timestamp", new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString());
+  if (!pronosTodos || (pronosTodos as PuntoProno[]).length === 0) return null;
+
+  // Lecturas observadas recientes de SF para corregir el sesgo en vivo
+  // (el SHN horario se actualiza cada hora a las .45; si viene por encima
+  // del INA, el veredicto se ajusta hacia arriba de inmediato).
+  const { data: obsRaw } = await supabase
+    .from("lecturas")
+    .select("timestamp, nivel_m")
+    .eq("estacion_id", estacionId)
+    .eq("tipo", "observado")
+    .order("timestamp", { ascending: true })
+    .limit(12);
+  const shnObservado = ((obsRaw as { timestamp: string; nivel_m: number }[] | null) ?? []).map((l) => ({
+    timestamp: l.timestamp,
+    nivel_m: Number(l.nivel_m),
+  }));
+
+  // Señal de crecida en camino: últimas lecturas de estaciones vecinas
+  // (Bs As y La Plata). Si suben fuerte ahora, la misma ola llega a SF
+  // después → el veredicto suma un margen de seguridad.
+  const vecinas: ContextoVeredicto["vecinas"] = [];
+  for (const nombre of ["Puerto de Buenos Aires", "La Plata"]) {
+    const { data: vecEst } = await supabase.from("estaciones").select("id").eq("nombre", nombre).single();
+    if (!vecEst) continue;
+    const { data: vecLect } = await supabase
+      .from("lecturas")
+      .select("timestamp, nivel_m")
+      .eq("estacion_id", vecEst.id)
+      .eq("tipo", "observado")
+      .order("timestamp", { ascending: true })
+      .limit(12);
+    if (vecLect && (vecLect as { timestamp: string; nivel_m: number }[]).length > 0) {
+      vecinas.push({
+        nombre,
+        lecturas: (vecLect as { timestamp: string; nivel_m: number }[]).map((l) => ({
+          timestamp: l.timestamp,
+          nivel_m: Number(l.nivel_m),
+        })),
+      });
+    }
+  }
+
+  return { diasSinClases, nivelSeguroM, pronosTodos: pronosTodos as PuntoProno[], shnObservado, vecinas };
+}
+
+// Hoy y los siguientes (n-1) días, como YYYY-MM-DD en hora argentina.
+function fechasProximas(n: number): string[] {
+  const fechas: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const f = new Date(Date.now() + i * 24 * 60 * 60 * 1000).toLocaleDateString("en-CA", { timeZone: TZ });
+    if (!fechas.includes(f)) fechas.push(f);
+  }
+  return fechas;
 }
 
 serve(async (req) => {
@@ -198,7 +284,7 @@ serve(async (req) => {
       .eq("estacion_id", estaciones.id)
       .eq("qualifier", "main")
       .gte("timestamp", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
-      .lte("timestamp", new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString())
+      .lte("timestamp", new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString())
       .order("timestamp", { ascending: true });
 
     const preavisos: string[] = [];
@@ -335,15 +421,55 @@ serve(async (req) => {
     // Prioridad (de mayor a menor, ya resuelta por calcularVentana salvo lo agregado):
     // evacuación/azul por bajante > roja por no-retorno o subida sostenida > roja por
     // pronóstico > amarilla por preaviso severo (bajante) > lo que devolvió calcularVentana.
-    const elevablePorPronostico = alerta === "verde" || alerta === "amarilla";
-    const rojaPorPronostico = elevablePorPronostico && picoProno != null && picoProno.valor_m > umbralProno;
-    const elevadoPorPronostico = !rojaPorPronostico && alerta === "verde" && preavisosProno.severo;
+    //
+    // El pronóstico NO escala por altura sola: se ancla al plan escolar. Se avisa con toda la
+    // anticipación que da el pronóstico (hoy ~4 días), pero el rojo exige que el plan de algún
+    // día de clases dé "no ir" o "salida temprana", y siempre se dice qué día y por qué.
+    // Un pico alto que no toca las clases queda como "Atención" informativa (ver
+    // pronostico_banner.ts). Antes se ponía rojo apenas el pico pasaba el umbral, aunque el
+    // "Plan de hoy" dijera "Día normal" (7-oct-2026).
+    //
+    // El veredicto escolar se calcula acá una sola vez y lo reusan los avisos push del final.
+    let ctxVeredicto: ContextoVeredicto | null = null;
+    let veredictosDias: VeredictoDia[] = [];
+    try {
+      ctxVeredicto = await cargarContextoVeredicto(supabase, estaciones.id);
+      if (ctxVeredicto) {
+        const c = ctxVeredicto;
+        veredictosDias = fechasProximas(4).map((fecha) =>
+          calcularVeredicto(c.pronosTodos, fecha, c.nivelSeguroM, c.diasSinClases, {
+            shnObservado: c.shnObservado,
+            vecinas: c.vecinas,
+          })
+        );
+      }
+    } catch (verdictErr) {
+      console.error("[evaluar-alerta] veredicto escolar: error al calcular", verdictErr);
+    }
+
+    const escalada = decidirEscaladaPronostico({
+      alerta,
+      veredictos: veredictosDias,
+      pronosMain: futurosProno,
+      picoProno,
+      umbralProno,
+      nivelSeguroM: ctxVeredicto?.nivelSeguroM ?? 2.25,
+      diasSinClases: ctxVeredicto?.diasSinClases ?? [],
+      ahoraMs: Date.now(),
+    });
+    const rojaPorPlan = escalada.nivel === "roja";
+    const amarillaPorPronostico = escalada.nivel === "amarilla";
+    // Escalada por pronóstico (roja por plan, o pico sobre el umbral): no manda push por esta
+    // vía; los avisos de "no ir" / "salida temprana" salen por el veredicto escolar, una vez
+    // por día. Es el mismo criterio que antes tenía rojaPorPronostico.
+    const escaladaPorPronostico = rojaPorPlan || escalada.sobreUmbral;
+    const elevadoPorPronostico = !escaladaPorPronostico && alerta === "verde" && preavisosProno.severo;
 
     let alertaFinal: NivelAlerta = alerta;
     let mensajeBase = mensaje;
-    if (rojaPorPronostico) {
-      alertaFinal = "roja";
-      mensajeBase = `Preparar salida — pronóstico anticipa ${picoProno!.valor_m.toFixed(2)}m en San Fernando (supera ${umbralProno.toFixed(2)}m)`;
+    if (rojaPorPlan || amarillaPorPronostico) {
+      alertaFinal = escalada.nivel as NivelAlerta;
+      mensajeBase = escalada.mensaje!;
     } else if (elevadoPorPronostico) {
       alertaFinal = "amarilla";
       // Si se elevó por el pronóstico, el mensaje principal no debe decir "Todo normal":
@@ -371,7 +497,10 @@ serve(async (req) => {
         tendencia_shn: tendenciaSHN,
         pico_pronostico_m: picoProno?.valor_m ?? null,
         record_pronostico: recordProno,
-        roja_por_pronostico: rojaPorPronostico,
+        roja_por_plan: rojaPorPlan,
+        plan_dia_afectado: escalada.diaAfectado,
+        pronostico_amarilla: amarillaPorPronostico,
+        veredictos_dias: veredictosDias.map((v) => ({ fecha: v.fecha, estado: v.estado, escolar: v.esDiaEscolar })),
         preavisos,
       },
     };
@@ -406,11 +535,10 @@ serve(async (req) => {
       }
     }
 
-// La escalada a roja por pronóstico es nueva (antes solo pintaba el banner en el
-// frontend): todavía no mandamos push por este camino hasta ver en producción que
-// no da falsos positivos. El resto de las rojas (crítico, subida sostenida) sí
-// notifican, igual que antes.
-if ((empeoro || recordProno) && !rojaPorPronostico) {
+// La escalada por pronóstico no manda push por este camino (los avisos de "no ir" /
+// "salida temprana" salen por el veredicto escolar, abajo, una vez por día). El resto de
+// las rojas (crítico, subida sostenida) sí notifican, igual que antes.
+if ((empeoro || recordProno) && !escaladaPorPronostico) {
       const titulo =
         alertaFinal === "evacuacion"
           ? "Baliza — EVACUACIÓN"
@@ -634,131 +762,49 @@ if ((empeoro || recordProno) && !rojaPorPronostico) {
       }
     }
 
-    // Veredicto escolar del día (puntos 1-4): con el pronóstico INA más
-    // reciente, decide si mañana/el próximo día hábil se puede ir a la escuela
-    // (8:00), volver (14:15) o hay que salir temprano, y notifica por push una
-    // vez por día cuando el plan NO es normal (dedup por fechaclave).
+    // Avisos push del veredicto escolar (puntos 1-4): usa el MISMO veredicto que ya se
+    // calculó arriba para el banner (hoy + 3 días, con el pronóstico INA más reciente) y
+    // notifica por push una vez por día cuando el plan NO es normal (dedup por fecha+estado).
     try {
-      const { data: diasRaw } = await supabase
-        .from("dias_sin_clases")
-        .select("fecha");
-      const diasSinClases = ((diasRaw as { fecha: string }[] | null) ?? []).map((d) => d.fecha);
+      const nivelSeguroM = ctxVeredicto?.nivelSeguroM ?? 2.25;
+      for (const v of veredictosDias) {
+        if (!v.esDiaEscolar || v.estado === "normal" || v.estado === "sin_datos") continue;
 
-      const { data: cfgSeguro } = await supabase
-        .from("configuracion")
-        .select("valor")
-        .eq("clave", "poseidon_acceso_seco_m")
-        .maybeSingle();
-      const nivelSeguroM = cfgSeguro ? parseFloat((cfgSeguro as ConfigRow).valor) || 2.25 : 2.25;
+        const claveVeredicto = `veredicto_escolar_${v.fecha}_${v.estado}`;
+        const { data: yaNotif } = await supabase
+          .from("configuracion")
+          .select("valor")
+          .eq("clave", claveVeredicto)
+          .maybeSingle();
 
-      // Todos los qualifiers (main + bandas) para los próximos 4 días
-      const { data: pronosTodos } = await supabase
-        .from("pronosticos")
-        .select("timestamp, valor_m, qualifier")
-        .eq("estacion_id", estaciones.id)
-        .gte("timestamp", new Date(Date.now()).toISOString())
-        .lte("timestamp", new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString());
-
-      if (pronosTodos && (pronosTodos as PuntoProno[]).length > 0) {
-        // Lecturas observadas recientes de SF para corregir el sesgo en vivo
-        // (el SHN horario se actualiza cada hora a las .45; si viene por encima
-        // del INA, el veredicto se ajusta hacia arriba de inmediato).
-        const { data: obsRaw } = await supabase
-          .from("lecturas")
-          .select("timestamp, nivel_m")
-          .eq("estacion_id", estaciones.id)
-          .eq("tipo", "observado")
-          .order("timestamp", { ascending: true })
-          .limit(12);
-        const shnObservado = ((obsRaw as { timestamp: string; nivel_m: number }[] | null) ?? []).map((l) => ({
-          timestamp: l.timestamp,
-          nivel_m: Number(l.nivel_m),
-        }));
-
-        // Señal de crecida en camino: últimas lecturas de estaciones vecinas
-        // (Bs As y La Plata). Si suben fuerte ahora, la misma ola llega a SF
-        // después → el veredicto suma un margen de seguridad.
-        const vecinas: { nombre: string; lecturas: { timestamp: string; nivel_m: number }[] }[] = [];
-        for (const nombre of ["Puerto de Buenos Aires", "La Plata"]) {
-          const { data: vecEst } = await supabase
-            .from("estaciones")
-            .select("id")
-            .eq("nombre", nombre)
-            .single();
-          if (vecEst) {
-            const { data: vecLect } = await supabase
-              .from("lecturas")
-              .select("timestamp, nivel_m")
-              .eq("estacion_id", vecEst.id)
-              .eq("tipo", "observado")
-              .order("timestamp", { ascending: true })
-              .limit(12);
-            if (vecLect && (vecLect as { timestamp: string; nivel_m: number }[]).length > 0) {
-              vecinas.push({
-                nombre,
-                lecturas: (vecLect as { timestamp: string; nivel_m: number }[]).map((l) => ({
-                  timestamp: l.timestamp,
-                  nivel_m: Number(l.nivel_m),
-                })),
-              });
-            }
-          }
-        }
-
-        // Próximos días a evaluar: hoy y los siguientes 3 días
-        const fechas: string[] = [];
-        for (let i = 0; i < 4; i++) {
-          const d = new Date(Date.now() + i * 24 * 60 * 60 * 1000);
-          const f = d.toLocaleDateString("en-CA", { timeZone: TZ });
-          if (!fechas.includes(f)) fechas.push(f);
-        }
-
-        for (const fecha of fechas) {
-          const v = calcularVeredicto(
-            pronosTodos as PuntoProno[],
-            fecha,
-            nivelSeguroM,
-            diasSinClases,
-            { shnObservado, vecinas }
+        if (!yaNotif) {
+          await supabase.from("configuracion").upsert(
+            { clave: claveVeredicto, valor: "1" },
+            { onConflict: "clave" }
           );
-          if (!v.esDiaEscolar || v.estado === "normal" || v.estado === "sin_datos") continue;
-
-          const claveVeredicto = `veredicto_escolar_${v.fecha}_${v.estado}`;
-          const { data: yaNotif } = await supabase
-            .from("configuracion")
-            .select("valor")
-            .eq("clave", claveVeredicto)
-            .maybeSingle();
-
-          if (!yaNotif) {
-            await supabase.from("configuracion").upsert(
-              { clave: claveVeredicto, valor: "1" },
-              { onConflict: "clave" }
+          const tituloV =
+            v.estado === "no_clases"
+              ? "Baliza — No ir a la escuela"
+              : "Baliza — Salida temprana de la escuela";
+          const cuerpoV =
+            v.estado === "no_clases"
+              ? `El ${v.fecha} a las 8:00 el agua estaría en ${v.entrada.main?.toFixed(2)}m — no se puede embarcar (límite ${nivelSeguroM.toFixed(2)}m).`
+              : `Se puede entrar a las 8 (${v.entrada.main?.toFixed(2)}m) pero hay que volver antes de las ${hhmmPlan(v.salidaLimiteMin)} — a las 14:15 estaría en ${v.vuelta.main?.toFixed(2)}m.`;
+          try {
+            await fetch(
+              `${Deno.env.get("SUPABASE_URL")}/functions/v1/enviar-notificacion`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") ?? ""}`,
+                  "x-notificacion-secret": Deno.env.get("NOTIFICACION_SECRET") ?? "",
+                },
+                body: JSON.stringify({ titulo: tituloV, cuerpo: cuerpoV, url: "/dashboard" }),
+              }
             );
-            const tituloV =
-              v.estado === "no_clases"
-                ? "Baliza — No ir a la escuela"
-                : "Baliza — Salida temprana de la escuela";
-            const cuerpoV =
-              v.estado === "no_clases"
-                ? `El ${v.fecha} a las 8:00 el agua estaría en ${v.entrada.main?.toFixed(2)}m — no se puede embarcar (límite ${nivelSeguroM.toFixed(2)}m).`
-                : `Se puede entrar a las 8 (${v.entrada.main?.toFixed(2)}m) pero hay que volver antes de las ${hhmmPlan(v.salidaLimiteMin)} — a las 14:15 estaría en ${v.vuelta.main?.toFixed(2)}m.`;
-            try {
-              await fetch(
-                `${Deno.env.get("SUPABASE_URL")}/functions/v1/enviar-notificacion`,
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") ?? ""}`,
-                    "x-notificacion-secret": Deno.env.get("NOTIFICACION_SECRET") ?? "",
-                  },
-                  body: JSON.stringify({ titulo: tituloV, cuerpo: cuerpoV, url: "/dashboard" }),
-                }
-              );
-            } catch (verErr) {
-              console.error("[evaluar-alerta] veredicto escolar: error notif", verErr);
-            }
+          } catch (verErr) {
+            console.error("[evaluar-alerta] veredicto escolar: error notif", verErr);
           }
         }
       }

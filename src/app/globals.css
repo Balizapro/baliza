@@ -860,3 +860,19 @@ html {
   border-color: color-mix(in srgb, currentColor 25%, transparent);
   color: var(--texto-sec, #6b7280);
 }
+
+/* Plan de hoy: fila "próximos días" */
+.pdh-proximos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  font-size: 13px;
+}
+.pdh-prox-dia {
+  font-weight: 700;
+  text-transform: capitalize;
+}

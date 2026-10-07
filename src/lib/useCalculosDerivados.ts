@@ -182,7 +182,21 @@ export function useCalculosDerivados({
       ? calcularVeredicto(sfProno ?? [], hoyStr, nivelSeguroM, diasSinClases, fuentesPlan, "estricto")
       : null;
 
-    return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible, veredicto, veredictoSuave, veredictoModelo, veredictoHoy };
+    // Veredicto de los próximos 3 días (mismo modo "estricto"). Es lo que permite que el
+    // "Plan de hoy" responda también "¿y el viernes?" y no parezca contradecir al banner
+    // cuando hay una crecida pronosticada a varios días (7-oct-2026).
+    const veredictosProximos: { fecha: string; veredicto: ReturnType<typeof calcularVeredicto> }[] = [];
+    for (let i = 1; i <= 3; i++) {
+      const f = fechaDiaArgentina(new Date(ahora + i * 24 * 60 * 60 * 1000).toISOString());
+      if (f && !veredictosProximos.some((v) => v.fecha === f) && f !== hoyStr) {
+        veredictosProximos.push({
+          fecha: f,
+          veredicto: calcularVeredicto(sfProno ?? [], f, nivelSeguroM, diasSinClases, fuentesPlan, "estricto"),
+        });
+      }
+    }
+
+    return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible, veredicto, veredictoSuave, veredictoModelo, veredictoHoy, veredictosProximos };
   }, [sfObs, sfProno, nivelSeguroM, ahora, diasSinClases, curvaModelo, shnAlturas, historial, exterioresLecturas]);
 
   const ciclo = useMemo(

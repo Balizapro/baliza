@@ -1,0 +1,60 @@
+name: Desplegar evaluar-alerta (Supabase)
+
+# Despliega la Edge Function evaluar-alerta a producción cada vez que cambia su código
+# en main, así no hay que pegar archivos a mano en el editor de Supabase.
+#
+# Seguridad:
+#  - Antes de desplegar corre los tests de la función; si fallan, NO se despliega.
+#  - Mantiene la configuración actual de la función: hoy NO exige token de entrada
+#    (la llaman pg_cron y las funciones de ingesta sin autorización), por eso lleva
+#    --no-verify-jwt. Sin ese flag el cron de cada 5 minutos dejaría de funcionar.
+#  - La clave de Supabase vive solo en el secreto SUPABASE_ACCESS_TOKEN de GitHub.
+#
+# Uso manual: pestaña Actions > "Desplegar evaluar-alerta (Supabase)" > Run workflow.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/functions/evaluar-alerta/**"
+      - ".github/workflows/deploy-evaluar-alerta.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-evaluar-alerta
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar que existe el secreto de Supabase
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::Falta el secreto SUPABASE_ACCESS_TOKEN (GitHub > Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tests de la función (si fallan, no se despliega)
+        env:
+          TZ: America/Argentina/Buenos_Aires
+        run: >
+          node --experimental-strip-types --test
+          supabase/functions/evaluar-alerta/logica.test.ts
+          supabase/functions/evaluar-alerta/pronostico_banner.test.ts
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Desplegar evaluar-alerta
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy evaluar-alerta --project-ref tcgzpcfhwytrrhfxtkmt --no-verify-jwt
