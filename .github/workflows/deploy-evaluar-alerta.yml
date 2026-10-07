@@ -54,8 +54,10 @@ jobs:
         with:
           version: latest
 
-      # Chequeo previo: la clave tiene que pertenecer a la cuenta dueña del proyecto de Baliza.
-      # No se imprime la lista de proyectos (los logs de un repo público los puede leer cualquiera).
+      # Chequeo previo: si la clave puede listar proyectos, tiene que ver el de Baliza (si no, es
+      # de otra cuenta). Una clave de alcance limitado (lo más seguro) puede no poder listar:
+      # en ese caso solo avisa y deja que el deploy decida. No se imprime la lista de proyectos
+      # (los logs de un repo público los puede leer cualquiera).
       - name: Verificar que la clave ve el proyecto de Baliza
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -65,10 +67,8 @@ jobs:
           estado=$?
           if [ $estado -ne 0 ]; then
             detalle=$(tail -c 800 proyectos.log | tr '\r\n' '  ' | sed 's/%/%25/g')
-            echo "::error title=La clave de Supabase no funciona::Supabase la rechazó (mal copiada, vencida o revocada). Respuesta: $detalle"
-            exit 1
-          fi
-          if ! grep -q "tcgzpcfhwytrrhfxtkmt" proyectos.log; then
+            echo "::warning title=No se pudo listar proyectos (normal con una clave de alcance limitado)::$detalle"
+          elif ! grep -q "tcgzpcfhwytrrhfxtkmt" proyectos.log; then
             echo "::error title=La clave no ve el proyecto de Baliza::La clave funciona pero fue creada con OTRA cuenta de Supabase. Generala con la cuenta dueña de Baliza (supabase.com/dashboard/account/tokens) y reemplazá el secreto SUPABASE_ACCESS_TOKEN en GitHub."
             exit 1
           fi
