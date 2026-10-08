@@ -478,24 +478,39 @@ test("a 2 días el ajuste ya no cuenta: el mismo +0.30m medido hoy NO convierte 
   assert.equal(v.estado, "normal");
 });
 
-test("lo que NO es sesgo se mantiene a cualquier distancia: la banda alta del INA sigue pudiendo dar 'no ir'", () => {
+test("la banda de error del INA NO decide: central 2.17m con banda hasta 2.40m => 'normal', y el rango se aclara", () => {
   const pronos = [
     ...diaART("2026-08-18", MAIN_HORAS),
     ...diaART("2026-08-20", { 8: 2.17, 14: 2.0 }, { p75: 0.23 }), // central 2.17, banda alta 2.40
   ];
   const v = calcularVeredicto(pronos, "2026-08-20", 2.25, [], { shnObservado: OBS_SESGO });
-  assert.ok(v.entrada.efectivo_m != null && Math.abs(v.entrada.efectivo_m - 2.4) < 1e-9, `${v.entrada.efectivo_m}`);
-  assert.equal(v.entrada.fuente, "banda");
-  assert.equal(v.estado, "no_clases");
+  assert.equal(v.estado, "normal");
+  assert.ok(v.entrada.efectivo_m != null && Math.abs(v.entrada.efectivo_m - 2.17) < 1e-9, `${v.entrada.efectivo_m}`);
+  assert.equal(v.entrada.fuente, "ina");
+  assert.ok(v.entrada.p75 != null && Math.abs(v.entrada.p75 - 2.4) < 1e-9, "la banda se sigue informando");
+  assert.match(v.explicacion, /queda dentro del rango habitual del INA \(hasta 2\.40m\)/);
+  assert.match(v.explicacion, /se decide por el pronóstico central, no por el rango/);
 });
 
-test("el motivo dice de dónde sale el número: central del INA, rango y fuente", () => {
+test("si el pronóstico central ya supera el límite, sí es 'no ir' (por el nivel pronosticado, no por la banda)", () => {
   const pronos = [
     ...diaART("2026-08-18", MAIN_HORAS),
-    ...diaART("2026-08-20", { 8: 2.17, 14: 2.0 }, { p25: -0.22, p75: 0.23 }),
+    ...diaART("2026-08-20", { 8: 2.33, 14: 1.7 }, { p25: -0.12, p75: 0.11 }),
   ];
   const v = calcularVeredicto(pronos, "2026-08-20", 2.25, [], { shnObservado: OBS_SESGO });
-  assert.match(v.motivo, /El INA pronostica 2\.17m \(rango habitual 1\.95–2\.40m\); se toma 2\.40m por la banda alta del INA/);
+  assert.equal(v.estado, "no_clases");
+  assert.ok(v.entrada.efectivo_m != null && Math.abs(v.entrada.efectivo_m - 2.33) < 1e-9, `${v.entrada.efectivo_m}`);
+  assert.equal(v.entrada.fuente, "ina");
+});
+
+test("el motivo dice qué pronostica el INA y su rango; 'se toma' solo aparece si otra fuente lo subió", () => {
+  const pronos = [
+    ...diaART("2026-08-18", MAIN_HORAS),
+    ...diaART("2026-08-20", { 8: 2.33, 14: 1.7 }, { p25: -0.12, p75: 0.11 }),
+  ];
+  const v = calcularVeredicto(pronos, "2026-08-20", 2.25, [], { shnObservado: OBS_SESGO });
+  assert.match(v.motivo, /El INA pronostica 2\.33m \(rango habitual 2\.21–2\.44m\)\./);
+  assert.doesNotMatch(v.motivo, /se toma/);
   const hoy = calcularVeredicto(
     diaART("2026-08-18", { ...MAIN_HORAS, 10: 2.1 }),
     "2026-08-18", 2.25, [], { shnObservado: OBS_SESGO }
@@ -508,26 +523,6 @@ test("si el INA y lo que se usa coinciden, el motivo no agrega explicaciones de 
   const v = calcularVeredicto(pronos, "2026-08-18", 2.25, []);
   assert.equal(v.estado, "no_clases");
   assert.doesNotMatch(v.motivo, /se toma/);
-});
-
-test("el motivo se parte en frase corta (titular) y explicación (letra chica), sin perder texto", () => {
-  const pronos = [
-    ...diaART("2026-08-18", MAIN_HORAS),
-    ...diaART("2026-08-20", { 8: 2.17, 14: 2.0 }, { p25: -0.22, p75: 0.23 }),
-  ];
-  const v = calcularVeredicto(pronos, "2026-08-20", 2.25, [], { shnObservado: OBS_SESGO });
-  assert.equal(v.estado, "no_clases");
-  assert.equal(v.motivo, `${v.motivo_corto}${v.explicacion ? " " + v.explicacion : ""}`);
-  assert.match(v.motivo_corto, /^A las 8 el agua estaría en 2\.40m — sobre el nivel seguro \(2\.25m\): NO se puede cruzar en lancha\.$/);
-  assert.doesNotMatch(v.motivo_corto, /se toma|INA pronostica/);
-  assert.match(v.explicacion, /^El INA pronostica 2\.17m \(rango habitual 1\.95–2\.40m\); se toma 2\.40m por la banda alta del INA/);
-});
-
-test("sin nada que explicar, la explicación queda vacía", () => {
-  const pronos = diaART("2026-08-18", { 7: 2.3, 8: 2.4, 14: 2.4 }, { p25: -0.02, p75: 0 });
-  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, []);
-  assert.equal(v.explicacion, "");
-  assert.equal(v.motivo, v.motivo_corto);
 });
 
 // ── El aviso oficial por crecida del SHN entra al veredicto (7-oct-2026) ─────────────────
@@ -545,6 +540,25 @@ const avisoSF = (altura_m: number, hora: string, fecha = "21/08/2026", tipo = "a
   alturas: [{ puerto: "SAN FERNANDO", altura_m, hora, fecha }],
 });
 const INA_NORMAL = { 8: 2.0, 9: 2.0, 12: 2.0, 14: 2.0, 15: 2.0 };
+
+test("el motivo se parte en frase corta (titular) y explicación (letra chica), sin perder texto", () => {
+  const pronos = diaART("2026-08-20", { 8: 2.0, 14: 2.0 }, { p25: -0.05, p75: 0.05 });
+  const v = calcularVeredicto(pronos, "2026-08-20", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoSF(2.6, "08:30", "20/08/2026")) });
+  assert.equal(v.estado, "no_clases");
+  assert.equal(v.motivo, `${v.motivo_corto}${v.explicacion ? " " + v.explicacion : ""}`);
+  assert.match(v.motivo_corto, /^A las 8 el agua estaría en 2\.60m — sobre el nivel seguro \(2\.25m\): NO se puede cruzar en lancha\.$/);
+  assert.doesNotMatch(v.motivo_corto, /se toma|INA pronostica/);
+  assert.match(v.explicacion, /^El INA pronostica 2\.00m \(rango habitual 1\.95–2\.05m\); se toma 2\.60m por el aviso oficial del SHN/);
+});
+
+test("sin otra fuente que lo suba, la explicación es solo lo que pronostica el INA y su rango", () => {
+  const pronos = diaART("2026-08-18", { 7: 2.3, 8: 2.4, 14: 2.4 }, { p25: -0.02, p75: 0 });
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, []);
+  assert.equal(v.estado, "no_clases");
+  assert.match(v.explicacion, /^El INA pronostica 2\.40m \(rango habitual 2\.38–2\.40m\)\.$/);
+  assert.doesNotMatch(v.explicacion, /se toma/);
+  assert.equal(v.motivo, `${v.motivo_corto} ${v.explicacion}`);
+});
 
 test("puntosAvisoSanFernando: toma solo San Fernando y convierte fecha y hora", () => {
   assert.deepEqual(puntosAvisoSanFernando(AVISO_REAL), [{ fecha: "2026-09-30", min: 11 * 60 + 30, altura_m: 2.25 }]);

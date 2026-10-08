@@ -17,10 +17,11 @@ export type EstadoVeredicto = "normal" | "salida_temprana" | "no_clases" | "sin_
 export type Confianza = "alta" | "media" | "baja";
 
 // Modo de cálculo del nivel efectivo:
-//  - "estricto": peor fuente con todas las penalizaciones (es el valor actual).
-//  - "suave": pronóstico central (INA main, modelo y SHN), sin bandas p75 ni
-//    sesgo en vivo ni margen por crecida; menos conservador, para comparar la
-//    sensibilidad del veredicto a las penalizaciones.
+//  - "estricto": peor fuente con las penalizaciones (sesgo en vivo, crecida en camino, modelo,
+//    SHN y aviso oficial). La banda de error del INA (p25/p75) NO decide: se muestra como rango.
+//  - "suave": pronóstico central (INA main, modelo y SHN), sin sesgo en vivo ni
+//    margen por crecida; menos conservador, para comparar la sensibilidad del
+//    veredicto a las penalizaciones.
 export type ModoPlan = "estricto" | "suave";
 
 export interface PuntoModelo {
@@ -110,7 +111,7 @@ export function pesoSesgo(horasAdelante: number): number {
 }
 
 // De dónde sale el nivel que se usa para decidir (la peor de varias fuentes).
-export type FuenteNivel = "ina" | "sesgo" | "pendiente" | "modelo" | "banda" | "shn" | "aviso";
+export type FuenteNivel = "ina" | "sesgo" | "pendiente" | "modelo" | "shn" | "aviso";
 
 // Aviso oficial por crecida del SHN: altura estimada en San Fernando con día y hora locales.
 export interface PuntoAvisoShn {
@@ -349,7 +350,7 @@ function sesgoEnVivo(pronos: PuntoProno[], observadas: PuntoModelo[]): { valor: 
 }
 
 // Serie del nivel efectivo para todo el día: en cada punto horario se toma el
-// peor (más alto) entre INA main, INA p75, modelo propio, SHN (pleamar/bajamar
+// peor (más alto) entre INA main, modelo propio, aviso del SHN, SHN (pleamar/bajamar
 // bracketed), INA main + sesgo y INA main + margen por crecida en camino.
 function serieEfectiva(
   s: Record<Qualifier, { min: number; valor_m: number }[]>,
@@ -371,7 +372,6 @@ function serieEfectiva(
   if (modo === "estricto") {
     for (const p of s.main) agrega(p.min, p.valor_m + sesgoAt(p.min));
     for (const p of s.main) agrega(p.min, margenPendiente > 0 ? p.valor_m + margenPendiente : null);
-    for (const p of s.p75) agrega(p.min, p.valor_m + sesgoAt(p.min));
     for (const p of serieModelo) agrega(p.min, p.valor_m + sesgoAt(p.min));
   } else {
     for (const p of serieModelo) agrega(p.min, p.valor_m);
@@ -410,7 +410,6 @@ function valorEfectivo(
     if (esNum(main) && sg > 0) candidatos.push({ v: main + sg, f: "sesgo" });
     if (esNum(main) && margenPendiente > 0) candidatos.push({ v: main + margenPendiente, f: "pendiente" });
     if (esNum(modelo)) candidatos.push({ v: modelo, f: "modelo" });
-    if (esNum(p75)) candidatos.push({ v: p75, f: "banda" });
   } else {
     if (esNum(modelo)) candidatos.push({ v: modelo, f: "modelo" });
   }
@@ -531,15 +530,18 @@ export function calcularVeredicto(
   }
 
   const nivel = (h: ValorHora) => (h.efectivo_m != null ? h.efectivo_m : h.main);
-  // ¿Por qué el nivel que se usa es más alto que el pronóstico central del INA? Se dice de
-  // dónde sale el número, para que no parezca un dato inventado.
+  // Qué pronostica el INA y de dónde sale el número que se usa. La banda de error (rango habitual)
+  // se muestra como contexto pero NO decide: la decisión se guía por el nivel pronosticado
+  // (pedido de la escuela, 8-oct-2026). Solo si otra fuente lo subió se aclara cuál.
   const explicaNivel = (h: ValorHora, inicio: string): string => {
-    if (h.main == null || h.efectivo_m == null || h.fuente == null || h.efectivo_m - h.main <= 0.03) return "";
+    if (h.main == null) return "";
     const rango = h.p25 != null && h.p75 != null ? ` (rango habitual ${h.p25.toFixed(2)}–${h.p75.toFixed(2)}m)` : "";
+    if (h.efectivo_m == null || h.fuente == null || h.efectivo_m - h.main <= 0.03) {
+      return ` ${inicio} ${h.main.toFixed(2)}m${rango}.`;
+    }
     const porque: Record<FuenteNivel, string> = {
       ina: "el pronóstico del INA",
       sesgo: `el ajuste en vivo (+${sesgoAt(h.horaMin).toFixed(2)}m: lo medido viene más alto que lo pronosticado)`,
-      banda: "la banda alta del INA (en 1 de cada 4 casos el agua sería más alta)",
       modelo: "el modelo propio de Baliza (marea + viento)",
       shn: "el boletín de mareas del SHN",
       pendiente: "la crecida en camino desde el exterior",
@@ -578,7 +580,15 @@ export function calcularVeredicto(
       break;
     case "normal":
       motivoCorto = `Agua accesible a las 8 (${nivel(entrada)?.toFixed(2)}m) y a las 14:15 (${nivel(vuelta)?.toFixed(2)}m) — rompe el día normal.`;
-      explicacion = pendienteNota;
+      {
+        // Si el límite cae dentro del rango habitual del INA se aclara, pero no se suspende por eso.
+        const dentro = [entrada, vuelta].filter((h) => h.p75 != null && h.p75 > nivelSeguroM);
+        const techo = dentro.length ? Math.max(...dentro.map((h) => h.p75 as number)) : null;
+        explicacion =
+          (esDia && techo != null
+            ? ` El límite (${nivelSeguroM.toFixed(2)}m) queda dentro del rango habitual del INA (hasta ${techo.toFixed(2)}m): se decide por el pronóstico central, no por el rango.`
+            : "") + pendienteNota;
+      }
       break;
     case "sin_datos":
     default:
