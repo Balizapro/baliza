@@ -37,6 +37,9 @@ export interface EscaladaPronostico {
   mensaje: string | null;
   // Fecha (YYYY-MM-DD) del primer día de clases afectado; solo cuando nivel === "roja".
   diaAfectado: string | null;
+  // De dónde sale el número que se usa (el pronóstico del INA, su rango y la fuente más alta).
+  // Va aparte del titular para mostrarse en letra chica; solo cuando nivel === "roja".
+  explicacion: string | null;
   // Hay un pico pronosticado sobre el umbral (a cualquier distancia) y el estado actual
   // todavía es elevable. Se usa para NO mandar push por esta vía: los avisos de "no ir" /
   // "salida temprana" ya salen por el veredicto escolar, con su propio dedup.
@@ -82,7 +85,7 @@ export function decidirEscaladaPronostico(args: {
   ahoraMs: number;
 }): EscaladaPronostico {
   const { alerta, veredictos, pronosMain, picoProno, umbralProno, nivelSeguroM, diasSinClases, ahoraMs } = args;
-  const ninguna: EscaladaPronostico = { nivel: null, mensaje: null, diaAfectado: null, sobreUmbral: false };
+  const ninguna: EscaladaPronostico = { nivel: null, mensaje: null, diaAfectado: null, explicacion: null, sobreUmbral: false };
 
   // Solo se puede subir un estado verde/amarillo; no pisa roja, evacuación ni bajante.
   const elevable = alerta === "verde" || alerta === "amarilla";
@@ -107,14 +110,15 @@ export function decidirEscaladaPronostico(args: {
       primero.estado === "no_clases"
         ? `Alerta — ${dia}: no se podría ir a la escuela`
         : `Alerta — ${dia}: salida temprana`;
-    const motivo = primero.motivo.trim();
+    // El titular lleva la frase corta; la explicación del número va aparte (explicacion).
+    const motivo = (primero.motivo_corto ?? primero.motivo).trim();
     const otros = afectados
       .slice(1)
       .map((v) => `${etiquetaDiaPlan(v.fecha, ahoraMs)} ${v.estado === "no_clases" ? "no ir" : "salida temprana"}`);
     const mensaje =
       `${titulo}. ${motivo}${/[.!]$/.test(motivo) ? "" : "."}` +
       (otros.length > 0 ? ` También: ${otros.join(", ")}.` : "");
-    return { nivel: "roja", mensaje, diaAfectado: primero.fecha, sobreUmbral };
+    return { nivel: "roja", mensaje, diaAfectado: primero.fecha, explicacion: primero.explicacion?.trim() || null, sobreUmbral };
   }
 
   // Crecida pronosticada sobre el umbral que NO toca las clases: amarillo informativo
@@ -146,7 +150,7 @@ export function decidirEscaladaPronostico(args: {
             : ".");
       }
     }
-    return { nivel: "amarilla", mensaje, diaAfectado: null, sobreUmbral };
+    return { nivel: "amarilla", mensaje, diaAfectado: null, explicacion: null, sobreUmbral };
   }
 
   return { ...ninguna, sobreUmbral };

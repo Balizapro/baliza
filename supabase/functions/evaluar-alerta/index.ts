@@ -499,6 +499,7 @@ serve(async (req) => {
         record_pronostico: recordProno,
         roja_por_plan: rojaPorPlan,
         plan_dia_afectado: escalada.diaAfectado,
+        plan_explicacion: escalada.explicacion,
         pronostico_amarilla: amarillaPorPronostico,
         veredictos_dias: veredictosDias.map((v) => ({ fecha: v.fecha, estado: v.estado, escolar: v.esDiaEscolar })),
         preavisos,

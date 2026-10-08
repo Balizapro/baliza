@@ -92,6 +92,10 @@ export default function Dashboard() {
   // Preparar salida", que se leía como una orden para hoy (7-oct-2026).
   const planDiaAfectado =
     typeof alerta?.disparadores_json?.plan_dia_afectado === "string" ? alerta.disparadores_json.plan_dia_afectado : null;
+  const planExplicacion =
+    alertaNivel === "roja" && typeof alerta?.disparadores_json?.plan_explicacion === "string"
+      ? alerta.disparadores_json.plan_explicacion
+      : null;
   const planFuturo =
     alertaNivel === "roja" && planDiaAfectado && planDiaAfectado !== fechaDiaArgentina(new Date(ahora).toISOString())
       ? etiquetaDiaCorta(planDiaAfectado, ahora)
@@ -241,6 +245,7 @@ export default function Dashboard() {
               <h1 className="recomendacion-titulo">
                 {alerta?.mensaje?.split("| Preaviso:")[0]?.trim() ?? "Sin datos — esperando primera ingesta"}
               </h1>
+              {planExplicacion && <p className="rb-explicacion">{planExplicacion}</p>}
               <p className="recomendacion-subtexto">
                 {sfObs?.nivel_m != null
                   ? (() => {
@@ -385,7 +390,10 @@ export default function Dashboard() {
                             })()}
                             {v.estado === "no_clases" && (
                               <div className="rb-plan-limit">
-                                🚫 El muelle no vuelve a bajar de {nivelSeguroM.toFixed(2)}m ese día a la tarde
+                                {v.entrada.efectivo_m != null && v.entrada.efectivo_m > nivelSeguroM &&
+                                v.vuelta.efectivo_m != null && v.vuelta.efectivo_m <= nivelSeguroM
+                                  ? `🌊 Más tarde el agua baja: a las 14:15 estaría en ${v.vuelta.efectivo_m.toFixed(2)}m. El problema es solo la entrada de la mañana.`
+                                  : `🚫 El muelle no vuelve a bajar de ${nivelSeguroM.toFixed(2)}m ese día a la tarde`}
                               </div>
                             )}
                             <p className="rb-plan-motivo">{v.motivo}</p>

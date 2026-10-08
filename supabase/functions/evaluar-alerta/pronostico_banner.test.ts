@@ -215,3 +215,28 @@ test("integración: viernes 08:00 a 2.40m => el plan da 'no_clases' y el banner 
   assert.equal(r.diaAfectado, "2026-10-09");
   assert.match(r.mensaje!, /^Alerta — vie 9: no se podría ir a la escuela/);
 });
+
+test("el titular rojo usa la frase corta; la explicación del número va aparte", () => {
+  const conDetalle = {
+    ...v("2026-10-09", "no_clases", true, "FRASE CORTA. DETALLE LARGO."),
+    motivo_corto: "FRASE CORTA.",
+    explicacion: "DETALLE LARGO.",
+  } as VeredictoDia;
+  const r = decidirEscaladaPronostico(base({ veredictos: [conDetalle] }));
+  assert.equal(r.nivel, "roja");
+  assert.match(r.mensaje!, /^Alerta — vie 9: no se podría ir a la escuela\. FRASE CORTA\.$/);
+  assert.doesNotMatch(r.mensaje!, /DETALLE/);
+  assert.equal(r.explicacion, "DETALLE LARGO.");
+});
+
+test("sin explicación (o con veredictos viejos sin esos campos) no se rompe", () => {
+  const r = decidirEscaladaPronostico(base({ veredictos: [v("2026-10-09", "no_clases", true, "Solo motivo.")] }));
+  assert.match(r.mensaje!, /Solo motivo\./);
+  assert.equal(r.explicacion, null);
+});
+
+test("el amarillo informativo no lleva explicación aparte", () => {
+  const r = decidirEscaladaPronostico(base());
+  assert.equal(r.nivel, "amarilla");
+  assert.equal(r.explicacion, null);
+});

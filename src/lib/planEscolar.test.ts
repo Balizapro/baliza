@@ -509,3 +509,23 @@ test("si el INA y lo que se usa coinciden, el motivo no agrega explicaciones de 
   assert.equal(v.estado, "no_clases");
   assert.doesNotMatch(v.motivo, /se toma/);
 });
+
+test("el motivo se parte en frase corta (titular) y explicación (letra chica), sin perder texto", () => {
+  const pronos = [
+    ...diaART("2026-08-18", MAIN_HORAS),
+    ...diaART("2026-08-20", { 8: 2.17, 14: 2.0 }, { p25: -0.22, p75: 0.23 }),
+  ];
+  const v = calcularVeredicto(pronos, "2026-08-20", 2.25, [], { shnObservado: OBS_SESGO });
+  assert.equal(v.estado, "no_clases");
+  assert.equal(v.motivo, `${v.motivo_corto}${v.explicacion ? " " + v.explicacion : ""}`);
+  assert.match(v.motivo_corto, /^A las 8 el agua estaría en 2\.40m — sobre el nivel seguro \(2\.25m\): NO se puede cruzar en lancha\.$/);
+  assert.doesNotMatch(v.motivo_corto, /se toma|INA pronostica/);
+  assert.match(v.explicacion, /^El INA pronostica 2\.17m \(rango habitual 1\.95–2\.40m\); se toma 2\.40m por la banda alta del INA/);
+});
+
+test("sin nada que explicar, la explicación queda vacía", () => {
+  const pronos = diaART("2026-08-18", { 7: 2.3, 8: 2.4, 14: 2.4 }, { p25: -0.02, p75: 0 });
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, []);
+  assert.equal(v.explicacion, "");
+  assert.equal(v.motivo, v.motivo_corto);
+});

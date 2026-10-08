@@ -62,6 +62,10 @@ export interface VeredictoDia {
   hora7: ValorHora;
   salidaLimiteMin: number | null;
   motivo: string;
+  // `motivo` partido en dos: la frase corta (para el titular del banner) y la explicación de
+  // dónde sale el número (para letra chica). motivo === motivo_corto + explicacion.
+  motivo_corto: string;
+  explicacion: string;
   sesgo_m: number | null;
   pendiente_m: number | null;
   pendiente_estacion: string | null;
@@ -500,25 +504,32 @@ export function calcularVeredicto(
   // ¿Por qué NO CLASES? Por la entrada cortada o por la regla de los 60 min.
   const motivo60 = estado === "no_clases" && entrada.efectivo_m != null && entrada.efectivo_m <= nivelSeguroM;
 
-  let motivo: string;
+  let motivoCorto: string;
+  let explicacion = "";
   switch (estado) {
     case "no_clases":
-      motivo = motivo60
-        ? `Se podría entrar a las 8 (${nivel(entrada)?.toFixed(2)}m), pero el muelle ya sube: la salida límite quedaría a las ${hhmm(salidaLimiteMin)} — solo ${Math.max(0, Math.round((salidaLimiteMin ?? HORA_ENTRADA) - HORA_ENTRADA))} min después de entrar, margen insuficiente: NO CLASES.`
-        : `A las 8 el agua estaría en ${nivel(entrada)?.toFixed(2)}m — sobre el nivel seguro (${nivelSeguroM.toFixed(2)}m): NO se puede cruzar en lancha.` + explicaNivel(entrada, "El INA pronostica") + pendienteNota;
+      if (motivo60) {
+        motivoCorto = `Se podría entrar a las 8 (${nivel(entrada)?.toFixed(2)}m), pero el muelle ya sube: la salida límite quedaría a las ${hhmm(salidaLimiteMin)} — solo ${Math.max(0, Math.round((salidaLimiteMin ?? HORA_ENTRADA) - HORA_ENTRADA))} min después de entrar, margen insuficiente: NO CLASES.`;
+      } else {
+        motivoCorto = `A las 8 el agua estaría en ${nivel(entrada)?.toFixed(2)}m — sobre el nivel seguro (${nivelSeguroM.toFixed(2)}m): NO se puede cruzar en lancha.`;
+        explicacion = explicaNivel(entrada, "El INA pronostica") + pendienteNota;
+      }
       break;
     case "salida_temprana":
-      motivo = `Se puede entrar a las 8 (${nivel(entrada)?.toFixed(2)}m), pero a las 14:15 estaría en ${nivel(vuelta)?.toFixed(2)}m` +
-        (salidaLimiteMin != null ? ` — hay que irse antes de las ${hhmm(salidaLimiteMin)}.` : " — no se podría volver.") + explicaNivel(vuelta, "A las 14:15 el INA pronostica") + pendienteNota;
+      motivoCorto = `Se puede entrar a las 8 (${nivel(entrada)?.toFixed(2)}m), pero a las 14:15 estaría en ${nivel(vuelta)?.toFixed(2)}m` +
+        (salidaLimiteMin != null ? ` — hay que irse antes de las ${hhmm(salidaLimiteMin)}.` : " — no se podría volver.");
+      explicacion = explicaNivel(vuelta, "A las 14:15 el INA pronostica") + pendienteNota;
       break;
     case "normal":
-      motivo = `Agua accesible a las 8 (${nivel(entrada)?.toFixed(2)}m) y a las 14:15 (${nivel(vuelta)?.toFixed(2)}m) — rompe el día normal.` + pendienteNota;
+      motivoCorto = `Agua accesible a las 8 (${nivel(entrada)?.toFixed(2)}m) y a las 14:15 (${nivel(vuelta)?.toFixed(2)}m) — rompe el día normal.`;
+      explicacion = pendienteNota;
       break;
     case "sin_datos":
     default:
-      motivo = `Sin pronóstico para ${fecha} — no se puede confirmar el plan.`;
+      motivoCorto = `Sin pronóstico para ${fecha} — no se puede confirmar el plan.`;
       break;
   }
+  const motivo = motivoCorto + explicacion;
 
   return {
     fecha,
@@ -532,6 +543,8 @@ export function calcularVeredicto(
     hora7,
     salidaLimiteMin,
     motivo,
+    motivo_corto: motivoCorto,
+    explicacion: explicacion.trim(),
     sesgo_m: sesgo,
     pendiente_m: pendiente?.pendiente_m ?? null,
     pendiente_estacion: pendiente?.estacion ?? null,
