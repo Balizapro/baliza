@@ -19,7 +19,9 @@ function resumenDia(v: VeredictoDia): { icono: string; texto: string } {
   if (v.estado === "salida_temprana") {
     return { icono: "⚠️", texto: v.salidaLimiteMin != null ? `salida antes de las ${hhmm(v.salidaLimiteMin)}` : "salida temprana" };
   }
-  if (v.estado === "no_clases") return { icono: "🚫", texto: "no ir" };
+  if (v.estado === "no_clases") {
+    return { icono: "🚫", texto: v.entrada.efectivo_m != null ? `no ir (a las 8: ${v.entrada.efectivo_m.toFixed(2)}m)` : "no ir" };
+  }
   return { icono: "❔", texto: "sin datos" };
 }
 

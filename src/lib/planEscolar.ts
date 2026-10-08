@@ -41,6 +41,8 @@ export interface ValorHora {
   // la decisión usa el nivel más alto entre INA y modelo.
   modelo_m: number | null;
   efectivo_m: number | null;
+  // Qué fuente dio el nivel efectivo (la más alta). Sirve para explicarlo en el aviso.
+  fuente?: FuenteNivel | null;
 }
 
 export interface VeredictoDia {
@@ -92,6 +94,23 @@ const UMBRAL_PENDIENTE_M_H = 0.35;
 const PENDIENTE_BASE_M_H = 0.20;
 // Tope del margen de seguridad que se suma al nivel efectivo por el exceso.
 const MAX_PENDIENTE_MARGEN_M = 0.25;
+
+// El "sesgo en vivo" (lo medido vs. lo pronosticado en las últimas horas) nació el 18-ago
+// para corregir las HORAS SIGUIENTES, el mismo día. Un error medido esta noche no dice nada
+// confiable sobre lo que pasará dentro de 1-2 días (el veredicto se calcula para 4 días y
+// antes se sumaba entero a todos). Se aplica completo durante SESGO_PLENO_HS desde la última
+// observación y se apaga linealmente hasta SESGO_NULO_HS. Valores razonables, NO calibrados
+// con histórico: revisarlos cuando haya eventos para comparar.
+export const SESGO_PLENO_HS = 12;
+export const SESGO_NULO_HS = 36;
+export function pesoSesgo(horasAdelante: number): number {
+  if (!Number.isFinite(horasAdelante) || horasAdelante <= SESGO_PLENO_HS) return 1;
+  if (horasAdelante >= SESGO_NULO_HS) return 0;
+  return 1 - (horasAdelante - SESGO_PLENO_HS) / (SESGO_NULO_HS - SESGO_PLENO_HS);
+}
+
+// De dónde sale el nivel que se usa para decidir (la peor de varias fuentes).
+export type FuenteNivel = "ina" | "sesgo" | "pendiente" | "modelo" | "banda" | "shn";
 
 // Horarios escolares (minutos del día local).
 export const HORA_VEREDICTO = 7 * 60; // la hora a la que se decide el plan
@@ -258,7 +277,7 @@ function margenPorPendiente(pendiente_m: number | null): number {
 // avance real de la marea en esos 45 min, así que se interpola INA con
 // la escala de minutos de la observación. Solo se usa cuando es positivo
 // (INA subestima), que es el caso de riesgo.
-function sesgoEnVivo(pronos: PuntoProno[], observadas: PuntoModelo[]): number | null {
+function sesgoEnVivo(pronos: PuntoProno[], observadas: PuntoModelo[]): { valor: number; refMs: number } | null {
   const pronoMain = pronos
     .filter((p) => p.qualifier === "main")
     .map((p) => ({ t: new Date(p.timestamp).getTime(), v: p.valor_m }))
@@ -282,14 +301,17 @@ function sesgoEnVivo(pronos: PuntoProno[], observadas: PuntoModelo[]): number | 
   const diffs: number[] = [];
   const obs = [...observadas]
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  for (const o of obs.slice(-6)) {
+  const ultimas = obs.slice(-6);
+  for (const o of ultimas) {
     const tO = new Date(o.timestamp).getTime();
     const pv = interp(tO);
     if (pv != null) diffs.push(o.nivel_m - pv);
   }
   if (diffs.length === 0) return null;
   diffs.sort((a, b) => a - b);
-  return diffs[Math.floor(diffs.length / 2)];
+  // refMs: momento de la última observación; desde ahí se mide cuánto "se apaga" el ajuste.
+  const refMs = new Date(ultimas[ultimas.length - 1].timestamp).getTime();
+  return { valor: diffs[Math.floor(diffs.length / 2)], refMs };
 }
 
 // Serie del nivel efectivo para todo el día: en cada punto horario se toma el
@@ -299,7 +321,7 @@ function serieEfectiva(
   s: Record<Qualifier, { min: number; valor_m: number }[]>,
   serieModelo: { min: number; valor_m: number }[],
   serieSHN: { min: number; valor_m: number }[],
-  sesgo: number | null,
+  sesgoAt: (min: number) => number,
   margenPendiente: number,
   modo: ModoPlan
 ): { min: number; valor_m: number }[] {
@@ -312,10 +334,10 @@ function serieEfectiva(
 
   for (const p of s.main) agrega(p.min, p.valor_m);
   if (modo === "estricto") {
-    for (const p of s.main) agrega(p.min, sesgo != null ? p.valor_m + Math.max(0, sesgo) : null);
+    for (const p of s.main) agrega(p.min, p.valor_m + sesgoAt(p.min));
     for (const p of s.main) agrega(p.min, margenPendiente > 0 ? p.valor_m + margenPendiente : null);
-    for (const p of s.p75) agrega(p.min, p.valor_m + (sesgo != null ? Math.max(0, sesgo) : 0));
-    for (const p of serieModelo) agrega(p.min, p.valor_m + (sesgo != null ? Math.max(0, sesgo) : 0));
+    for (const p of s.p75) agrega(p.min, p.valor_m + sesgoAt(p.min));
+    for (const p of serieModelo) agrega(p.min, p.valor_m + sesgoAt(p.min));
   } else {
     for (const p of serieModelo) agrega(p.min, p.valor_m);
   }
@@ -339,28 +361,30 @@ function valorEfectivo(
   s: Record<Qualifier, { min: number; valor_m: number }[]>,
   serieModelo: { min: number; valor_m: number }[],
   serieSHN: { min: number; valor_m: number }[],
-  sesgo: number | null,
+  sesgoAt: (min: number) => number,
   margenPendiente: number,
   horaMin: number,
   modo: ModoPlan
-): { main: number | null; modelo: number | null; efectivo: number | null; p75: number | null } {
+): { main: number | null; modelo: number | null; efectivo: number | null; p75: number | null; fuente: FuenteNivel | null } {
   const main = valorEn(s.main, horaMin);
   const p75 = valorEn(s.p75, horaMin);
   const modelo = valorEn(serieModelo, horaMin);
   const shnValor = valorEn(serieSHN, horaMin, { soloBracketed: true });
-  const candidatos: number[] = [];
-  if (esNum(main)) candidatos.push(main);
+  const candidatos: { v: number; f: FuenteNivel }[] = [];
+  if (esNum(main)) candidatos.push({ v: main, f: "ina" });
   if (modo === "estricto") {
-    if (esNum(main) && sesgo != null) candidatos.push(main + Math.max(0, sesgo));
-    if (esNum(main) && margenPendiente > 0) candidatos.push(main + margenPendiente);
-    if (esNum(modelo)) candidatos.push(modelo);
-    if (esNum(p75)) candidatos.push(p75);
+    const sg = sesgoAt(horaMin);
+    if (esNum(main) && sg > 0) candidatos.push({ v: main + sg, f: "sesgo" });
+    if (esNum(main) && margenPendiente > 0) candidatos.push({ v: main + margenPendiente, f: "pendiente" });
+    if (esNum(modelo)) candidatos.push({ v: modelo, f: "modelo" });
+    if (esNum(p75)) candidatos.push({ v: p75, f: "banda" });
   } else {
-    if (esNum(modelo)) candidatos.push(modelo);
+    if (esNum(modelo)) candidatos.push({ v: modelo, f: "modelo" });
   }
-  if (esNum(shnValor)) candidatos.push(shnValor);
-  const efectivo = candidatos.length ? Math.max(...candidatos) : null;
-  return { main, modelo, efectivo, p75 };
+  if (esNum(shnValor)) candidatos.push({ v: shnValor, f: "shn" });
+  let mejor: { v: number; f: FuenteNivel } | null = null;
+  for (const c of candidatos) if (mejor == null || c.v > mejor.v) mejor = c;
+  return { main, modelo, efectivo: mejor ? mejor.v : null, p75, fuente: mejor ? mejor.f : null };
 }
 
 export function calcularVeredicto(
@@ -394,7 +418,15 @@ export function calcularVeredicto(
     })
     .sort((a, b) => a.min - b.min);
 
-  const sesgo = sesgoEnVivo(pronos, fuentes.shnObservado ?? []);
+  const sesgoInfo = sesgoEnVivo(pronos, fuentes.shnObservado ?? []);
+  const sesgo = sesgoInfo ? sesgoInfo.valor : null; // el medido (se muestra tal cual)
+  // Ajuste que le corresponde a cada hora de ESTE día: pleno cerca de la observación y
+  // apagado cuando se mira lejos (ver SESGO_PLENO_HS / SESGO_NULO_HS).
+  const t0Ms = Date.parse(`${fecha}T00:00:00-03:00`);
+  const sesgoAt = (min: number): number =>
+    sesgoInfo == null
+      ? 0
+      : Math.max(0, sesgoInfo.valor) * pesoSesgo((t0Ms + min * 60000 - sesgoInfo.refMs) / 3600000);
 
   // Señal de crecida en camino: ¿alguna estación vecina está subiendo fuerte en
   // las últimas horas? La marea entra por el estuario y llega a SF con desfase.
@@ -402,7 +434,7 @@ export function calcularVeredicto(
   const margenPendiente = margenPorPendiente(pendiente?.pendiente_m ?? null);
 
   const horaEn = (horaMin: number): ValorHora => {
-    const e = valorEfectivo(s, serieModelo, serieSHN, sesgo, margenPendiente, horaMin, modo);
+    const e = valorEfectivo(s, serieModelo, serieSHN, sesgoAt, margenPendiente, horaMin, modo);
     return {
       horaMin,
       main: e.main,
@@ -412,6 +444,7 @@ export function calcularVeredicto(
       p95: valorEn(s.p95, horaMin),
       modelo_m: e.modelo,
       efectivo_m: e.efectivo,
+      fuente: e.fuente,
     };
   };
 
@@ -419,7 +452,7 @@ export function calcularVeredicto(
   const vuelta = horaEn(HORA_VUELTA);
   const hora7 = horaEn(HORA_VEREDICTO);
 
-  const serieEff = serieEfectiva(s, serieModelo, serieSHN, sesgo, margenPendiente, modo);
+  const serieEff = serieEfectiva(s, serieModelo, serieSHN, sesgoAt, margenPendiente, modo);
   const salidaLimiteMin = cruceSubida(serieEff, nivelSeguroM, HORA_ENTRADA);
 
   // La decisión se toma con el nivel efectivo (peor fuente), no con main solo.
@@ -460,7 +493,21 @@ export function calcularVeredicto(
   }
 
   const nivel = (h: ValorHora) => (h.efectivo_m != null ? h.efectivo_m : h.main);
-  const sesgoNota = sesgo != null && sesgo > 0 ? ` (sesgo en vivo +${sesgo.toFixed(2)}m)` : "";
+  // ¿Por qué el nivel que se usa es más alto que el pronóstico central del INA? Se dice de
+  // dónde sale el número, para que no parezca un dato inventado.
+  const explicaNivel = (h: ValorHora, inicio: string): string => {
+    if (h.main == null || h.efectivo_m == null || h.fuente == null || h.efectivo_m - h.main <= 0.03) return "";
+    const rango = h.p25 != null && h.p75 != null ? ` (rango habitual ${h.p25.toFixed(2)}–${h.p75.toFixed(2)}m)` : "";
+    const porque: Record<FuenteNivel, string> = {
+      ina: "el pronóstico del INA",
+      sesgo: `el ajuste en vivo (+${sesgoAt(h.horaMin).toFixed(2)}m: lo medido viene más alto que lo pronosticado)`,
+      banda: "la banda alta del INA (en 1 de cada 4 casos el agua sería más alta)",
+      modelo: "el modelo propio de Baliza (marea + viento)",
+      shn: "el boletín de mareas del SHN",
+      pendiente: "la crecida en camino desde el exterior",
+    };
+    return ` ${inicio} ${h.main.toFixed(2)}m${rango}; se toma ${h.efectivo_m.toFixed(2)}m por ${porque[h.fuente]}.`;
+  };
   const pendienteNota =
     margenPendiente > 0 && pendiente
       ? ` — ${pendiente.estacion} subiendo a ${pendiente.pendiente_m.toFixed(2)} m/h: crecida en camino`
@@ -474,14 +521,14 @@ export function calcularVeredicto(
     case "no_clases":
       motivo = motivo60
         ? `Se podría entrar a las 8 (${nivel(entrada)?.toFixed(2)}m), pero el muelle ya sube: la salida límite quedaría a las ${hhmm(salidaLimiteMin)} — solo ${Math.max(0, Math.round((salidaLimiteMin ?? HORA_ENTRADA) - HORA_ENTRADA))} min después de entrar, margen insuficiente: NO CLASES.`
-        : `A las 8 el agua estaría en ${nivel(entrada)?.toFixed(2)}m — sobre el nivel seguro (${nivelSeguroM.toFixed(2)}m): NO se puede cruzar en lancha.` + sesgoNota + pendienteNota;
+        : `A las 8 el agua estaría en ${nivel(entrada)?.toFixed(2)}m — sobre el nivel seguro (${nivelSeguroM.toFixed(2)}m): NO se puede cruzar en lancha.` + explicaNivel(entrada, "El INA pronostica") + pendienteNota;
       break;
     case "salida_temprana":
       motivo = `Se puede entrar a las 8 (${nivel(entrada)?.toFixed(2)}m), pero a las 14:15 estaría en ${nivel(vuelta)?.toFixed(2)}m` +
-        (salidaLimiteMin != null ? ` — hay que irse antes de las ${hhmm(salidaLimiteMin)}.` : " — no se podría volver.") + sesgoNota + pendienteNota;
+        (salidaLimiteMin != null ? ` — hay que irse antes de las ${hhmm(salidaLimiteMin)}.` : " — no se podría volver.") + explicaNivel(vuelta, "A las 14:15 el INA pronostica") + pendienteNota;
       break;
     case "normal":
-      motivo = `Agua accesible a las 8 (${nivel(entrada)?.toFixed(2)}m) y a las 14:15 (${nivel(vuelta)?.toFixed(2)}m) — rompe el día normal.` + sesgoNota + pendienteNota;
+      motivo = `Agua accesible a las 8 (${nivel(entrada)?.toFixed(2)}m) y a las 14:15 (${nivel(vuelta)?.toFixed(2)}m) — rompe el día normal.` + pendienteNota;
       break;
     case "sin_datos":
     default:

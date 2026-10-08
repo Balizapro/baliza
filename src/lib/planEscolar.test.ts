@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calcularVeredicto, esDiaEscolar, hhmm, minutosDiaArgentina } from "./planEscolar.ts";
+import { calcularVeredicto, esDiaEscolar, hhmm, minutosDiaArgentina, pesoSesgo } from "./planEscolar.ts";
 
 // Genera el pronóstico de un día: serie main (pico al mediodía) y bandas p25/p95.
 // Los timestamps son UTC; la serie corresponde a las horas locales de Argentina.
@@ -412,4 +412,100 @@ test("modo suave sin penalizaciones: coincide con el nivel central INA main", ()
   assert.equal(v.estado, "normal");
   assert.ok(v.entrada.efectivo_m !== null && v.entrada.main !== null);
   assert.equal(v.entrada.efectivo_m, v.entrada.main);
+});
+
+// ── El ajuste en vivo se apaga con la distancia (7-oct-2026) ─────────────────────────────
+// Hora fija de Argentina (-03:00), para que estos tests no dependan de la zona de la máquina.
+function diaART(
+  fecha: string,
+  main: Record<number, number>,
+  opt?: { p25?: number; p75?: number; p95?: number }
+): { timestamp: string; valor_m: number; qualifier: string }[] {
+  const pts: { timestamp: string; valor_m: number; qualifier: string }[] = [];
+  for (const [h, v] of Object.entries(main)) {
+    const iso = new Date(`${fecha}T${String(parseInt(h, 10)).padStart(2, "0")}:00:00-03:00`).toISOString();
+    pts.push({ timestamp: iso, valor_m: v, qualifier: "main" });
+    pts.push({ timestamp: iso, valor_m: v + (opt?.p95 ?? 0.05), qualifier: "p95" });
+    pts.push({ timestamp: iso, valor_m: v + (opt?.p25 ?? -0.05), qualifier: "p25" });
+    pts.push({ timestamp: iso, valor_m: v + (opt?.p75 ?? 0), qualifier: "p75" });
+  }
+  return pts;
+}
+// El agua medida viene +0.30m sobre lo pronosticado; última observación: 18-ago 08:00 ART.
+const OBS_SESGO = [
+  { timestamp: "2026-08-18T10:00:00Z", nivel_m: 2.24 }, // 07:00 ART (pronóstico 1.94)
+  { timestamp: "2026-08-18T11:00:00Z", nivel_m: 2.3 }, // 08:00 ART (pronóstico 2.0)
+];
+const MAIN_HORAS = { 7: 1.94, 8: 2.0, 9: 2.05, 14: 2.0, 15: 1.95 };
+
+test("pesoSesgo: pleno hasta 12 h, se apaga linealmente y es 0 desde las 36 h", () => {
+  assert.equal(pesoSesgo(0), 1);
+  assert.equal(pesoSesgo(-3), 1); // la hora ya pasó
+  assert.equal(pesoSesgo(12), 1);
+  assert.equal(pesoSesgo(24), 0.5);
+  assert.equal(pesoSesgo(36), 0);
+  assert.equal(pesoSesgo(60), 0);
+  assert.equal(pesoSesgo(Number.NaN), 1); // si algo falla, se comporta como antes (conservador)
+});
+
+test("el ajuste en vivo sigue completo el mismo día (no se debilita la protección original)", () => {
+  const pronos = diaART("2026-08-18", { ...MAIN_HORAS, 10: 2.1, 11: 2.1, 12: 2.1, 13: 2.05 });
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, [], { shnObservado: OBS_SESGO });
+  assert.ok(v.sesgo_m != null && Math.abs(v.sesgo_m - 0.3) < 1e-9);
+  assert.ok(v.entrada.efectivo_m != null && Math.abs(v.entrada.efectivo_m - 2.3) < 1e-9, `${v.entrada.efectivo_m}`);
+  assert.equal(v.entrada.fuente, "sesgo");
+  assert.equal(v.estado, "no_clases");
+});
+
+test("a 24 h el ajuste pesa la mitad", () => {
+  const pronos = [
+    ...diaART("2026-08-18", MAIN_HORAS),
+    ...diaART("2026-08-19", { 8: 2.0, 14: 2.0 }),
+  ];
+  const v = calcularVeredicto(pronos, "2026-08-19", 2.25, [], { shnObservado: OBS_SESGO });
+  assert.ok(v.entrada.efectivo_m != null && Math.abs(v.entrada.efectivo_m - 2.15) < 1e-9, `${v.entrada.efectivo_m}`);
+  assert.equal(v.estado, "normal");
+});
+
+test("a 2 días el ajuste ya no cuenta: el mismo +0.30m medido hoy NO convierte el viernes en 'no ir'", () => {
+  const pronos = [
+    ...diaART("2026-08-18", MAIN_HORAS),
+    ...diaART("2026-08-20", { 8: 2.0, 14: 2.0 }),
+  ];
+  const v = calcularVeredicto(pronos, "2026-08-20", 2.25, [], { shnObservado: OBS_SESGO });
+  assert.ok(v.sesgo_m != null && v.sesgo_m > 0.25, "el sesgo medido se sigue informando");
+  assert.ok(v.entrada.efectivo_m != null && Math.abs(v.entrada.efectivo_m - 2.0) < 1e-9, `${v.entrada.efectivo_m}`);
+  assert.equal(v.estado, "normal");
+});
+
+test("lo que NO es sesgo se mantiene a cualquier distancia: la banda alta del INA sigue pudiendo dar 'no ir'", () => {
+  const pronos = [
+    ...diaART("2026-08-18", MAIN_HORAS),
+    ...diaART("2026-08-20", { 8: 2.17, 14: 2.0 }, { p75: 0.23 }), // central 2.17, banda alta 2.40
+  ];
+  const v = calcularVeredicto(pronos, "2026-08-20", 2.25, [], { shnObservado: OBS_SESGO });
+  assert.ok(v.entrada.efectivo_m != null && Math.abs(v.entrada.efectivo_m - 2.4) < 1e-9, `${v.entrada.efectivo_m}`);
+  assert.equal(v.entrada.fuente, "banda");
+  assert.equal(v.estado, "no_clases");
+});
+
+test("el motivo dice de dónde sale el número: central del INA, rango y fuente", () => {
+  const pronos = [
+    ...diaART("2026-08-18", MAIN_HORAS),
+    ...diaART("2026-08-20", { 8: 2.17, 14: 2.0 }, { p25: -0.22, p75: 0.23 }),
+  ];
+  const v = calcularVeredicto(pronos, "2026-08-20", 2.25, [], { shnObservado: OBS_SESGO });
+  assert.match(v.motivo, /El INA pronostica 2\.17m \(rango habitual 1\.95–2\.40m\); se toma 2\.40m por la banda alta del INA/);
+  const hoy = calcularVeredicto(
+    diaART("2026-08-18", { ...MAIN_HORAS, 10: 2.1 }),
+    "2026-08-18", 2.25, [], { shnObservado: OBS_SESGO }
+  );
+  assert.match(hoy.motivo, /El INA pronostica 2\.00m .*se toma 2\.30m por el ajuste en vivo \(\+0\.30m/);
+});
+
+test("si el INA y lo que se usa coinciden, el motivo no agrega explicaciones de más", () => {
+  const pronos = diaART("2026-08-18", { 7: 2.3, 8: 2.4, 14: 2.4 }, { p25: -0.02, p75: 0 });
+  const v = calcularVeredicto(pronos, "2026-08-18", 2.25, []);
+  assert.equal(v.estado, "no_clases");
+  assert.doesNotMatch(v.motivo, /se toma/);
 });
