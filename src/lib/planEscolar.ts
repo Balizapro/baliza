@@ -44,6 +44,8 @@ export interface ValorHora {
   efectivo_m: number | null;
   // Qué fuente dio el nivel efectivo (la más alta). Sirve para explicarlo en el aviso.
   fuente?: FuenteNivel | null;
+  // Punto del aviso oficial del SHN que se usó (cuando fuente === "aviso").
+  aviso?: { min: number; altura_m: number } | null;
 }
 
 export interface VeredictoDia {
@@ -62,6 +64,8 @@ export interface VeredictoDia {
   // dónde sale el número (para letra chica). motivo === motivo_corto + explicacion.
   motivo_corto: string;
   explicacion: string;
+  // "Ojito": el aviso del SHN manda, pero el INA cae del OTRO lado del límite en la hora decisiva.
+  ina_difiere: { main_m: number; hora: number; lado: "sobre" | "bajo" } | null;
   // Sesgo estimado en vivo: observado - INA main (últimas horas). Solo aplica
   // cuando es positivo (INA subestima), que es el caso de riesgo.
   sesgo_m: number | null;
@@ -117,7 +121,7 @@ export function pesoSesgo(horasAdelante: number): number {
 }
 
 // De dónde sale el nivel que se usa para decidir (la peor de varias fuentes).
-export type FuenteNivel = "ina" | "sesgo" | "pendiente" | "modelo" | "shn" | "aviso";
+export type FuenteNivel = "ina" | "sesgo" | "pendiente" | "modelo" | "shn" | "aviso" | "medido";
 
 // Aviso oficial por crecida del SHN: altura estimada en San Fernando con día y hora locales.
 export interface PuntoAvisoShn {
@@ -364,6 +368,7 @@ function serieEfectiva(
   serieModelo: { min: number; valor_m: number }[],
   serieSHN: { min: number; valor_m: number }[],
   avisoDia: { min: number; valor_m: number }[],
+  medido: { min: number; nivel_m: number } | null,
   sesgoAt: (min: number) => number,
   margenPendiente: number,
   modo: ModoPlan
@@ -386,7 +391,12 @@ function serieEfectiva(
   // SHN bracketed: cada extremo se interpola en la serie de suma, los puntos
   // intermedios quedan cubiertos por la interpolación de cruceSubida.
   for (const p of serieSHN) agrega(p.min, p.valor_m);
+  // El aviso del SHN manda en su ventana: se descartan los puntos del INA/modelo/ajustes de esa
+  // ventana y quedan el aviso (y lo medido, si hay).
+  const enVentana = (min: number) => avisoDia.some((a) => Math.abs(a.min - min) <= AVISO_VENTANA_MIN);
+  for (const min of [...puntos.keys()]) if (enVentana(min)) puntos.delete(min);
   for (const p of avisoDia) agrega(p.min, p.valor_m);
+  if (medido != null && enVentana(medido.min)) agrega(medido.min, medido.nivel_m);
 
   const serie: { min: number; valor_m: number }[] = [];
   for (const [min, vs] of puntos) {
@@ -406,15 +416,38 @@ function valorEfectivo(
   serieModelo: { min: number; valor_m: number }[],
   serieSHN: { min: number; valor_m: number }[],
   avisoDia: { min: number; valor_m: number }[],
+  medido: { min: number; nivel_m: number } | null,
   sesgoAt: (min: number) => number,
   margenPendiente: number,
   horaMin: number,
   modo: ModoPlan
-): { main: number | null; modelo: number | null; efectivo: number | null; p75: number | null; fuente: FuenteNivel | null } {
+): {
+  main: number | null;
+  modelo: number | null;
+  efectivo: number | null;
+  p75: number | null;
+  fuente: FuenteNivel | null;
+  aviso: { min: number; altura_m: number } | null;
+} {
   const main = valorEn(s.main, horaMin);
   const p75 = valorEn(s.p75, horaMin);
   const modelo = valorEn(serieModelo, horaMin);
   const shnValor = valorEn(serieSHN, horaMin, { soloBracketed: true });
+
+  // El aviso oficial del SHN MANDA dentro de su ventana: reemplaza al INA, al modelo, a las mareas
+  // y a los ajustes, aunque dé MENOS que el INA (el INA queda como "ojito" aparte). Pedido de la
+  // escuela (8-oct-2026): el 30/9 el SHN erró +6 cm y el INA -40 cm. Lo único que no se ignora es
+  // lo que se está MIDIENDO en esas horas: si supera al aviso, gana.
+  const avisoCerca = avisoDia
+    .filter((a) => Math.abs(a.min - horaMin) <= AVISO_VENTANA_MIN)
+    .sort((x, y) => y.valor_m - x.valor_m);
+  if (avisoCerca.length > 0) {
+    const a = avisoCerca[0];
+    if (medido != null && Math.abs(medido.min - horaMin) <= AVISO_VENTANA_MIN && medido.nivel_m > a.valor_m) {
+      return { main, modelo, efectivo: medido.nivel_m, p75, fuente: "medido", aviso: { min: a.min, altura_m: a.valor_m } };
+    }
+    return { main, modelo, efectivo: a.valor_m, p75, fuente: "aviso", aviso: { min: a.min, altura_m: a.valor_m } };
+  }
   const candidatos: { v: number; f: FuenteNivel }[] = [];
   if (esNum(main)) candidatos.push({ v: main, f: "ina" });
   if (modo === "estricto") {
@@ -426,13 +459,9 @@ function valorEfectivo(
     if (esNum(modelo)) candidatos.push({ v: modelo, f: "modelo" });
   }
   if (esNum(shnValor)) candidatos.push({ v: shnValor, f: "shn" });
-  // Aviso oficial del SHN: cuenta en las horas cercanas a su momento, en ambos modos (es oficial).
-  for (const a of avisoDia) {
-    if (Math.abs(a.min - horaMin) <= AVISO_VENTANA_MIN) candidatos.push({ v: a.valor_m, f: "aviso" });
-  }
   let mejor: { v: number; f: FuenteNivel } | null = null;
   for (const c of candidatos) if (mejor == null || c.v > mejor.v) mejor = c;
-  return { main, modelo, efectivo: mejor ? mejor.v : null, p75, fuente: mejor ? mejor.f : null };
+  return { main, modelo, efectivo: mejor ? mejor.v : null, p75, fuente: mejor ? mejor.f : null, aviso: null };
 }
 
 export function calcularVeredicto(
@@ -481,6 +510,15 @@ export function calcularVeredicto(
     sesgoInfo == null
       ? 0
       : Math.max(0, sesgoInfo.valor) * pesoSesgo((t0Ms + min * 60000 - sesgoInfo.refMs) / 3600000);
+  // Última lectura medida (en minutos de ESTE día): el aviso del SHN no puede ignorarla.
+  const obsOrdenadas = [...(fuentes.shnObservado ?? [])].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+  const ultObs = obsOrdenadas.length ? obsOrdenadas[obsOrdenadas.length - 1] : null;
+  const medido =
+    ultObs && esNum(ultObs.nivel_m)
+      ? { min: (new Date(ultObs.timestamp).getTime() - t0Ms) / 60000, nivel_m: Number(ultObs.nivel_m) }
+      : null;
 
   // Señal de crecida en camino: ¿alguna estación vecina está subiendo fuerte en
   // las últimas horas? La marea entra por el estuario y llega a SF con desfase.
@@ -488,7 +526,7 @@ export function calcularVeredicto(
   const margenPendiente = margenPorPendiente(pendiente?.pendiente_m ?? null);
 
   const horaEn = (horaMin: number): ValorHora => {
-    const e = valorEfectivo(s, serieModelo, serieSHN, avisoDia, sesgoAt, margenPendiente, horaMin, modo);
+    const e = valorEfectivo(s, serieModelo, serieSHN, avisoDia, medido, sesgoAt, margenPendiente, horaMin, modo);
     return {
       horaMin,
       main: e.main,
@@ -499,6 +537,7 @@ export function calcularVeredicto(
       modelo_m: e.modelo,
       efectivo_m: e.efectivo,
       fuente: e.fuente,
+      aviso: e.aviso,
     };
   };
 
@@ -506,7 +545,7 @@ export function calcularVeredicto(
   const vuelta = horaEn(HORA_VUELTA);
   const hora7 = horaEn(HORA_VEREDICTO);
 
-  const serieEff = serieEfectiva(s, serieModelo, serieSHN, avisoDia, sesgoAt, margenPendiente, modo);
+  const serieEff = serieEfectiva(s, serieModelo, serieSHN, avisoDia, medido, sesgoAt, margenPendiente, modo);
   const salidaLimiteMin = cruceSubida(serieEff, nivelSeguroM, HORA_ENTRADA);
 
   // La decisión se toma con el nivel efectivo (peor fuente), no con main solo.
@@ -547,12 +586,35 @@ export function calcularVeredicto(
   }
 
   const nivel = (h: ValorHora) => (h.efectivo_m != null ? h.efectivo_m : h.main);
+  // "Ojito": el aviso del SHN manda en su ventana, pero si el INA cae del OTRO lado del límite se
+  // avisa que dice otra cosa (pedido de la escuela, 8-oct-2026).
+  const ojo = (h: ValorHora): { main_m: number; hora: number; lado: "sobre" | "bajo" } | null => {
+    if (h.fuente !== "aviso" || h.main == null || h.efectivo_m == null) return null;
+    const decide = h.efectivo_m > nivelSeguroM;
+    const ina = h.main > nivelSeguroM;
+    return decide === ina ? null : { main_m: h.main, hora: h.horaMin, lado: ina ? "sobre" : "bajo" };
+  };
+  const textoOjo = (o: { main_m: number; hora: number; lado: "sobre" | "bajo" }): string =>
+    ` 👁️ El INA dice otra cosa: pronostica ${o.main_m.toFixed(2)}m a las ${hhmm(o.hora)}, ${o.lado} el límite (${nivelSeguroM.toFixed(2)}m).`;
+  const textoAviso = (h: ValorHora): string =>
+    h.aviso
+      ? `aviso oficial del SHN (San Fernando ${h.aviso.altura_m.toFixed(2)}m a las ${hhmm(h.aviso.min)})`
+      : "aviso oficial del SHN";
+  const inaDifiere = ojo(entrada) ?? ojo(vuelta);
+
   // Qué pronostica el INA y de dónde sale el número que se usa. La banda de error (rango habitual)
   // se muestra como contexto pero NO decide: la decisión se guía por el nivel pronosticado
   // (pedido de la escuela, 8-oct-2026). Solo si otra fuente lo subió se aclara cuál.
   const explicaNivel = (h: ValorHora, inicio: string): string => {
     if (h.main == null) return "";
     const rango = h.p25 != null && h.p75 != null ? ` (rango habitual ${h.p25.toFixed(2)}–${h.p75.toFixed(2)}m)` : "";
+    if (h.fuente === "aviso" && h.efectivo_m != null) {
+      const o = ojo(h);
+      return ` Se toma ${h.efectivo_m.toFixed(2)}m del ${textoAviso(h)}.` + (o ? textoOjo(o) : ` El INA pronostica ${h.main.toFixed(2)}m${rango}.`);
+    }
+    if (h.fuente === "medido" && h.efectivo_m != null) {
+      return ` Se toma ${h.efectivo_m.toFixed(2)}m: lo que se está midiendo ahora supera al ${textoAviso(h)}. El INA pronostica ${h.main.toFixed(2)}m${rango}.`;
+    }
     if (h.efectivo_m == null || h.fuente == null || h.efectivo_m - h.main <= 0.03) {
       return ` ${inicio} ${h.main.toFixed(2)}m${rango}.`;
     }
@@ -562,12 +624,8 @@ export function calcularVeredicto(
       modelo: "el modelo propio de Baliza (marea + viento)",
       shn: "el boletín de mareas del SHN",
       pendiente: "la crecida en camino desde el exterior",
-      aviso: (() => {
-        const a = avisoDia
-          .filter((p) => Math.abs(p.min - h.horaMin) <= AVISO_VENTANA_MIN)
-          .sort((x, y) => y.valor_m - x.valor_m)[0];
-        return a ? `el aviso oficial del SHN (San Fernando ${a.valor_m.toFixed(2)}m a las ${hhmm(a.min)})` : "el aviso oficial del SHN";
-      })(),
+      aviso: `el ${textoAviso(h)}`,
+      medido: "lo que se está midiendo ahora",
     };
     return ` ${inicio} ${h.main.toFixed(2)}m${rango}; se toma ${h.efectivo_m.toFixed(2)}m por ${porque[h.fuente]}.`;
   };
@@ -602,9 +660,11 @@ export function calcularVeredicto(
         const dentro = [entrada, vuelta].filter((h) => h.p75 != null && h.p75 > nivelSeguroM);
         const techo = dentro.length ? Math.max(...dentro.map((h) => h.p75 as number)) : null;
         explicacion =
-          (esDia && techo != null
-            ? ` El límite (${nivelSeguroM.toFixed(2)}m) queda dentro del rango habitual del INA (hasta ${techo.toFixed(2)}m): se decide por el pronóstico central, no por el rango.`
-            : "") + pendienteNota;
+          (inaDifiere
+            ? ` Se toma el ${textoAviso(inaDifiere.hora === entrada.horaMin ? entrada : vuelta)}.` + textoOjo(inaDifiere)
+            : esDia && techo != null
+              ? ` El límite (${nivelSeguroM.toFixed(2)}m) queda dentro del rango habitual del INA (hasta ${techo.toFixed(2)}m): se decide por el pronóstico central, no por el rango.`
+              : "") + pendienteNota;
       }
       break;
     case "sin_datos":
@@ -628,6 +688,7 @@ export function calcularVeredicto(
     motivo,
     motivo_corto: motivoCorto,
     explicacion: explicacion.trim(),
+    ina_difiere: inaDifiere,
     sesgo_m: sesgo,
     pendiente_m: pendiente?.pendiente_m ?? null,
     pendiente_estacion: pendiente?.estacion ?? null,

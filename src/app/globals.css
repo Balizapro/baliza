@@ -884,3 +884,10 @@ html {
   margin: 8px 0 0;
   opacity: 0.92;
 }
+
+/* Plan de hoy: "ojito" cuando el INA dice otra cosa que el aviso del SHN */
+.pdh-ojo {
+  font-size: 12px;
+  opacity: 0.85;
+  white-space: nowrap;
+}

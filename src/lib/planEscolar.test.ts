@@ -547,8 +547,8 @@ test("el motivo se parte en frase corta (titular) y explicación (letra chica), 
   assert.equal(v.estado, "no_clases");
   assert.equal(v.motivo, `${v.motivo_corto}${v.explicacion ? " " + v.explicacion : ""}`);
   assert.match(v.motivo_corto, /^A las 8 el agua estaría en 2\.60m — sobre el nivel seguro \(2\.25m\): NO se puede cruzar en lancha\.$/);
-  assert.doesNotMatch(v.motivo_corto, /se toma|INA pronostica/);
-  assert.match(v.explicacion, /^El INA pronostica 2\.00m \(rango habitual 1\.95–2\.05m\); se toma 2\.60m por el aviso oficial del SHN/);
+  assert.doesNotMatch(v.motivo_corto, /se toma|INA pronostica|ojito|👁/i);
+  assert.match(v.explicacion, /^Se toma 2\.60m del aviso oficial del SHN \(San Fernando 2\.60m a las 08:30\)\. 👁️ El INA dice otra cosa: pronostica 2\.00m a las 08:00, bajo el límite \(2\.25m\)\.$/);
 });
 
 test("sin otra fuente que lo suba, la explicación es solo lo que pronostica el INA y su rango", () => {
@@ -585,7 +585,7 @@ test("si el SHN estima 2.60m a las 08:30, el plan pasa de 'normal' a 'no ir' y l
   assert.equal(con.estado, "no_clases");
   assert.ok(con.entrada.efectivo_m != null && Math.abs(con.entrada.efectivo_m - 2.6) < 1e-9);
   assert.equal(con.entrada.fuente, "aviso");
-  assert.match(con.explicacion, /se toma 2\.60m por el aviso oficial del SHN \(San Fernando 2\.60m a las 08:30\)/);
+  assert.match(con.explicacion, /Se toma 2\.60m del aviso oficial del SHN \(San Fernando 2\.60m a las 08:30\)/);
 });
 
 test("el aviso del SHN también cuenta en el modo 'suave' (es la fuente oficial)", () => {
@@ -617,9 +617,69 @@ test("un aviso de OTRO día no afecta a este día", () => {
   assert.equal(v.estado, "normal");
 });
 
-test("un aviso más bajo que lo que ya se calcula no baja el nivel (siempre el peor caso)", () => {
+test("el SHN MANDA aunque dé menos que el INA, y se deja el 'ojito' de que el INA dice otra cosa", () => {
   const pronos = diaART("2026-08-21", { 8: 2.4, 9: 2.4, 12: 2.0, 14: 2.0, 15: 2.0 });
+  const sinAviso = calcularVeredicto(pronos, "2026-08-21", 2.25, []);
+  assert.equal(sinAviso.estado, "no_clases"); // solo con el INA sería 'no ir'
   const v = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoSF(2.1, "08:30")) });
-  assert.ok(v.entrada.efectivo_m != null && v.entrada.efectivo_m >= 2.4);
-  assert.notEqual(v.entrada.fuente, "aviso");
+  assert.ok(v.entrada.efectivo_m != null && Math.abs(v.entrada.efectivo_m - 2.1) < 1e-9, `${v.entrada.efectivo_m}`);
+  assert.equal(v.entrada.fuente, "aviso");
+  assert.equal(v.estado, "normal");
+  assert.ok(v.ina_difiere != null && Math.abs(v.ina_difiere.main_m - 2.4) < 1e-9 && v.ina_difiere.lado === "sobre");
+  assert.match(v.explicacion, /👁️ El INA dice otra cosa: pronostica 2\.40m a las 08:00, sobre el límite \(2\.25m\)\./);
+});
+
+test("el caso del viernes 9: INA 2.31m a las 8:00, SHN 2.20m a las 7:00 => 'normal' con el ojito del INA", () => {
+  const pronos = diaART("2026-10-09", { 6: 2.29, 7: 2.34, 8: 2.31, 9: 2.22, 12: 1.66, 14: 1.4, 15: 1.47 });
+  const aviso = { tipo: "aviso_crecida", alturas: [{ puerto: "SAN FERNANDO", altura_m: 2.2, hora: "07:00", fecha: "09/10/2026" }] };
+  const sin = calcularVeredicto(pronos, "2026-10-09", 2.25, []);
+  assert.equal(sin.estado, "no_clases"); // solo con el INA: 2.31m > 2.25m
+  const v = calcularVeredicto(pronos, "2026-10-09", 2.25, [], { shnAviso: puntosAvisoSanFernando(aviso) });
+  assert.equal(v.estado, "normal");
+  assert.ok(v.entrada.efectivo_m != null && Math.abs(v.entrada.efectivo_m - 2.2) < 1e-9);
+  assert.ok(v.hora7.efectivo_m != null && Math.abs(v.hora7.efectivo_m - 2.2) < 1e-9);
+  assert.equal(v.salidaLimiteMin, null);
+  assert.ok(v.ina_difiere != null && Math.abs(v.ina_difiere.main_m - 2.31) < 1e-9);
+  assert.equal(v.ina_difiere!.hora, 480);
+  assert.equal(v.ina_difiere!.lado, "sobre");
+  assert.match(v.explicacion, /Se toma el aviso oficial del SHN \(San Fernando 2\.20m a las 07:00\)\. 👁️ El INA dice otra cosa: pronostica 2\.31m a las 08:00, sobre el límite \(2\.25m\)\./);
+});
+
+test("si el SHN y el INA quedan del mismo lado del límite no hay ojito", () => {
+  const pronos = diaART("2026-08-21", INA_NORMAL); // INA 2.00m
+  const v = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoSF(2.1, "08:30")) });
+  assert.equal(v.estado, "normal");
+  assert.equal(v.entrada.fuente, "aviso");
+  assert.equal(v.ina_difiere, null);
+  assert.doesNotMatch(v.explicacion, /👁/);
+});
+
+test("lo que se está MIDIENDO en esas horas no se ignora: si supera al aviso del SHN, gana", () => {
+  const pronos = diaART("2026-08-21", { 6: 2.0, 7: 2.0, 8: 2.0, 9: 2.0, 12: 2.0, 14: 2.0, 15: 2.0 });
+  const obs = [
+    { timestamp: "2026-08-21T09:15:00Z", nivel_m: 2.3 }, // 06:15 ART
+    { timestamp: "2026-08-21T10:15:00Z", nivel_m: 2.35 }, // 07:15 ART
+  ];
+  const v = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnObservado: obs, shnAviso: puntosAvisoSanFernando(avisoSF(2.2, "07:00")) });
+  assert.ok(v.entrada.efectivo_m != null && Math.abs(v.entrada.efectivo_m - 2.35) < 1e-9, `${v.entrada.efectivo_m}`);
+  assert.equal(v.entrada.fuente, "medido");
+  assert.equal(v.estado, "no_clases");
+  assert.match(v.explicacion, /Se toma 2\.35m: lo que se está midiendo ahora supera al aviso oficial del SHN \(San Fernando 2\.20m a las 07:00\)/);
+});
+
+test("una medición de otro día no pisa al aviso del SHN", () => {
+  const pronos = diaART("2026-08-21", INA_NORMAL);
+  const obs = [{ timestamp: "2026-08-20T13:00:00Z", nivel_m: 2.9 }];
+  const v = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnObservado: obs, shnAviso: puntosAvisoSanFernando(avisoSF(2.2, "08:00")) });
+  // En la hora de entrada manda el aviso (2.20m), no una medición de ayer (2.90m).
+  assert.equal(v.entrada.fuente, "aviso");
+  assert.ok(v.entrada.efectivo_m != null && Math.abs(v.entrada.efectivo_m - 2.2) < 1e-9, `${v.entrada.efectivo_m}`);
+});
+
+test("dentro de la ventana del aviso, los picos del INA ya no fuerzan una hora límite de salida", () => {
+  const pronos = diaART("2026-08-21", { 8: 2.0, 9: 2.0, 12: 2.4, 14: 2.0, 15: 2.0 });
+  const sinAviso = calcularVeredicto(pronos, "2026-08-21", 2.25, []);
+  assert.ok(sinAviso.salidaLimiteMin != null, "con solo el INA, el agua cruza el límite al mediodía");
+  const conAviso = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoSF(2.1, "12:30")) });
+  assert.equal(conAviso.salidaLimiteMin, null);
 });

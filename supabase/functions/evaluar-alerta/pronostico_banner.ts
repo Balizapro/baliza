@@ -20,6 +20,7 @@ import {
   HORA_VUELTA,
   esDiaEscolar,
   fechaDiaArgentina,
+  hhmm,
   minutosDiaArgentina,
   weekdayArgentina,
   type VeredictoDia,
@@ -124,6 +125,27 @@ export function decidirEscaladaPronostico(args: {
   // Crecida pronosticada sobre el umbral que NO toca las clases: amarillo informativo
   // (solo si el estado actual es verde; si ya es amarillo se deja el mensaje que tiene).
   if (sobreUmbral && alerta === "verde") {
+    // Si el aviso oficial del SHN manda en algún día de clases, el mensaje parte del SHN y deja el
+    // "ojito" del INA (pedido de la escuela, 8-oct-2026); si no, se habla del pico del INA.
+    const conAviso = veredictos.find(
+      (v) =>
+        v.esDiaEscolar &&
+        !(v.fecha === hoy && minAhora >= HORA_VUELTA) &&
+        (v.entrada?.fuente === "aviso" || v.vuelta?.fuente === "aviso")
+    );
+    if (conAviso) {
+      const h = conAviso.entrada?.fuente === "aviso" ? conAviso.entrada : conAviso.vuelta;
+      const seguroAviso = nivelSeguroM.toFixed(2);
+      const altura = h.aviso?.altura_m ?? h.efectivo_m;
+      const cuando = `${etiquetaDiaPlan(conAviso.fecha, ahoraMs)}${h.aviso ? ` a las ${hhmm(h.aviso.min)}` : ""}`;
+      const o = conAviso.ina_difiere;
+      const mensajeAviso =
+        `Atención — crecida pronosticada: el SHN estima ${altura != null ? altura.toFixed(2) + "m" : "un nivel"} en San Fernando ${cuando} ` +
+        `(aviso oficial; bajo el nivel seguro de ${seguroAviso}m: las clases no se ven afectadas).` +
+        (o ? ` 👁️ El INA dice otra cosa: pronostica ${o.main_m.toFixed(2)}m a las ${hhmm(o.hora)}, ${o.lado} el límite (${seguroAviso}m).` : "");
+      return { nivel: "amarilla", mensaje: mensajeAviso, diaAfectado: null, explicacion: null, sobreUmbral };
+    }
+
     const pico = picoProno!;
     const fechaPico = fechaDiaArgentina(pico.timestamp);
     const escolarPico = esDiaEscolar(fechaPico, weekdayArgentina(pico.timestamp), diasSinClases);

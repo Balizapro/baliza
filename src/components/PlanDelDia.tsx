@@ -13,7 +13,7 @@ interface Props {
   proximos?: { fecha: string; veredicto: VeredictoDia }[];
 }
 
-function resumenDia(v: VeredictoDia): { icono: string; texto: string } {
+function resumenBase(v: VeredictoDia): { icono: string; texto: string } {
   if (!v.esDiaEscolar) return { icono: "📅", texto: "sin clases" };
   if (v.estado === "normal") return { icono: "✅", texto: "normal" };
   if (v.estado === "salida_temprana") {
@@ -23,6 +23,12 @@ function resumenDia(v: VeredictoDia): { icono: string; texto: string } {
     return { icono: "🚫", texto: v.entrada.efectivo_m != null ? `no ir (a las 8: ${v.entrada.efectivo_m.toFixed(2)}m)` : "no ir" };
   }
   return { icono: "❔", texto: "sin datos" };
+}
+
+// El aviso del SHN manda, pero si el INA dice otra cosa (del otro lado del límite) se deja un "ojito".
+function resumenDia(v: VeredictoDia): { icono: string; texto: string; ojo: string | null } {
+  const b = resumenBase(v);
+  return { ...b, ojo: v.esDiaEscolar && v.ina_difiere ? `👁️ INA ${v.ina_difiere.main_m.toFixed(2)}m` : null };
 }
 
 const ESTILO: Record<string, { clase: string; icono: string; titulo: string }> = {
@@ -52,6 +58,14 @@ export default function PlanDelDia({ veredicto, nivelSeguroM, onVerDetalle, hayD
           <li key={fecha}>
             <span className="pdh-prox-dia">{etiquetaDiaSemana(fecha)}</span>{" "}
             <span aria-hidden="true">{r.icono}</span> {r.texto}
+            {r.ojo && (
+              <>
+                {" "}
+                <span className="pdh-ojo" title="El aviso del SHN manda, pero el INA dice otra cosa">
+                  {r.ojo}
+                </span>
+              </>
+            )}
           </li>
         );
       })}
