@@ -9,7 +9,14 @@ import {
   subeSostenido,
   type NivelAlerta,
 } from "./logica.ts";
-import { calcularVeredicto, hhmm as hhmmPlan, type PuntoProno, type VeredictoDia } from "./plan_escolar.ts";
+import {
+  calcularVeredicto,
+  hhmm as hhmmPlan,
+  puntosAvisoSanFernando,
+  type PuntoAvisoShn,
+  type PuntoProno,
+  type VeredictoDia,
+} from "./plan_escolar.ts";
 import { decidirEscaladaPronostico } from "./pronostico_banner.ts";
 import { anticiparSubida } from "./anticipacion.ts";
 
@@ -105,6 +112,8 @@ interface ContextoVeredicto {
   pronosTodos: PuntoProno[];
   shnObservado: { timestamp: string; nivel_m: number }[];
   vecinas: { nombre: string; lecturas: { timestamp: string; nivel_m: number }[] }[];
+  // Alturas estimadas en San Fernando del aviso/alerta por crecida vigente del SHN.
+  shnAviso: PuntoAvisoShn[];
 }
 
 // deno-lint-ignore no-explicit-any
@@ -168,7 +177,20 @@ async function cargarContextoVeredicto(supabase: any, estacionId: string): Promi
     }
   }
 
-  return { diasSinClases, nivelSeguroM, pronosTodos: pronosTodos as PuntoProno[], shnObservado, vecinas };
+  // Aviso/alerta por crecida del SHN (o su cese): el más reciente. Sus alturas estimadas en San
+  // Fernando entran al veredicto como fuente oficial; si el SHN sube la alerta, el plan la ve.
+  // (Antes el aviso solo se mostraba y no entraba al cálculo.) Un cese deja la lista vacía.
+  const { data: avisoPlan } = await supabase
+    .from("avisos_crecida")
+    .select("tipo, alturas")
+    .eq("vigente", true)
+    .ilike("tipo", "%crecida%")
+    .order("emitido", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const shnAviso = puntosAvisoSanFernando(avisoPlan);
+
+  return { diasSinClases, nivelSeguroM, pronosTodos: pronosTodos as PuntoProno[], shnObservado, vecinas, shnAviso };
 }
 
 // Hoy y los siguientes (n-1) días, como YYYY-MM-DD en hora argentina.
@@ -440,6 +462,7 @@ serve(async (req) => {
           calcularVeredicto(c.pronosTodos, fecha, c.nivelSeguroM, c.diasSinClases, {
             shnObservado: c.shnObservado,
             vecinas: c.vecinas,
+            shnAviso: c.shnAviso,
           })
         );
       }

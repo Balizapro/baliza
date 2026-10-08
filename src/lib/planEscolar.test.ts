@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calcularVeredicto, esDiaEscolar, hhmm, minutosDiaArgentina, pesoSesgo } from "./planEscolar.ts";
+import { calcularVeredicto, esDiaEscolar, hhmm, minutosDiaArgentina, pesoSesgo, puntosAvisoSanFernando } from "./planEscolar.ts";
 
 // Genera el pronóstico de un día: serie main (pico al mediodía) y bandas p25/p95.
 // Los timestamps son UTC; la serie corresponde a las horas locales de Argentina.
@@ -528,4 +528,84 @@ test("sin nada que explicar, la explicación queda vacía", () => {
   const v = calcularVeredicto(pronos, "2026-08-18", 2.25, []);
   assert.equal(v.explicacion, "");
   assert.equal(v.motivo, v.motivo_corto);
+});
+
+// ── El aviso oficial por crecida del SHN entra al veredicto (7-oct-2026) ─────────────────
+// Formato real del aviso del 30-sep (San Fernando 2.25m a las 11:30).
+const AVISO_REAL = {
+  tipo: "aviso_crecida",
+  alturas: [
+    { puerto: "PUERTO LA PLATA", altura_m: 2.2, hora: "08:30", fecha: "30/09/2026" },
+    { puerto: "PUERTO DE BUENOS AIRES (MUELLE DE PESCADORES)", altura_m: 2.2, hora: "10:30", fecha: "30/09/2026" },
+    { puerto: "SAN FERNANDO", altura_m: 2.25, hora: "11:30", fecha: "30/09/2026" },
+  ],
+};
+const avisoSF = (altura_m: number, hora: string, fecha = "21/08/2026", tipo = "aviso_crecida") => ({
+  tipo,
+  alturas: [{ puerto: "SAN FERNANDO", altura_m, hora, fecha }],
+});
+const INA_NORMAL = { 8: 2.0, 9: 2.0, 12: 2.0, 14: 2.0, 15: 2.0 };
+
+test("puntosAvisoSanFernando: toma solo San Fernando y convierte fecha y hora", () => {
+  assert.deepEqual(puntosAvisoSanFernando(AVISO_REAL), [{ fecha: "2026-09-30", min: 11 * 60 + 30, altura_m: 2.25 }]);
+});
+
+test("puntosAvisoSanFernando: 'alerta' por crecida (el SHN sube el nivel) también cuenta", () => {
+  assert.equal(puntosAvisoSanFernando(avisoSF(2.6, "08:30", "21/08/2026", "alerta_crecida")).length, 1);
+});
+
+test("puntosAvisoSanFernando: un CESE, otro tipo de aviso o datos incompletos no suman", () => {
+  assert.deepEqual(puntosAvisoSanFernando(avisoSF(2.6, "08:30", "21/08/2026", "cese_crecida")), []);
+  assert.deepEqual(puntosAvisoSanFernando(avisoSF(2.6, "08:30", "21/08/2026", "aviso_viento")), []);
+  assert.deepEqual(puntosAvisoSanFernando(null), []);
+  assert.deepEqual(puntosAvisoSanFernando({ tipo: "aviso_crecida", alturas: null }), []);
+  assert.deepEqual(puntosAvisoSanFernando(avisoSF(2.6, "8h30")), []);
+  assert.deepEqual(puntosAvisoSanFernando(avisoSF(Number.NaN, "08:30")), []);
+});
+
+test("si el SHN estima 2.60m a las 08:30, el plan pasa de 'normal' a 'no ir' y lo explica", () => {
+  const pronos = diaART("2026-08-21", INA_NORMAL);
+  const sin = calcularVeredicto(pronos, "2026-08-21", 2.25, []);
+  assert.equal(sin.estado, "normal");
+  const con = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoSF(2.6, "08:30")) });
+  assert.equal(con.estado, "no_clases");
+  assert.ok(con.entrada.efectivo_m != null && Math.abs(con.entrada.efectivo_m - 2.6) < 1e-9);
+  assert.equal(con.entrada.fuente, "aviso");
+  assert.match(con.explicacion, /se toma 2\.60m por el aviso oficial del SHN \(San Fernando 2\.60m a las 08:30\)/);
+});
+
+test("el aviso del SHN también cuenta en el modo 'suave' (es la fuente oficial)", () => {
+  const pronos = diaART("2026-08-21", INA_NORMAL);
+  const v = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoSF(2.6, "08:30")) }, "suave");
+  assert.equal(v.estado, "no_clases");
+  assert.equal(v.entrada.fuente, "aviso");
+});
+
+test("aviso a las 14:00 con 2.50m: se entra normal pero a la vuelta no => salida temprana, con hora límite", () => {
+  const pronos = diaART("2026-08-21", INA_NORMAL);
+  const v = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoSF(2.5, "14:00")) });
+  assert.equal(v.estado, "salida_temprana");
+  assert.equal(v.vuelta.fuente, "aviso");
+  assert.ok(v.salidaLimiteMin != null && v.salidaLimiteMin >= 12 * 60 && v.salidaLimiteMin <= 14 * 60, `${v.salidaLimiteMin}`);
+});
+
+test("un aviso lejos de las 8:00 y de las 14:15 no cambia entrada ni vuelta", () => {
+  const pronos = diaART("2026-08-21", INA_NORMAL);
+  const v = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoSF(2.6, "11:30")) });
+  assert.equal(v.estado, "normal");
+  assert.notEqual(v.entrada.fuente, "aviso");
+  assert.notEqual(v.vuelta.fuente, "aviso");
+});
+
+test("un aviso de OTRO día no afecta a este día", () => {
+  const pronos = diaART("2026-08-21", INA_NORMAL);
+  const v = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoSF(2.6, "08:30", "22/08/2026")) });
+  assert.equal(v.estado, "normal");
+});
+
+test("un aviso más bajo que lo que ya se calcula no baja el nivel (siempre el peor caso)", () => {
+  const pronos = diaART("2026-08-21", { 8: 2.4, 9: 2.4, 12: 2.0, 14: 2.0, 15: 2.0 });
+  const v = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoSF(2.1, "08:30")) });
+  assert.ok(v.entrada.efectivo_m != null && v.entrada.efectivo_m >= 2.4);
+  assert.notEqual(v.entrada.fuente, "aviso");
 });

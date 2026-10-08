@@ -114,6 +114,7 @@ export default function Dashboard() {
     sfObs,
     sfProno,
     avisosShn: datos?.avisosShn,
+    avisoCrecidaPlan: datos?.avisoCrecidaPlan,
     historial,
     lecturasLP,
     vientoHist,

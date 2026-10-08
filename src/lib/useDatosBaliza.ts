@@ -136,6 +136,17 @@ export function useDatosBaliza() {
         .limit(1)
         .maybeSingle();
 
+      // Para el plan escolar: el último aviso/alerta por crecida (o su cese), aunque después haya
+      // salido un aviso de otro tipo (viento, bajante...) que ocupe el lugar del "último".
+      const { data: avisoCrecidaPlan } = await supabase
+        .from("avisos_crecida")
+        .select("*")
+        .eq("vigente", true)
+        .ilike("tipo", "%crecida%")
+        .order("emitido", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
       // Un CESE de aviso solo informa durante 2 horas; pasado ese tiempo se descarta
       const avisoCrecida = avisoCrecidaRaw &&
         avisoCrecidaRaw.tipo.startsWith("cese_") &&
@@ -216,6 +227,7 @@ export function useDatosBaliza() {
         alertasSmn: (alertasSmn as unknown as { area_id: number; fecha: string; max_level: number; eventos_json: { id: number; max_level: number }[]; actualizado: string }[]) ?? [],
         avisosShn: (avisosShn as AvisoShn[]) ?? [],
         avisoCrecida: (avisoCrecida as AvisoCrecida | null) ?? null,
+        avisoCrecidaPlan: (avisoCrecidaPlan as AvisoCrecida | null) ?? null,
       };
 
       setDatos(d);

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import type { Alerta, Lectura, Pronostico, AvisoShn } from "@/lib/types";
+import type { Alerta, Lectura, Pronostico, AvisoShn, AvisoCrecida } from "@/lib/types";
 import { analizarCiclo, predecirProximosExtremos } from "@/lib/ciclo";
-import { calcularVeredicto } from "@/lib/planEscolar";
+import { calcularVeredicto, puntosAvisoSanFernando } from "@/lib/planEscolar";
 import { alturasSanFernando } from "@/lib/shn";
 import { proyectarCurva } from "@/lib/modelo";
 import { enHorarioEscolar, fechaDiaArgentina } from "@/lib/dashboardHelpers";
@@ -18,6 +18,7 @@ interface Params {
   sfObs: Lectura | null | undefined;
   sfProno: Pronostico[] | undefined;
   avisosShn: AvisoShn[] | undefined;
+  avisoCrecidaPlan: AvisoCrecida | null | undefined;
   historial: Lectura[];
   lecturasLP: Lectura[];
   vientoHist: VientoPunto[];
@@ -36,6 +37,7 @@ export function useCalculosDerivados({
   sfObs,
   sfProno,
   avisosShn,
+  avisoCrecidaPlan,
   historial,
   lecturasLP,
   vientoHist,
@@ -142,6 +144,8 @@ export function useCalculosDerivados({
         .filter((l) => l.nivel_m != null)
         .map((l) => ({ timestamp: l.timestamp, nivel_m: l.nivel_m })),
       shnAlturas,
+      // Aviso oficial por crecida del SHN: si sube la alerta, el veredicto lo tiene en cuenta.
+      shnAviso: puntosAvisoSanFernando(avisoCrecidaPlan),
       // Estaciones vecinas (Bs As, La Plata...) para anticipar crecidas por
       // pendiente de subida: la marea entra por el estuario y llega a SF con
       // desfase, así que una subida fuerte afuera anticipa la de SF.
@@ -197,7 +201,7 @@ export function useCalculosDerivados({
     }
 
     return { noAccesible, nivel, regreso, tieneProno: futuros.length > 0, picoNoAccesible, veredicto, veredictoSuave, veredictoModelo, veredictoHoy, veredictosProximos };
-  }, [sfObs, sfProno, nivelSeguroM, ahora, diasSinClases, curvaModelo, shnAlturas, historial, exterioresLecturas]);
+  }, [sfObs, sfProno, nivelSeguroM, ahora, diasSinClases, curvaModelo, shnAlturas, avisoCrecidaPlan, historial, exterioresLecturas]);
 
   const ciclo = useMemo(
     () => analizarCiclo(historial, lecturasLP.slice(0, 24), 2.5, ahora),

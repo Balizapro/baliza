@@ -82,6 +82,8 @@ export interface FuentesPlan {
   shnObservado?: PuntoModelo[];
   shnAlturas?: AlturaShn[];
   vecinas?: LecturasVecina[];
+  // Aviso oficial por crecida del SHN (ver puntosAvisoSanFernando): fuente oficial del veredicto.
+  shnAviso?: PuntoAvisoShn[];
 }
 
 // Pendiente de subida que indica crecida en camino. Una estación vecina
@@ -108,7 +110,42 @@ export function pesoSesgo(horasAdelante: number): number {
 }
 
 // De dónde sale el nivel que se usa para decidir (la peor de varias fuentes).
-export type FuenteNivel = "ina" | "sesgo" | "pendiente" | "modelo" | "banda" | "shn";
+export type FuenteNivel = "ina" | "sesgo" | "pendiente" | "modelo" | "banda" | "shn" | "aviso";
+
+// Aviso oficial por crecida del SHN: altura estimada en San Fernando con día y hora locales.
+export interface PuntoAvisoShn {
+  fecha: string; // YYYY-MM-DD
+  min: number; // minutos del día local
+  altura_m: number;
+}
+
+// Extrae los puntos de San Fernando de un aviso/alerta por crecida del SHN. Un CESE, o un aviso
+// de otra cosa (viento, bajante...), no suma. Si el SHN sube la alerta, el plan tiene que verla:
+// antes el aviso solo se mostraba y no entraba al cálculo (7-oct-2026).
+export function puntosAvisoSanFernando(
+  aviso:
+    | { tipo: string; alturas: { puerto: string; altura_m: number; hora: string; fecha: string }[] | null }
+    | null
+    | undefined
+): PuntoAvisoShn[] {
+  if (!aviso || !aviso.alturas) return [];
+  const tipo = String(aviso.tipo ?? "").toLowerCase();
+  if (!tipo.includes("crecida") || tipo.startsWith("cese")) return [];
+  const puntos: PuntoAvisoShn[] = [];
+  for (const a of aviso.alturas) {
+    if (!String(a.puerto ?? "").toUpperCase().includes("SAN FERNANDO")) continue;
+    const h = /^(\d{1,2}):(\d{2})$/.exec(String(a.hora ?? ""));
+    const f = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(a.fecha ?? ""));
+    const altura = Number(a.altura_m);
+    if (!h || !f || !Number.isFinite(altura)) continue;
+    puntos.push({ fecha: `${f[3]}-${f[2]}-${f[1]}`, min: Number(h[1]) * 60 + Number(h[2]), altura_m: altura });
+  }
+  return puntos;
+}
+
+// El aviso da la altura estimada en un momento (pleamar con sobreelevación): se la toma como
+// el nivel de las horas cercanas. Ventana conservadora, NO calibrada con histórico.
+const AVISO_VENTANA_MIN = 90;
 
 // Horarios escolares (minutos del día local).
 export const HORA_VEREDICTO = 7 * 60; // la hora a la que se decide el plan
@@ -318,6 +355,7 @@ function serieEfectiva(
   s: Record<Qualifier, { min: number; valor_m: number }[]>,
   serieModelo: { min: number; valor_m: number }[],
   serieSHN: { min: number; valor_m: number }[],
+  avisoDia: { min: number; valor_m: number }[],
   sesgoAt: (min: number) => number,
   margenPendiente: number,
   modo: ModoPlan
@@ -339,6 +377,7 @@ function serieEfectiva(
     for (const p of serieModelo) agrega(p.min, p.valor_m);
   }
   for (const p of serieSHN) agrega(p.min, p.valor_m);
+  for (const p of avisoDia) agrega(p.min, p.valor_m);
 
   const serie: { min: number; valor_m: number }[] = [];
   for (const [min, vs] of puntos) {
@@ -354,6 +393,7 @@ function valorEfectivo(
   s: Record<Qualifier, { min: number; valor_m: number }[]>,
   serieModelo: { min: number; valor_m: number }[],
   serieSHN: { min: number; valor_m: number }[],
+  avisoDia: { min: number; valor_m: number }[],
   sesgoAt: (min: number) => number,
   margenPendiente: number,
   horaMin: number,
@@ -375,6 +415,10 @@ function valorEfectivo(
     if (esNum(modelo)) candidatos.push({ v: modelo, f: "modelo" });
   }
   if (esNum(shnValor)) candidatos.push({ v: shnValor, f: "shn" });
+  // Aviso oficial del SHN: cuenta en las horas cercanas a su momento, en ambos modos (es oficial).
+  for (const a of avisoDia) {
+    if (Math.abs(a.min - horaMin) <= AVISO_VENTANA_MIN) candidatos.push({ v: a.valor_m, f: "aviso" });
+  }
   let mejor: { v: number; f: FuenteNivel } | null = null;
   for (const c of candidatos) if (mejor == null || c.v > mejor.v) mejor = c;
   return { main, modelo, efectivo: mejor ? mejor.v : null, p75, fuente: mejor ? mejor.f : null };
@@ -408,6 +452,12 @@ export function calcularVeredicto(
     })
     .sort((a, b) => a.min - b.min);
 
+  // Puntos del aviso oficial del SHN para ESTE día (si hay).
+  const avisoDia: { min: number; valor_m: number }[] = (fuentes.shnAviso ?? [])
+    .filter((a) => a.fecha === fecha && esNum(a.altura_m) && esNum(a.min))
+    .map((a) => ({ min: a.min, valor_m: a.altura_m }))
+    .sort((a, b) => a.min - b.min);
+
   const sesgoInfo = sesgoEnVivo(pronos, fuentes.shnObservado ?? []);
   const sesgo = sesgoInfo ? sesgoInfo.valor : null; // el medido (se muestra tal cual)
   // Ajuste que le corresponde a cada hora de ESTE día: pleno cerca de la observación y
@@ -424,7 +474,7 @@ export function calcularVeredicto(
   const margenPendiente = margenPorPendiente(pendiente?.pendiente_m ?? null);
 
   const horaEn = (horaMin: number): ValorHora => {
-    const e = valorEfectivo(s, serieModelo, serieSHN, sesgoAt, margenPendiente, horaMin, modo);
+    const e = valorEfectivo(s, serieModelo, serieSHN, avisoDia, sesgoAt, margenPendiente, horaMin, modo);
     return {
       horaMin,
       main: e.main,
@@ -442,7 +492,7 @@ export function calcularVeredicto(
   const vuelta = horaEn(HORA_VUELTA);
   const hora7 = horaEn(HORA_VEREDICTO);
 
-  const serieEff = serieEfectiva(s, serieModelo, serieSHN, sesgoAt, margenPendiente, modo);
+  const serieEff = serieEfectiva(s, serieModelo, serieSHN, avisoDia, sesgoAt, margenPendiente, modo);
   const salidaLimiteMin = cruceSubida(serieEff, nivelSeguroM, HORA_ENTRADA);
 
   let estado: EstadoVeredicto = "sin_datos";
@@ -493,6 +543,12 @@ export function calcularVeredicto(
       modelo: "el modelo propio de Baliza (marea + viento)",
       shn: "el boletín de mareas del SHN",
       pendiente: "la crecida en camino desde el exterior",
+      aviso: (() => {
+        const a = avisoDia
+          .filter((p) => Math.abs(p.min - h.horaMin) <= AVISO_VENTANA_MIN)
+          .sort((x, y) => y.valor_m - x.valor_m)[0];
+        return a ? `el aviso oficial del SHN (San Fernando ${a.valor_m.toFixed(2)}m a las ${hhmm(a.min)})` : "el aviso oficial del SHN";
+      })(),
     };
     return ` ${inicio} ${h.main.toFixed(2)}m${rango}; se toma ${h.efectivo_m.toFixed(2)}m por ${porque[h.fuente]}.`;
   };

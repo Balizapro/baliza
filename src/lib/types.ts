@@ -156,6 +156,8 @@ export interface DatosAgregados {
   alertasSmn: AlertaSmn[];
   avisosShn: AvisoShn[];
   avisoCrecida: AvisoCrecida | null;
+  // Último aviso/alerta por crecida (o su cese), de cualquier tipo de aviso: lo usa el plan escolar.
+  avisoCrecidaPlan: AvisoCrecida | null;
 }
 
 export interface AlturaCrecida {
