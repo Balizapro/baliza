@@ -146,6 +146,13 @@ export function useCalculosDerivados({
       shnAlturas,
       // Aviso oficial por crecida del SHN: si sube la alerta, el veredicto lo tiene en cuenta.
       shnAviso: puntosAvisoSanFernando(avisoCrecidaPlan),
+      // Cuándo se cargó el pronóstico del INA: si es más nuevo y mucho más alto que el aviso del SHN, manda el INA.
+      inaIngestadoMs: (() => {
+        const cargas = (sfProno ?? [])
+          .map((p) => (p.created_at ? Date.parse(p.created_at) : Number.NaN))
+          .filter((n) => Number.isFinite(n));
+        return cargas.length ? Math.max(...cargas) : null;
+      })(),
       // Estaciones vecinas (Bs As, La Plata...) para anticipar crecidas por
       // pendiente de subida: la marea entra por el estuario y llega a SF con
       // desfase, así que una subida fuerte afuera anticipa la de SF.

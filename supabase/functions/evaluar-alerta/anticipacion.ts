@@ -277,11 +277,22 @@ export function anticiparSubida(
     pendSF = mejor.pendiente_m_h * regModelo.pendiente;
   }
 
-  const mensaje = sfCruce != null
-    ? `Exteriores ya suben (${giraron.map((e) => e.nombre).join(", ")}) — SF empezaría a subir en serio ≈ ${new Date(sfGiro).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} y superaría ${umbralEvalM.toFixed(2)}m ≈ ${new Date(sfCruce).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}.`
-    : sfGiroNivel != null && sfGiroNivel >= umbralEvalM
-      ? `Exteriores ya suben (${giraron.map((e) => e.nombre).join(", ")}) — SF empezaría a subir en serio ≈ ${new Date(sfGiro).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} (${sfGiroNivel.toFixed(2)}m), ya sobre el umbral de evaluación.`
-      : `Exteriores ya suben (${giraron.map((e) => e.nombre).join(", ")}) — SF empezaría a subir en serio ≈ ${new Date(sfGiro).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}.`;
+  // Hora argentina CON el día (el servidor no debe depender de su propia zona horaria).
+  const cuandoAR = (ms: number): string =>
+    new Date(ms).toLocaleString("es-AR", {
+      weekday: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "America/Argentina/Buenos_Aires",
+    });
+  // No se muestra la hora en que "superaría" el umbral: es una extrapolación lineal que no se validó y
+  // llegó a contradecir al pronóstico del INA (8-oct-2026). sfCruceEvalTs se sigue calculando.
+  const nombresSubida = giraron.map((e) => e.nombre).join(", ");
+  const mensaje =
+    sfGiroNivel != null && sfGiroNivel >= umbralEvalM
+      ? `Exteriores ya suben (${nombresSubida}) — SF empezaría a subir en serio ≈ ${cuandoAR(sfGiro)} (${sfGiroNivel.toFixed(2)}m), ya sobre el umbral de evaluación.`
+      : `Exteriores ya suben (${nombresSubida}) — SF empezaría a subir en serio ≈ ${cuandoAR(sfGiro)}${cuandoAR(sfGiro).endsWith(".") ? "" : "."}`;
 
   return {
     giraron: true,

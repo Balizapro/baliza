@@ -247,3 +247,25 @@ test("SF bajando y valle por encima del umbral de evaluación => sin cruce falso
     assert.ok(r.sfCruceEvalTs >= r.sfGiroTs!, "cruce posterior al giro");
   }
 });
+
+test("el mensaje de subida lleva el día y la hora argentina, y no inventa una hora de 'superaría'", () => {
+  const lp = serieSubida(9, 0.2, 12);
+  const oyarvide = serieSubida(8, 0.15, 12);
+  const atalaya = serieSubida(8, 0.18, 12);
+  const ba = serieSubida(11, 0.25, 12);
+  const sf = serieSubida(11, 0.1, 12);
+  const r = anticiparSubida(
+    [
+      { nombre: "La Plata", lecturas: lp },
+      { nombre: "Oyarvide", lecturas: oyarvide },
+      { nombre: "Atalaya", lecturas: atalaya },
+      { nombre: "Puerto de Buenos Aires", lecturas: ba },
+    ],
+    sf,
+    2.0,
+    new Date(2026, 7, 7, 12).getTime()
+  );
+  assert.equal(r.giraron, true);
+  assert.match(r.mensaje, /SF empezaría a subir en serio ≈ (lun|mar|mié|jue|vie|sáb|dom) \d{1,2}, \d{2}:\d{2}/);
+  assert.doesNotMatch(r.mensaje, /superaría/);
+});

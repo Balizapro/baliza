@@ -273,3 +273,24 @@ test("si el SHN manda y supera el límite, el aviso es rojo y explica que se tom
   assert.match(r.mensaje!, /^Alerta — vie 9: no se podría ir a la escuela\. A las 8 el agua estaría en 2\.70m/);
   assert.match(r.explicacion!, /Se toma 2\.70m del aviso oficial del SHN \(San Fernando 2\.70m a las 07:30\)\. 👁️ El INA dice otra cosa: pronostica 2\.00m a las 08:00, bajo el límite/);
 });
+
+test("HOY: el aviso del SHN quedó atrás del INA => alerta roja con la aclaración de que se toma el INA", () => {
+  const pronos = [
+    { timestamp: art(9, 6), valor_m: 2.54, qualifier: "main" },
+    { timestamp: art(9, 7), valor_m: 2.56, qualifier: "main" },
+    { timestamp: art(9, 8), valor_m: 2.51, qualifier: "main" },
+    { timestamp: art(9, 14), valor_m: 1.4, qualifier: "main" },
+  ] as PuntoProno[];
+  const aviso = {
+    tipo: "aviso_crecida",
+    emitido: "2026-10-08T15:20:00+00:00",
+    alturas: [{ puerto: "SAN FERNANDO", altura_m: 2.2, hora: "07:00", fecha: "09/10/2026" }],
+  };
+  const veredictos = ["2026-10-08", "2026-10-09"].map((f) =>
+    calcularVeredicto(pronos, f, SEGURO, [], { shnAviso: puntosAvisoSanFernando(aviso), inaIngestadoMs: Date.parse("2026-10-08T21:20:00Z") })
+  );
+  const r = decidirEscaladaPronostico(base({ veredictos }));
+  assert.equal(r.nivel, "roja");
+  assert.match(r.mensaje!, /^Alerta — vie 9: no se podría ir a la escuela\. A las 8 el agua estaría en 2\.51m/);
+  assert.match(r.explicacion!, /es más viejo y queda 31 cm por debajo del INA: se toma el INA hasta que el SHN actualice/);
+});

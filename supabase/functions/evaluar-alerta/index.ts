@@ -114,6 +114,8 @@ interface ContextoVeredicto {
   vecinas: { nombre: string; lecturas: { timestamp: string; nivel_m: number }[] }[];
   // Alturas estimadas en San Fernando del aviso/alerta por crecida vigente del SHN.
   shnAviso: PuntoAvisoShn[];
+  // Cuándo se cargó el último pronóstico del INA (para la salvaguarda frente a un aviso más viejo).
+  inaIngestadoMs: number | null;
 }
 
 // deno-lint-ignore no-explicit-any
@@ -131,7 +133,7 @@ async function cargarContextoVeredicto(supabase: any, estacionId: string): Promi
   // Todos los qualifiers (main + bandas) para los próximos 4 días
   const { data: pronosTodos } = await supabase
     .from("pronosticos")
-    .select("timestamp, valor_m, qualifier")
+    .select("timestamp, valor_m, qualifier, created_at")
     .eq("estacion_id", estacionId)
     .gte("timestamp", new Date(Date.now()).toISOString())
     .lte("timestamp", new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString());
@@ -182,7 +184,7 @@ async function cargarContextoVeredicto(supabase: any, estacionId: string): Promi
   // (Antes el aviso solo se mostraba y no entraba al cálculo.) Un cese deja la lista vacía.
   const { data: avisoPlan } = await supabase
     .from("avisos_crecida")
-    .select("tipo, alturas")
+    .select("tipo, alturas, emitido")
     .eq("vigente", true)
     .ilike("tipo", "%crecida%")
     .order("emitido", { ascending: false })
@@ -190,7 +192,13 @@ async function cargarContextoVeredicto(supabase: any, estacionId: string): Promi
     .maybeSingle();
   const shnAviso = puntosAvisoSanFernando(avisoPlan);
 
-  return { diasSinClases, nivelSeguroM, pronosTodos: pronosTodos as PuntoProno[], shnObservado, vecinas, shnAviso };
+  // El INA reescribe todo el pronóstico en cada corrida: la carga más reciente es la de ese pronóstico.
+  const cargas = (pronosTodos as { created_at?: string | null }[])
+    .map((p) => (p.created_at ? Date.parse(p.created_at) : Number.NaN))
+    .filter((n) => Number.isFinite(n));
+  const inaIngestadoMs = cargas.length ? Math.max(...cargas) : null;
+
+  return { diasSinClases, nivelSeguroM, pronosTodos: pronosTodos as PuntoProno[], shnObservado, vecinas, shnAviso, inaIngestadoMs };
 }
 
 // Hoy y los siguientes (n-1) días, como YYYY-MM-DD en hora argentina.
@@ -463,6 +471,7 @@ serve(async (req) => {
             shnObservado: c.shnObservado,
             vecinas: c.vecinas,
             shnAviso: c.shnAviso,
+            inaIngestadoMs: c.inaIngestadoMs,
           })
         );
       }

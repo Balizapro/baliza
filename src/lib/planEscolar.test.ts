@@ -540,6 +540,14 @@ const avisoSF = (altura_m: number, hora: string, fecha = "21/08/2026", tipo = "a
   alturas: [{ puerto: "SAN FERNANDO", altura_m, hora, fecha }],
 });
 const INA_NORMAL = { 8: 2.0, 9: 2.0, 12: 2.0, 14: 2.0, 15: 2.0 };
+// Aviso con su hora de emisión (21-ago 07:00 ART = 10:00 UTC) y dos momentos de carga del INA.
+const avisoEmitido = (altura_m: number, hora: string, fecha = "21/08/2026") => ({
+  tipo: "aviso_crecida",
+  emitido: "2026-08-21T10:00:00Z",
+  alturas: [{ puerto: "SAN FERNANDO", altura_m, hora, fecha }],
+});
+const INA_MAS_VIEJO = Date.parse("2026-08-21T09:00:00Z"); // cargado ANTES del aviso
+const INA_MAS_NUEVO = Date.parse("2026-08-21T14:00:00Z"); // cargado DESPUÉS del aviso
 
 test("el motivo se parte en frase corta (titular) y explicación (letra chica), sin perder texto", () => {
   const pronos = diaART("2026-08-20", { 8: 2.0, 14: 2.0 }, { p25: -0.05, p75: 0.05 });
@@ -561,7 +569,7 @@ test("sin otra fuente que lo suba, la explicación es solo lo que pronostica el 
 });
 
 test("puntosAvisoSanFernando: toma solo San Fernando y convierte fecha y hora", () => {
-  assert.deepEqual(puntosAvisoSanFernando(AVISO_REAL), [{ fecha: "2026-09-30", min: 11 * 60 + 30, altura_m: 2.25 }]);
+  assert.deepEqual(puntosAvisoSanFernando(AVISO_REAL), [{ fecha: "2026-09-30", min: 11 * 60 + 30, altura_m: 2.25, emitidoMs: null }]);
 });
 
 test("puntosAvisoSanFernando: 'alerta' por crecida (el SHN sube el nivel) también cuenta", () => {
@@ -617,11 +625,14 @@ test("un aviso de OTRO día no afecta a este día", () => {
   assert.equal(v.estado, "normal");
 });
 
-test("el SHN MANDA aunque dé menos que el INA, y se deja el 'ojito' de que el INA dice otra cosa", () => {
+test("el SHN MANDA aunque dé menos que el INA (si el INA no es más nuevo), y se deja el 'ojito'", () => {
   const pronos = diaART("2026-08-21", { 8: 2.4, 9: 2.4, 12: 2.0, 14: 2.0, 15: 2.0 });
   const sinAviso = calcularVeredicto(pronos, "2026-08-21", 2.25, []);
   assert.equal(sinAviso.estado, "no_clases"); // solo con el INA sería 'no ir'
-  const v = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoSF(2.1, "08:30")) });
+  const v = calcularVeredicto(pronos, "2026-08-21", 2.25, [], {
+    shnAviso: puntosAvisoSanFernando(avisoEmitido(2.1, "08:30")),
+    inaIngestadoMs: INA_MAS_VIEJO,
+  });
   assert.ok(v.entrada.efectivo_m != null && Math.abs(v.entrada.efectivo_m - 2.1) < 1e-9, `${v.entrada.efectivo_m}`);
   assert.equal(v.entrada.fuente, "aviso");
   assert.equal(v.estado, "normal");
@@ -680,6 +691,75 @@ test("dentro de la ventana del aviso, los picos del INA ya no fuerzan una hora l
   const pronos = diaART("2026-08-21", { 8: 2.0, 9: 2.0, 12: 2.4, 14: 2.0, 15: 2.0 });
   const sinAviso = calcularVeredicto(pronos, "2026-08-21", 2.25, []);
   assert.ok(sinAviso.salidaLimiteMin != null, "con solo el INA, el agua cruza el límite al mediodía");
-  const conAviso = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoSF(2.1, "12:30")) });
+  const conAviso = calcularVeredicto(pronos, "2026-08-21", 2.25, [], {
+    shnAviso: puntosAvisoSanFernando(avisoEmitido(2.1, "12:30")),
+    inaIngestadoMs: INA_MAS_VIEJO,
+  });
   assert.equal(conAviso.salidaLimiteMin, null);
+});
+
+// ── Salvaguarda: si el INA es más nuevo y mucho más alto, el aviso del SHN quedó atrás ───────
+test("HOY: INA 2.56m (cargado a las 18:20) vs aviso SHN 2.20m (emitido a las 12:20) => manda el INA y se avisa", () => {
+  const pronos = diaART("2026-10-09", { 6: 2.54, 7: 2.56, 8: 2.51, 9: 2.41, 12: 1.7, 14: 1.4, 15: 1.47 });
+  const aviso = {
+    tipo: "aviso_crecida",
+    emitido: "2026-10-08T15:20:00+00:00", // 12:20 ART
+    alturas: [{ puerto: "SAN FERNANDO", altura_m: 2.2, hora: "07:00", fecha: "09/10/2026" }],
+  };
+  const v = calcularVeredicto(pronos, "2026-10-09", 2.25, [], {
+    shnAviso: puntosAvisoSanFernando(aviso),
+    inaIngestadoMs: Date.parse("2026-10-08T21:20:00Z"), // 18:20 ART
+  });
+  assert.equal(v.estado, "no_clases");
+  assert.ok(v.entrada.efectivo_m != null && Math.abs(v.entrada.efectivo_m - 2.51) < 1e-9, `${v.entrada.efectivo_m}`);
+  assert.equal(v.entrada.fuente, "ina");
+  assert.ok(v.entrada.aviso_descartado != null && Math.abs(v.entrada.aviso_descartado.altura_m - 2.2) < 1e-9);
+  assert.equal(v.ina_difiere, null);
+  assert.match(
+    v.explicacion,
+    /Ojo: el aviso del SHN \(San Fernando 2\.20m a las 07:00, emitido a las 12:20\) es más viejo y queda 31 cm por debajo del INA: se toma el INA hasta que el SHN actualice\./
+  );
+});
+
+test("con la diferencia de la mañana (14 cm) el SHN sigue mandando, aunque el INA sea más nuevo", () => {
+  const pronos = diaART("2026-10-09", { 6: 2.29, 7: 2.34, 8: 2.31, 9: 2.22, 12: 1.66, 14: 1.4, 15: 1.47 });
+  const aviso = { tipo: "aviso_crecida", emitido: "2026-10-08T15:20:00+00:00", alturas: [{ puerto: "SAN FERNANDO", altura_m: 2.2, hora: "07:00", fecha: "09/10/2026" }] };
+  const v = calcularVeredicto(pronos, "2026-10-09", 2.25, [], { shnAviso: puntosAvisoSanFernando(aviso), inaIngestadoMs: Date.parse("2026-10-08T21:20:00Z") });
+  assert.equal(v.estado, "normal");
+  assert.equal(v.entrada.fuente, "aviso");
+  assert.equal(v.entrada.aviso_descartado, null);
+});
+
+test("justo por encima del margen (16 cm) se descarta; justo por debajo (14 cm) no", () => {
+  const mk = (ina7: number) => diaART("2026-08-21", { 7: ina7, 8: ina7, 9: ina7, 12: 2.0, 14: 2.0, 15: 2.0 });
+  const f = (ina7: number) =>
+    calcularVeredicto(mk(ina7), "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoEmitido(2.2, "07:00")), inaIngestadoMs: INA_MAS_NUEVO });
+  assert.equal(f(2.34).entrada.fuente, "aviso"); // +0.14
+  assert.equal(f(2.36).entrada.fuente, "ina"); // +0.16
+});
+
+test("si el INA es mucho más alto pero MÁS VIEJO que el aviso, sigue mandando el SHN", () => {
+  const pronos = diaART("2026-08-21", { 7: 2.6, 8: 2.6, 9: 2.6, 12: 2.0, 14: 2.0, 15: 2.0 });
+  const v = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoEmitido(2.2, "07:00")), inaIngestadoMs: INA_MAS_VIEJO });
+  assert.equal(v.entrada.fuente, "aviso");
+  assert.equal(v.estado, "normal");
+});
+
+test("si no se sabe cuál es más nuevo, se asume que el INA (lado seguro)", () => {
+  const pronos = diaART("2026-08-21", { 7: 2.6, 8: 2.6, 9: 2.6, 12: 2.0, 14: 2.0, 15: 2.0 });
+  const sinFrescura = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoSF(2.2, "07:00")) });
+  assert.equal(sinFrescura.entrada.fuente, "ina");
+  assert.equal(sinFrescura.estado, "no_clases");
+});
+
+test("la salvaguarda solo protege contra un INA más ALTO: un INA más bajo que el aviso no la activa", () => {
+  const pronos = diaART("2026-08-21", { 7: 1.8, 8: 1.8, 9: 1.8, 12: 1.8, 14: 1.8, 15: 1.8 });
+  const v = calcularVeredicto(pronos, "2026-08-21", 2.25, [], { shnAviso: puntosAvisoSanFernando(avisoEmitido(2.6, "07:00")), inaIngestadoMs: INA_MAS_NUEVO });
+  assert.equal(v.entrada.fuente, "aviso");
+  assert.equal(v.estado, "no_clases");
+});
+
+test("puntosAvisoSanFernando lleva la hora de emisión del aviso", () => {
+  const p = puntosAvisoSanFernando(avisoEmitido(2.2, "07:00"));
+  assert.equal(p[0].emitidoMs, Date.parse("2026-08-21T10:00:00Z"));
 });

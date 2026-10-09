@@ -46,6 +46,8 @@ export interface ValorHora {
   fuente?: FuenteNivel | null;
   // Punto del aviso oficial del SHN que se usó (cuando fuente === "aviso").
   aviso?: { min: number; altura_m: number } | null;
+  // Punto del aviso del SHN que se DESCARTÓ por quedar atrás del INA (ver AVISO_MARGEN_INA_M).
+  aviso_descartado?: { min: number; altura_m: number; emitidoMs: number | null } | null;
 }
 
 export interface VeredictoDia {
@@ -95,6 +97,8 @@ export interface FuentesPlan {
   vecinas?: LecturasVecina[];
   // Aviso oficial por crecida del SHN (ver puntosAvisoSanFernando): fuente oficial del veredicto.
   shnAviso?: PuntoAvisoShn[];
+  // Cuándo se cargó el último pronóstico del INA (para saber si es más nuevo que el aviso del SHN).
+  inaIngestadoMs?: number | null;
 }
 
 // Pendiente de subida que indica crecida en camino. Una estación vecina
@@ -128,6 +132,8 @@ export interface PuntoAvisoShn {
   fecha: string; // YYYY-MM-DD
   min: number; // minutos del día local
   altura_m: number;
+  // Cuándo emitió el SHN el aviso (para saber si el INA es más nuevo). null/ausente = se desconoce.
+  emitidoMs?: number | null;
 }
 
 // Extrae los puntos de San Fernando de un aviso/alerta por crecida del SHN. Un CESE, o un aviso
@@ -135,7 +141,11 @@ export interface PuntoAvisoShn {
 // antes el aviso solo se mostraba y no entraba al cálculo (7-oct-2026).
 export function puntosAvisoSanFernando(
   aviso:
-    | { tipo: string; alturas: { puerto: string; altura_m: number; hora: string; fecha: string }[] | null }
+    | {
+        tipo: string;
+        emitido?: string | null;
+        alturas: { puerto: string; altura_m: number; hora: string; fecha: string }[] | null;
+      }
     | null
     | undefined
 ): PuntoAvisoShn[] {
@@ -143,13 +153,19 @@ export function puntosAvisoSanFernando(
   const tipo = String(aviso.tipo ?? "").toLowerCase();
   if (!tipo.includes("crecida") || tipo.startsWith("cese")) return [];
   const puntos: PuntoAvisoShn[] = [];
+  const emitidoMs = aviso.emitido ? Date.parse(aviso.emitido) : Number.NaN;
   for (const a of aviso.alturas) {
     if (!String(a.puerto ?? "").toUpperCase().includes("SAN FERNANDO")) continue;
     const h = /^(\d{1,2}):(\d{2})$/.exec(String(a.hora ?? ""));
     const f = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(a.fecha ?? ""));
     const altura = Number(a.altura_m);
     if (!h || !f || !Number.isFinite(altura)) continue;
-    puntos.push({ fecha: `${f[3]}-${f[2]}-${f[1]}`, min: Number(h[1]) * 60 + Number(h[2]), altura_m: altura });
+    puntos.push({
+      fecha: `${f[3]}-${f[2]}-${f[1]}`,
+      min: Number(h[1]) * 60 + Number(h[2]),
+      altura_m: altura,
+      emitidoMs: Number.isFinite(emitidoMs) ? emitidoMs : null,
+    });
   }
   return puntos;
 }
@@ -157,6 +173,9 @@ export function puntosAvisoSanFernando(
 // El aviso da la altura estimada en un momento (pleamar con sobreelevación): se la toma como
 // el nivel de las horas cercanas. Ventana conservadora, NO calibrada con histórico.
 const AVISO_VENTANA_MIN = 90;
+// Salvaguarda (8-oct-2026): el aviso del SHN manda, SALVO que el INA sea más nuevo y lo supere por más
+// de este margen: ahí el aviso quedó atrás y se toma el INA (se avisa) hasta que el SHN actualice.
+export const AVISO_MARGEN_INA_M = 0.15;
 
 // Horarios escolares (minutos del día local).
 export const HORA_VEREDICTO = 7 * 60; // la hora a la que se decide el plan
@@ -496,10 +515,24 @@ export function calcularVeredicto(
     .sort((a, b) => a.min - b.min);
 
   // Puntos del aviso oficial del SHN para ESTE día (si hay).
-  const avisoDia: { min: number; valor_m: number }[] = (fuentes.shnAviso ?? [])
+  const avisosFecha = (fuentes.shnAviso ?? [])
     .filter((a) => a.fecha === fecha && esNum(a.altura_m) && esNum(a.min))
-    .map((a) => ({ min: a.min, valor_m: a.altura_m }))
     .sort((a, b) => a.min - b.min);
+  // Salvaguarda: el aviso queda atrás si el INA es más nuevo (o no se sabe) y a la hora del aviso
+  // lo supera por más de AVISO_MARGEN_INA_M. Sin freshness conocida se asume que el INA es más nuevo
+  // (lado seguro). Esos puntos NO mandan: se usa el INA y se explica.
+  const inaMasNuevo = (emitidoMs: number | null | undefined) =>
+    fuentes.inaIngestadoMs == null || emitidoMs == null || fuentes.inaIngestadoMs > emitidoMs;
+  const quedoAtras = (a: { min: number; altura_m: number; emitidoMs?: number | null }) => {
+    const ina = valorEn(s.main, a.min);
+    return ina != null && ina - a.altura_m > AVISO_MARGEN_INA_M && inaMasNuevo(a.emitidoMs);
+  };
+  const avisoDia: { min: number; valor_m: number }[] = avisosFecha
+    .filter((a) => !quedoAtras(a))
+    .map((a) => ({ min: a.min, valor_m: a.altura_m }));
+  const avisoDescartado = avisosFecha
+    .filter((a) => quedoAtras(a))
+    .map((a) => ({ min: a.min, altura_m: a.altura_m, emitidoMs: a.emitidoMs ?? null }));
 
   const sesgoInfo = sesgoEnVivo(pronos, fuentes.shnObservado ?? []);
   const sesgo = sesgoInfo ? sesgoInfo.valor : null; // el medido (se muestra tal cual)
@@ -538,6 +571,10 @@ export function calcularVeredicto(
       efectivo_m: e.efectivo,
       fuente: e.fuente,
       aviso: e.aviso,
+      aviso_descartado:
+        avisoDescartado
+          .filter((a) => Math.abs(a.min - horaMin) <= AVISO_VENTANA_MIN)
+          .sort((x, y) => y.altura_m - x.altura_m)[0] ?? null,
     };
   };
 
@@ -605,7 +642,7 @@ export function calcularVeredicto(
   // Qué pronostica el INA y de dónde sale el número que se usa. La banda de error (rango habitual)
   // se muestra como contexto pero NO decide: la decisión se guía por el nivel pronosticado
   // (pedido de la escuela, 8-oct-2026). Solo si otra fuente lo subió se aclara cuál.
-  const explicaNivel = (h: ValorHora, inicio: string): string => {
+  const explicaNivelBase = (h: ValorHora, inicio: string): string => {
     if (h.main == null) return "";
     const rango = h.p25 != null && h.p75 != null ? ` (rango habitual ${h.p25.toFixed(2)}–${h.p75.toFixed(2)}m)` : "";
     if (h.fuente === "aviso" && h.efectivo_m != null) {
@@ -629,6 +666,15 @@ export function calcularVeredicto(
     };
     return ` ${inicio} ${h.main.toFixed(2)}m${rango}; se toma ${h.efectivo_m.toFixed(2)}m por ${porque[h.fuente]}.`;
   };
+  // El aviso del SHN quedó atrás (más viejo y mucho más bajo que el INA): se toma el INA y se dice.
+  const notaDescartado = (h: ValorHora): string => {
+    const d = h.aviso_descartado;
+    if (!d || h.main == null) return "";
+    const emitido = d.emitidoMs != null ? minutosDiaArgentina(new Date(d.emitidoMs).toISOString()) : null;
+    const cm = Math.round((h.main - d.altura_m) * 100);
+    return ` Ojo: el aviso del SHN (San Fernando ${d.altura_m.toFixed(2)}m a las ${hhmm(d.min)}${emitido != null ? `, emitido a las ${hhmm(emitido)}` : ""}) es más viejo y queda ${cm} cm por debajo del INA: se toma el INA hasta que el SHN actualice.`;
+  };
+  const explicaNivel = (h: ValorHora, inicio: string): string => explicaNivelBase(h, inicio) + notaDescartado(h);
   const pendienteNota =
     margenPendiente > 0 && pendiente
       ? ` — ${pendiente.estacion} subiendo a ${pendiente.pendiente_m.toFixed(2)} m/h: crecida en camino`
@@ -664,7 +710,7 @@ export function calcularVeredicto(
             ? ` Se toma el ${textoAviso(inaDifiere.hora === entrada.horaMin ? entrada : vuelta)}.` + textoOjo(inaDifiere)
             : esDia && techo != null
               ? ` El límite (${nivelSeguroM.toFixed(2)}m) queda dentro del rango habitual del INA (hasta ${techo.toFixed(2)}m): se decide por el pronóstico central, no por el rango.`
-              : "") + pendienteNota;
+              : "") + (notaDescartado(entrada) || notaDescartado(vuelta)) + pendienteNota;
       }
       break;
     case "sin_datos":

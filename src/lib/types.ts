@@ -84,6 +84,7 @@ export interface Pronostico {
   valor_m: number;
   qualifier: string;
   forecast_date: string;
+  created_at?: string;
 }
 
 export type DireccionTendencia = "subiendo" | "bajando" | "estable";
